@@ -190,32 +190,32 @@ pageRoutes.get("/", requireUser(undefined, "page"), async (c) => {
   if (isAdmin) {
     if (scope === "mine") {
       if (effectiveOpp !== "all") {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.assigned_to = ?1 AND l.opportunity_type = ?2
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to = ?1 AND l.opportunity_type = ?2
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [user.id, effectiveOpp];
       } else {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.assigned_to = ?1
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to = ?1
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [user.id];
       }
     } else if (scope === "unassigned") {
       if (effectiveOpp !== "all") {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.assigned_to IS NULL AND l.opportunity_type = ?1
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to IS NULL AND l.opportunity_type = ?1
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [effectiveOpp];
       } else {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.assigned_to IS NULL
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to IS NULL
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [];
       }
     } else {
       // scope === "all"
       if (effectiveOpp !== "all") {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.opportunity_type = ?1
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.opportunity_type = ?1
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [effectiveOpp];
       } else {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS}
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation'
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [];
       }
@@ -223,12 +223,12 @@ pageRoutes.get("/", requireUser(undefined, "page"), async (c) => {
   } else {
     // Closer : Uniquement ses leads ET uniquement dans les types d'opportunités qui lui sont activés
     if (effectiveOpp !== "all") {
-      querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.assigned_to = ?1 AND l.opportunity_type = ?2
+      querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to = ?1 AND l.opportunity_type = ?2
                   ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
       bindings = [user.id, effectiveOpp];
     } else if (allowedOpps.length > 0) {
       const placeholders = allowedOpps.map((_, i) => `?${i + 2}`).join(", ");
-      querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.assigned_to = ?1 AND l.opportunity_type IN (${placeholders})
+      querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to = ?1 AND l.opportunity_type IN (${placeholders})
                   ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
       bindings = [user.id, ...allowedOpps];
     } else {
@@ -245,7 +245,7 @@ pageRoutes.get("/", requireUser(undefined, "page"), async (c) => {
 
 pageRoutes.get("/admin", requireUser("admin", "page"), async (c) => {
   const user: User = c.get("user");
-  const tab = ["overview", "scanner", "models", "benchmarks", "team", "attribution"].includes(c.req.query("tab") ?? "")
+  const tab = ["overview", "scanner", "models", "benchmarks", "team", "attribution", "pending"].includes(c.req.query("tab") ?? "")
     ? (c.req.query("tab") as string)
     : "overview";
   const leads = await c.env.DB.prepare(`SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} ORDER BY l.created_at DESC LIMIT 200`).all<LeadRow>();

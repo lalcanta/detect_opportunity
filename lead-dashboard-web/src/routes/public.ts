@@ -67,25 +67,29 @@ publicRoutes.post("/api/sync", async (c) => {
     return c.json({ error: "unauthorized" }, 401);
   }
   const body = await c.req.json<SyncBody>().catch(() => null);
-  if (!body?.id || !/^[a-f0-9]{8,64}$/.test(body.id) || !body.company_name || !body.demo_html || !body.battlecard_data) {
+  if (!body?.id || !/^[a-f0-9]{8,64}$/.test(body.id) || !body.company_name) {
     return c.json({ error: "invalid_payload" }, 400);
   }
+
+  const isPending = body.status === "pending_generation" || (!body.demo_html && !body.battlecard_data);
+  const targetStatus = isPending ? "pending_generation" : (body.status || "demo_ready");
 
   const flyerUrl = body.flyer_pdf_base64 ? `/api/leads/${body.id}/flyer` : null;
   const oppType = body.opportunity_type || "website";
   const stmts: D1PreparedStatement[] = [
     c.env.DB.prepare(
       `INSERT INTO leads (id, company_name, activity, city, phone, email, website_url, google_rating,
-         google_reviews_count, audit_data, demo_html, flyer_pdf_url, flyer_pdf_base64, battlecard_data, created_at, opportunity_type)
-       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)
+         google_reviews_count, audit_data, demo_html, flyer_pdf_url, flyer_pdf_base64, battlecard_data, created_at, opportunity_type, status)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
        ON CONFLICT(id) DO UPDATE SET
          company_name = excluded.company_name, activity = excluded.activity, city = excluded.city,
          phone = COALESCE(excluded.phone, leads.phone), email = COALESCE(excluded.email, leads.email),
          website_url = excluded.website_url, google_rating = excluded.google_rating,
          google_reviews_count = excluded.google_reviews_count, audit_data = excluded.audit_data,
-         demo_html = excluded.demo_html, flyer_pdf_url = excluded.flyer_pdf_url,
-         flyer_pdf_base64 = excluded.flyer_pdf_base64, battlecard_data = excluded.battlecard_data,
-         opportunity_type = COALESCE(excluded.opportunity_type, leads.opportunity_type)`,
+         demo_html = COALESCE(excluded.demo_html, leads.demo_html), flyer_pdf_url = COALESCE(excluded.flyer_pdf_url, leads.flyer_pdf_url),
+         flyer_pdf_base64 = COALESCE(excluded.flyer_pdf_base64, leads.flyer_pdf_base64), battlecard_data = COALESCE(excluded.battlecard_data, leads.battlecard_data),
+         opportunity_type = COALESCE(excluded.opportunity_type, leads.opportunity_type),
+         status = excluded.status`,
     ).bind(
       body.id,
       body.company_name,
@@ -97,12 +101,13 @@ publicRoutes.post("/api/sync", async (c) => {
       body.google_rating ?? null,
       body.google_reviews_count ?? null,
       JSON.stringify(body.audit_data ?? {}),
-      body.demo_html,
+      body.demo_html ?? null,
       flyerUrl,
       body.flyer_pdf_base64 ?? null,
-      JSON.stringify(body.battlecard_data),
+      body.battlecard_data ? JSON.stringify(body.battlecard_data) : null,
       new Date().toISOString(),
       oppType,
+      targetStatus,
     ),
   ];
   for (const t of body.token_usage ?? []) {
@@ -114,8 +119,10 @@ publicRoutes.post("/api/sync", async (c) => {
   }
   await c.env.DB.batch(stmts);
 
-  if (c.env.AUTO_ASSIGN === "true") await assignRoundRobin(c.env.DB);
-  return c.json({ ok: true, id: body.id });
+  if (targetStatus !== "pending_generation" && c.env.AUTO_ASSIGN === "true") {
+    await assignRoundRobin(c.env.DB);
+  }
+  return c.json({ ok: true, id: body.id, status: targetStatus });
 });
 
 function renderInteractiveDemoFloatingBar(opts: {

@@ -1,7 +1,7 @@
 export type Role = "admin" | "closer";
 
 export const LEAD_STATUSES = ["demo_ready", "hot_lead", "called", "won", "lost", "callback_scheduled"] as const;
-export type LeadStatus = (typeof LEAD_STATUSES)[number];
+export type LeadStatus = (typeof LEAD_STATUSES)[number] | "pending_generation";
 
 export interface Bindings {
   DB: D1Database;
@@ -232,9 +232,10 @@ export interface SyncBody {
   google_reviews_count?: number | null;
   opportunity_type?: string | null;
   audit_data?: Record<string, unknown>;
-  demo_html: string;
+  demo_html?: string | null;
   flyer_pdf_base64?: string | null;
-  battlecard_data: Battlecard;
+  battlecard_data?: Battlecard | null;
+  status?: LeadStatus | null;
   token_usage?: {
     task: string;
     model: string;

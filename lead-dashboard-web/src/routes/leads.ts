@@ -64,7 +64,7 @@ leadRoutes.post("/api/leads/:id/status", requireUser("closer"), async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json<StatusBody>().catch(() => ({}) as StatusBody);
   const status = body.status as LeadStatus | undefined;
-  if (!status || !LEAD_STATUSES.includes(status)) return c.json({ error: "invalid_status" }, 400);
+  if (!status || !LEAD_STATUSES.includes(status as any)) return c.json({ error: "invalid_status" }, 400);
 
   const lead = await c.env.DB.prepare(
     "SELECT company_name, phone, status, battlecard_data, locked_by, locked_until, call_notes, assigned_to, opportunity_type FROM leads WHERE id = ?",
@@ -250,7 +250,7 @@ leadRoutes.post("/api/leads/:id/update", requireUser("closer"), async (c) => {
 
   const phone = b.phone !== undefined ? (b.phone.trim().slice(0, 30) || null) : current.phone;
   const email = b.email !== undefined ? (b.email.trim().slice(0, 100) || null) : current.email;
-  const status = b.status && LEAD_STATUSES.includes(b.status) ? b.status : current.status;
+  const status = b.status && LEAD_STATUSES.includes(b.status as any) ? b.status : current.status;
   const callback = b.callback_scheduled_at !== undefined ? (b.callback_scheduled_at?.trim() || null) : current.callback_scheduled_at;
   const notes = b.call_notes !== undefined ? b.call_notes.slice(0, 4000) : current.call_notes;
 

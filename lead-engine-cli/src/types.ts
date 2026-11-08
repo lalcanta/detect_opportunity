@@ -111,14 +111,15 @@ export interface SyncPayload {
   activity: string;
   city: string;
   phone: string | null;
-  email: string | null;
+  email?: string | null;
   website_url: string | null;
   google_rating: number | null;
   google_reviews_count: number | null;
   opportunity_type?: string | null;
   audit_data: Record<string, unknown>;
-  demo_html: string;
-  flyer_pdf_base64: string | null;
-  battlecard_data: Battlecard;
-  token_usage: TokenUsageRecord[];
+  demo_html?: string | null;
+  flyer_pdf_base64?: string | null;
+  battlecard_data?: Battlecard | null;
+  token_usage?: TokenUsageRecord[];
+  status?: string | null;
 }

@@ -301,9 +301,13 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
   const mAudit = models.find((m) => m.action_type === "audit") || { provider: "gemini", model: "gemini-3-flash-preview", thinking_budget: 0 };
   const mCard = models.find((m) => m.action_type === "battlecard") || { provider: "gemini", model: "gemini-3-flash-preview", thinking_budget: 0 };
 
+  const pendingLeads = leads.filter((l) => l.status === "pending_generation");
+  const pendingCount = pendingLeads.length;
+
   const adminTabs: [string, IconName, string][] = [
     ["overview", "chart", "Vue d'ensemble & KPIs"],
     ["scanner", "target", `Scanner Local & Jobs${hasActive ? ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500 text-white font-extrabold animate-pulse">en cours</span>' : ""}`],
+    ["pending", "clock", `File CLI 0€${pendingCount > 0 ? ` <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-extrabold">${pendingCount}</span>` : ""}`],
     ["models", "cpu", "Modèles IA par Action"],
     ["benchmarks", "sparkles", "Benchmarks Concurrents"],
     ["team", "users", "Équipe & Closers"],
@@ -821,6 +825,110 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
           }
           </tbody>
         </table>
+      </div>
+    </section>`
+      : ""
+  }
+
+  ${
+    /* ========================================================================= */
+    /* ONGLET : FILE D'ATTENTE CLI 0€ (LEADS EN ATTENTE DE GÉNÉRATION)           */
+    /* ========================================================================= */
+    tab === "pending"
+      ? `<section class="space-y-6">
+      <!-- En-tête statut & instructions -->
+      <div class="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-6 shadow-sm">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-800 text-xs font-bold">
+              ${icon("clock", "w-3.5 h-3.5 text-amber-600")}
+              <span>${pendingCount} prospect(s) préparé(s) en attente</span>
+            </div>
+            <h2 class="text-lg font-bold text-zinc-900 mt-2">File d'Attente Génération Antigravity (0€ API Externe)</h2>
+            <p class="text-xs text-zinc-600 max-w-2xl leading-relaxed">
+              Ces prospects ont été qualifiés sur Google Maps et inspectés par Playwright (logos extraits, flyers PDF prêts).
+              Les démos interactives et battlecards d'appel peuvent être générées à 0€ en demandant à Antigravity.
+            </p>
+          </div>
+          <div class="bg-white/80 backdrop-blur border border-amber-200/80 rounded-xl p-4 shadow-sm text-xs space-y-2 shrink-0">
+            <span class="font-bold text-zinc-900 block">⚡ Comment lancer la génération ?</span>
+            <div class="font-mono bg-zinc-900 text-amber-300 px-3 py-2 rounded-lg text-[11px] select-all">
+              "Génère les démos et battlecards des leads en attente"
+            </div>
+            <p class="text-[11px] text-zinc-500">Ou en terminal : <code class="bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-800">npm run sync-queue</code></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table des prospects en attente -->
+      <div class="${card}">
+        <div class="flex items-center justify-between pb-4 border-b border-zinc-100">
+          <div class="flex items-center gap-2">
+            <h3 class="font-semibold text-sm text-zinc-900">Prospects Qualifiés en Attente</h3>
+            <span class="text-xs bg-zinc-100 text-zinc-700 font-semibold px-2 py-0.5 rounded">${pendingCount}</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto mt-4">
+          <table class="w-full text-xs text-left">
+            <thead>
+              <tr class="text-zinc-500 border-b border-zinc-100">
+                <th class="py-2.5 font-semibold">Entreprise</th>
+                <th class="py-2.5 font-semibold">Activité & Ville</th>
+                <th class="py-2.5 font-semibold">Téléphone</th>
+                <th class="py-2.5 font-semibold">Avis Google</th>
+                <th class="py-2.5 font-semibold">Présence Web</th>
+                <th class="py-2.5 font-semibold">Flyer PDF</th>
+                <th class="py-2.5 font-semibold">Statut</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-100">
+              ${
+                pendingLeads
+                  .map(
+                    (l) => `
+                <tr class="hover:bg-zinc-50/70 transition">
+                  <td class="py-3 font-semibold text-zinc-900">
+                    <div class="flex items-center gap-2">
+                      <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs shrink-0">
+                        ${esc(l.company_name.slice(0, 2).toUpperCase())}
+                      </div>
+                      <div>
+                        <span class="block">${esc(l.company_name)}</span>
+                        <span class="text-[10px] text-zinc-400 font-mono">#${esc(l.id.slice(0, 8))}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3">
+                    <span class="text-zinc-800 font-medium block">${esc(l.activity || "Artisan")}</span>
+                    <span class="text-zinc-500 text-[11px]">${esc(l.city || "")}</span>
+                  </td>
+                  <td class="py-3 font-mono font-medium text-zinc-900">
+                    ${l.phone ? `<a href="tel:${esc(l.phone)}" class="text-indigo-600 hover:underline">${esc(l.phone)}</a>` : '<span class="text-zinc-400">—</span>'}
+                  </td>
+                  <td class="py-3">
+                    ${l.google_rating ? `<span class="inline-flex items-center gap-1 font-semibold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded text-[11px]">⭐ ${l.google_rating} <span class="text-zinc-400 font-normal">(${l.google_reviews_count || 0})</span></span>` : '<span class="text-zinc-400">—</span>'}
+                  </td>
+                  <td class="py-3">
+                    ${l.website_url ? `<a href="${esc(l.website_url)}" target="_blank" rel="noopener" class="text-xs text-indigo-600 hover:underline inline-flex items-center gap-1">Visiter ${icon("external", "w-3 h-3")}</a>` : '<span class="text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 font-medium">Aucun site</span>'}
+                  </td>
+                  <td class="py-3">
+                    ${l.flyer_pdf_url ? `<a href="${esc(l.flyer_pdf_url)}" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-medium text-[11px] transition">📄 Flyer PDF</a>` : '<span class="text-zinc-400">—</span>'}
+                  </td>
+                  <td class="py-3">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 border border-amber-200 text-amber-700">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                      En attente IA (0€)
+                    </span>
+                  </td>
+                </tr>`,
+                  )
+                  .join("") ||
+                `<tr><td colspan="7" class="text-zinc-400 py-10 text-center">Aucun prospect en attente de génération dans la file.<br><span class="text-xs text-zinc-400">Lancez un scan en mode 'Préparation CLI 0€' depuis l'onglet Scanner.</span></td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>`
       : ""

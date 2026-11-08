@@ -7,6 +7,7 @@ import { inspectSite, lookupCompanySirene } from "./inspector/siteInspector";
 import { generateFlyerPdf } from "./generator/flyerGenerator";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
+import { pushLead } from "./sync/pushLead";
 import { leadId, log, parseDirectDomainLeads } from "./utils/helpers";
 import type { MapsLead } from "./types";
 
@@ -249,6 +250,39 @@ export async function runPrepScan(
         preparedAt: new Date().toISOString(),
       };
       await writeFile(`${leadDir}/meta.json`, JSON.stringify(meta, null, 2));
+
+      // Synchronisation immédiate vers le CRM avec statut pending_generation pour visibilité admin
+      try {
+        let flyerPdfBase64: string | null = null;
+        if (existsSync(`${leadDir}/flyer.pdf`)) {
+          const flyerBuf = await readFile(`${leadDir}/flyer.pdf`);
+          flyerPdfBase64 = flyerBuf.toString("base64");
+        }
+        await pushLead(cfg.REMOTE_APP_URL, cfg.SYNC_SECRET_TOKEN, {
+          id,
+          company_name: lead.name,
+          activity: lead.activity || "Artisan",
+          city: lead.city,
+          phone: lead.phone,
+          email: inspection?.emails?.[0] ?? null,
+          website_url: lead.website,
+          google_rating: lead.rating,
+          google_reviews_count: lead.reviewsCount,
+          opportunity_type: oppType,
+          audit_data: {
+            loadTimeMs: inspection?.loadTimeMs ?? null,
+            isResponsive: inspection?.isResponsive ?? null,
+            dominantColors: inspection?.dominantColors ?? [],
+            logoUrl: inspection?.logoUrl ?? null,
+            trackersFound: inspection?.trackersFound ?? [],
+            stack: inspection?.stack ?? [],
+          },
+          status: "pending_generation",
+          flyer_pdf_base64: flyerPdfBase64,
+        });
+      } catch {
+        // En mode déconnecté, la sync échouera en silence et sera reprise par sync-queue
+      }
 
       // Si opportunité Audit QA Traceurs : génération immédiate et déterministe du rapport HTML + brouillon Cold Email (0 attente)
       if (oppType === "audit_qa_trackers") {

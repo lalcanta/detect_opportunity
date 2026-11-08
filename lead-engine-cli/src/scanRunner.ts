@@ -313,7 +313,7 @@ async function processLead(
 async function saveLocally(p: SyncPayload): Promise<void> {
   const dir = `output/${p.id}`;
   await mkdir(dir, { recursive: true });
-  await writeFile(`${dir}/demo.html`, p.demo_html);
+  await writeFile(`${dir}/demo.html`, p.demo_html || "");
   if (p.flyer_pdf_base64) await writeFile(`${dir}/flyer.pdf`, Buffer.from(p.flyer_pdf_base64, "base64"));
   const { demo_html: _d, flyer_pdf_base64: _f, ...meta } = p;
   await writeFile(`${dir}/lead.json`, JSON.stringify(meta, null, 2));

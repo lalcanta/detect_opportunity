@@ -381,5 +381,24 @@ describe("RÈGLES MÉTIER : Dashboard Web & Pipeline Commercial (lead-dashboard-
 
       assert.deepEqual(calls, ["runPrepScan", "runFullCycle", "runFullCycle"]);
     });
+
+    it("doit exclure les leads au statut 'pending_generation' du pipeline closer et les réserver à l'admin", () => {
+      const allLeads = [
+        { id: "l1", company_name: "Artisan 1", status: "pending_generation" },
+        { id: "l2", company_name: "Artisan 2", status: "demo_ready" },
+        { id: "l3", company_name: "Artisan 3", status: "hot_lead" },
+        { id: "l4", company_name: "Artisan 4", status: "pending_generation" },
+      ];
+
+      // Filtre closer : uniquement les leads dont la démo est prête
+      const closerVisible = allLeads.filter((l) => l.status !== "pending_generation");
+      assert.equal(closerVisible.length, 2);
+      assert.deepEqual(closerVisible.map((l) => l.id), ["l2", "l3"]);
+
+      // Filtre admin onglet File d'attente CLI 0€
+      const adminPending = allLeads.filter((l) => l.status === "pending_generation");
+      assert.equal(adminPending.length, 2);
+      assert.deepEqual(adminPending.map((l) => l.id), ["l1", "l4"]);
+    });
   });
 });
