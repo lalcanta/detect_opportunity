@@ -1,5 +1,25 @@
 import type { ScanModule } from "./types";
 
+/** Convertit une chaîne CSS rgb(...) ou rgba(...) en code hexadécimal (#rrggbb). */
+export function parseRgbToHex(rgb: string): string | null {
+  const m = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+  if (!m) return null;
+  if (m[4] !== undefined && Number(m[4]) < 0.5) return null;
+  const [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (Math.max(r, g, b) - Math.min(r, g, b) < 18) return null;
+  return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+
+/** Résout une URL relative en URL absolue selon la page hôte. */
+export function resolveLogoUrl(u: string | null, baseUrl: string): string | null {
+  if (!u || u.startsWith("data:")) return u;
+  try {
+    return new URL(u, baseUrl).href;
+  } catch {
+    return null;
+  }
+}
+
 export const brandingVisualModule: ScanModule = {
   id: "branding_visual",
   label: "Identité Visuelle, Logo Base64 & Capture HD",

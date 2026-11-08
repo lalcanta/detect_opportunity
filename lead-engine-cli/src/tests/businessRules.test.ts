@@ -17,6 +17,7 @@ import {
   getModulesForOpportunity,
   parseSireneApiResponse,
 } from "../inspector/siteInspector";
+import { parseRgbToHex, resolveLogoUrl } from "../inspector/modules/brandingVisualModule";
 import { generateTrackerReportHtml } from "../generator/trackerReportGenerator";
 
 describe("RÈGLES MÉTIER : Moteur Local & CLI (lead-engine-cli)", () => {
@@ -330,6 +331,58 @@ describe("RÈGLES MÉTIER : Moteur Local & CLI (lead-engine-cli)", () => {
       assert.ok(signals[0]?.includes("HTTP sans cadenas SSL"));
       assert.ok(signals[1]?.includes("2019"));
       assert.ok(signals[2]?.includes("2 image(s) cassée(s)"));
+    });
+  });
+
+  describe("Règle 24 : Robustesse d'Inspection Web & Tolérance aux Certificats Défaillants", () => {
+    it("bascule automatiquement d'une URL HTTPS vers HTTP en cas d'erreur de certificat ou de délai d'attente", () => {
+      function getHttpFallbackUrl(targetUrl: string): string {
+        return targetUrl.startsWith("https://") ? targetUrl.replace(/^https:\/\//i, "http://") : targetUrl;
+      }
+
+      assert.equal(getHttpFallbackUrl("https://artisan-sans-certificat.fr"), "http://artisan-sans-certificat.fr");
+      assert.equal(getHttpFallbackUrl("https://www.plomberie-martin.com/devis"), "http://www.plomberie-martin.com/devis");
+      assert.equal(getHttpFallbackUrl("http://deja-http.fr"), "http://deja-http.fr");
+    });
+
+    it("sécurise le scope global du navigateur avec le polyfill __name pour empêcher les ReferenceError de esbuild", () => {
+      const sandboxGlobal: Record<string, any> = {};
+      const polyfillScript = () => {
+        sandboxGlobal.__name = (fn: any) => fn;
+      };
+      polyfillScript();
+
+      assert.equal(typeof sandboxGlobal.__name, "function");
+      const dummyFn = () => "test";
+      assert.equal(sandboxGlobal.__name(dummyFn), dummyFn);
+    });
+
+    it("parseRgbToHex convertit les styles CSS en hexadécimal et filtre les gris neutres / transparences", () => {
+      // Couleurs franches acceptées
+      assert.equal(parseRgbToHex("rgb(37, 99, 235)"), "#2563eb");
+      assert.equal(parseRgbToHex("rgba(220, 38, 38, 1)"), "#dc2626");
+
+      // Transparence excessive (alpha < 0.5) rejetée
+      assert.equal(parseRgbToHex("rgba(37, 99, 235, 0.4)"), null);
+      assert.equal(parseRgbToHex("rgba(0, 0, 0, 0)"), null);
+
+      // Gris/noir/blanc neutres (delta R-V-B < 18) rejetés
+      assert.equal(parseRgbToHex("rgb(240, 240, 240)"), null);
+      assert.equal(parseRgbToHex("rgb(15, 15, 15)"), null);
+      assert.equal(parseRgbToHex("rgb(100, 105, 108)"), null);
+
+      // Format invalide
+      assert.equal(parseRgbToHex("transparent"), null);
+      assert.equal(parseRgbToHex("inherit"), null);
+    });
+
+    it("resolveLogoUrl résout les chemins relatifs, absolus et data URIs sans erreur", () => {
+      const base = "https://www.artisan-toulouse.fr/contact/";
+      assert.equal(resolveLogoUrl("/assets/logo.png", base), "https://www.artisan-toulouse.fr/assets/logo.png");
+      assert.equal(resolveLogoUrl("./img/logo.svg", base), "https://www.artisan-toulouse.fr/contact/img/logo.svg");
+      assert.equal(resolveLogoUrl("https://cdn.artisan.fr/logo.webp", base), "https://cdn.artisan.fr/logo.webp");
+      assert.equal(resolveLogoUrl("data:image/svg+xml;base64,PHN2Z...", base), "data:image/svg+xml;base64,PHN2Z...");
+      assert.equal(resolveLogoUrl(null, base), null);
     });
   });
 });

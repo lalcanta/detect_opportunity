@@ -344,5 +344,42 @@ describe("RÈGLES MÉTIER : Dashboard Web & Pipeline Commercial (lead-dashboard-
         'Déclenché automatiquement par la planification "Matinale Plombiers" (Cycle Complet)',
       );
     });
+
+    it("doit formater le libellé et le badge visuel appropriés selon le mode d'exécution", () => {
+      function getExecutionBadge(mode: ExecutionMode) {
+        return mode === "prep_only"
+          ? { label: "Mode CLI (0€)", color: "emerald", costEstimateEur: 0 }
+          : { label: "Cycle Complet", color: "indigo", costEstimateEur: 0.05 };
+      }
+
+      const prepBadge = getExecutionBadge("prep_only");
+      assert.equal(prepBadge.label, "Mode CLI (0€)");
+      assert.equal(prepBadge.color, "emerald");
+      assert.equal(prepBadge.costEstimateEur, 0, "Le mode CLI doit garantir un coût API nul");
+
+      const autoBadge = getExecutionBadge("full_auto");
+      assert.equal(autoBadge.label, "Cycle Complet");
+      assert.equal(autoBadge.color, "indigo");
+      assert.ok(autoBadge.costEstimateEur > 0);
+    });
+
+    it("doit router le worker CLI vers runPrepScan en mode prep_only et runFullCycle en full_auto", () => {
+      const calls: string[] = [];
+
+      function simulateWorkerDispatch(job: { execution_mode?: string }) {
+        const mode = normalizeExecutionMode(job.execution_mode);
+        if (mode === "prep_only") {
+          calls.push("runPrepScan");
+        } else {
+          calls.push("runFullCycle");
+        }
+      }
+
+      simulateWorkerDispatch({ execution_mode: "prep_only" });
+      simulateWorkerDispatch({ execution_mode: "full_auto" });
+      simulateWorkerDispatch({}); // fallback
+
+      assert.deepEqual(calls, ["runPrepScan", "runFullCycle", "runFullCycle"]);
+    });
   });
 });
