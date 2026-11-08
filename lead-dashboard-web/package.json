@@ -10,7 +10,8 @@
     "db:seed:local": "wrangler d1 execute DB --local --file=seed.sql",
     "db:init:remote": "wrangler d1 execute lead-dashboard --remote --file=schema.sql",
     "deploy": "wrangler pages deploy public",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --noEmit"
   },
   "dependencies": {
     "hono": "^4.6.0"
