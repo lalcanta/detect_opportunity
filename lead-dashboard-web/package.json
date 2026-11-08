@@ -11,13 +11,14 @@
     "db:init:remote": "wrangler d1 execute lead-dashboard --remote --file=schema.sql",
     "deploy": "wrangler pages deploy public",
     "typecheck": "tsc --noEmit",
-    "test": "tsc --noEmit"
+    "test": "tsc --noEmit && tsx --test src/tests/*.test.ts"
   },
   "dependencies": {
     "hono": "^4.6.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241106.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.0",
     "wrangler": "^3.90.0"
   }
