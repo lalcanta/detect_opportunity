@@ -4,5 +4,5 @@ compatibility_date = "2024-11-01"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "DB"
-database_id = "local-DB"
+database_name = "lead-dashboard-db"
+database_id = "151e9f86-14f5-43dd-be22-4fa91f4ff880"
