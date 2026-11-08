@@ -1,0 +1,18 @@
+{
+  "name": "detect-opportunity",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Système d'acquisition, prospection et closing B2B pour artisans locaux",
+  "scripts": {
+    "scan": "npm --prefix lead-engine-cli run scan",
+    "prep": "npm --prefix lead-engine-cli run prep",
+    "sync-queue": "npm --prefix lead-engine-cli run sync-queue",
+    "dev:web": "npm --prefix lead-dashboard-web run dev",
+    "worker": "npm --prefix lead-engine-cli run worker",
+    "typecheck": "npm --prefix lead-dashboard-web run typecheck && npm --prefix lead-engine-cli run typecheck",
+    "test": "./lead-engine-cli/node_modules/.bin/tsx --test lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts",
+    "test:unit": "./lead-engine-cli/node_modules/.bin/tsx --test lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts",
+    "test:functional": "./lead-engine-cli/node_modules/.bin/tsx --test tests/functional.test.ts",
+    "test:all": "./lead-engine-cli/node_modules/.bin/tsx --test lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts tests/functional.test.ts"
+  }
+}

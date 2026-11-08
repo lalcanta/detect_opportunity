@@ -1,0 +1,66 @@
+name: CI / CD - Test & Deploy Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 🧪 Tests & Quality Assurance
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 📦 Install lead-engine-cli dependencies
+        run: npm --prefix lead-engine-cli ci
+
+      - name: 📦 Install lead-dashboard-web dependencies
+        run: npm --prefix lead-dashboard-web ci
+
+      - name: 🔍 Typecheck (TypeScript)
+        run: |
+          npm --prefix lead-engine-cli run typecheck
+          npm --prefix lead-dashboard-web run typecheck
+
+      - name: 🛡️ Run Test Suite (Business Rules, Components & Templates)
+        run: npm test
+
+  deploy-dashboard:
+    name: 🚀 Deploy Cloudflare Pages (lead-dashboard)
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 📦 Install dashboard dependencies
+        run: npm --prefix lead-dashboard-web ci
+
+      - name: 🚀 Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy public --project-name=lead-dashboard
+          workingDirectory: lead-dashboard-web

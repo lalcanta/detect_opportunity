@@ -1,0 +1,26 @@
+import "dotenv/config";
+import { z } from "zod";
+
+const schema = z.object({
+  GEMINI_API_KEY_1: z.string().optional(),
+  GEMINI_API_KEY_2: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  THINKING_BUDGET_HEAVY: z.coerce.number().int().min(0).max(8192).default(2048),
+  REMOTE_APP_URL: z.string().url(),
+  SYNC_SECRET_TOKEN: z.string().min(8),
+  CDP_URL: z.string().url().default("http://localhost:9222"),
+});
+
+export type Config = z.infer<typeof schema>;
+
+export function loadConfig(): Config {
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `- ${i.path.join(".")}: ${i.message}`).join("\n");
+    throw new Error(`Configuration .env invalide :\n${issues}`);
+  }
+  return { ...parsed.data, REMOTE_APP_URL: parsed.data.REMOTE_APP_URL.replace(/\/+$/, "") };
+}
