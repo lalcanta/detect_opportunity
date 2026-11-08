@@ -59,6 +59,9 @@ jobs:
 
       - name: 🚀 Deploy to Cloudflare Pages
         run: |
+          # Sécurisation : supprime automatiquement 'Bearer ' ou les guillemets si collés par erreur dans le secret GitHub
+          CLEAN_TOKEN=$(echo -n "${CLOUDFLARE_API_TOKEN}" | sed -E 's/^[bB][eE][aA][rR][eE][rR][[:space:]]+//' | tr -d '"'\'' ' | tr -d '\r\n')
+          export CLOUDFLARE_API_TOKEN="${CLEAN_TOKEN}"
           npx wrangler pages deploy public --project-name=lead-dashboard --branch=main --commit-dirty=true
         working-directory: lead-dashboard-web
         env:
