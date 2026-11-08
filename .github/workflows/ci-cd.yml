@@ -57,15 +57,6 @@ jobs:
       - name: 📦 Install dashboard dependencies
         run: npm --prefix lead-dashboard-web ci
 
-      - name: 🔍 Verify Cloudflare Auth & Token Permissions
-        run: |
-          echo "Testing Cloudflare credentials..."
-          npx wrangler whoami
-        working-directory: lead-dashboard-web
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
       - name: 🚀 Deploy to Cloudflare Pages
         run: |
           npx wrangler pages deploy public --project-name=lead-dashboard --branch=main --commit-dirty=true
