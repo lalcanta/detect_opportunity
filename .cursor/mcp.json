@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "leadengine": {
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/lead-engine-cli/node_modules/tsx/dist/cli.mjs",
+        "${workspaceFolder}/lead-engine-cli/src/mcp/server.ts"
+      ],
+      "cwd": "${workspaceFolder}/lead-engine-cli"
+    }
+  }
+}

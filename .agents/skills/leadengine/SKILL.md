@@ -55,3 +55,14 @@ npm run sync-queue
 ```
 Les leads sont poussés dans le Cloud CRM via `/api/sync` et déplacés dans `queue/completed/<leadId>/`.
 Les closers retrouvent immédiatement les fiches dans le Kanban avec démo interactive, flyer PDF prêt à l'emploi et battlecard d'appel.
+
+### 4. Mode MCP Direct ("Génère mes X / toutes mes démos")
+Quand l'utilisateur demande :
+> "Génère mes X démos" ou "Génère toutes mes démos"
+
+L'agent (Antigravity, Claude, Cursor) utilise les outils du serveur MCP `leadengine` :
+1. `leadengine_list_tasks` pour récupérer les fiches cibles.
+2. Pour chaque lead, `leadengine_get_task_context` : le MCP fournit directement la fiche complète ET le brief de direction artistique sur-mesure (archétype métier, typographies Google Fonts, palette Tailwind exacte, et le composant interactif signature clé en main).
+3. L'agent rédige le code HTML5 complet avec la plus haute exigence esthétique.
+4. `leadengine_submit_assets` pour valider, injecter le bandeau prospect interactif et publier instantanément dans la base Cloudflare D1 de production.
+
