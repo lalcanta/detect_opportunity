@@ -24,7 +24,7 @@ Quand l'utilisateur demande :
 > "Génère les démos et battlecards des leads en attente"
 
 Antigravity exécute :
-1. Lit `lead-engine-cli/queue/pending_manifest.json` (ou scanne `lead-engine-cli/queue/pending/`).
+1. Scanne `lead-engine-cli/queue/pending/` (le manifeste `pending_manifest.json` n'est qu'un index, purgé par `sync-queue`).
 2. Pour chaque lead `leadDir = lead-engine-cli/queue/pending/<id>` :
    - Lit `meta.json`, `prompt_demo.md`, et `prompt_battlecard.md`.
    - Inspecte `screenshot.png` si présent pour analyser les faiblesses du site actuel.
@@ -40,6 +40,9 @@ Antigravity exécute :
      - Objections et répliques.
      - Message WhatsApp de closing avec le lien démo.
      - Audit critique et arguments ROI.
+   - Lead `audit_qa_trackers` : `demo.html` (rapport) est déjà généré ; écrire `battlecard.json` avec un
+     `coldEmail` (`subject`, `body`) obligatoire, en citant uniquement les traceurs de `audit_facts.json`.
+     Sans `coldEmail`, `sync-queue` laisse le lead en attente.
 
 ### 3. Synchronisation Cloud CRM (1 commande)
 Une fois les fichiers `demo.html` et `battlecard.json` écrits :

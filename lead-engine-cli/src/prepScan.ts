@@ -338,7 +338,8 @@ export async function runPrepScan(
         log("prep", `⚠️ Sync pending_generation échouée pour ${lead.name} (reprise par sync-queue) : ${(err as Error).message}`);
       }
 
-      // Si opportunité Audit QA Traceurs : génération immédiate et déterministe du rapport HTML + brouillon Cold Email (0 attente)
+      // Si opportunité Audit QA Traceurs : rapport HTML déterministe + constats mesurés dans audit_facts.json.
+      // battlecard.json (avec le cold email) reste à produire par l'agent : sync-queue attend sa présence.
       if (oppType === "audit_qa_trackers") {
         const qaReportHtml = generateTrackerReportHtml({
           leadId: id,
@@ -350,15 +351,13 @@ export async function runPrepScan(
         const domain = (lead.website || lead.name).replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/[/?#].*$/, "");
         const trackers = inspection?.trackersFound ?? [];
         await writeFile(
-          `${leadDir}/battlecard.json`,
+          `${leadDir}/audit_facts.json`,
           JSON.stringify(
             {
               auditSummary: trackers.length
                 ? `${trackers.length} traceur(s) tiers exécuté(s) avant consentement (${trackers.join(", ")}).`
                 : `Audit réseau effectué sur ${domain} en session vierge.`,
               weaknesses: trackers.length ? trackers.map((t) => `${t} déclenché avant consentement CMP`) : [],
-              callScript: "Approche 100% asynchrone par email (aucun appel téléphonique).",
-              objections: [],
             },
             null,
             2,
@@ -446,6 +445,8 @@ Enregistre le JSON valide directement dans :
 - Domaine : ${lead.website || lead.name}
 - Ville : ${lead.city || ""}
 - Note / Présence : ${lead.rating || "5.0"}/5
+- Traceurs mesurés avant consentement : ${(inspection?.trackersFound ?? []).join(", ") || "aucun détecté"}
+- Rapport technique (déjà généré) : ${cfg.REMOTE_APP_URL}/demos/${id}
 
 # STRUCTURE DU MESSAGE :
 1. Objet : [Dev QA] Petite régression réseau repérée sur ${lead.website ? new URL(lead.website).hostname : lead.name} (tags avant CMP)
@@ -473,7 +474,7 @@ loic.alcantara@gmail.com | https://www.linkedin.com/in/loicalcantara/
     "subject": "[Dev QA] Petite régression réseau repérée sur ${lead.name} (tags avant CMP)",
     "body": "Bonjour l'équipe ${lead.name}, ...",
     "trackersFound": ["Google Analytics (GA4)", "Hotjar", "Meta Pixel"],
-    "reportUrl": "https://pub-r2.dev/${id}.html"
+    "reportUrl": "${cfg.REMOTE_APP_URL}/demos/${id}"
   }
 }
 \`\`\`

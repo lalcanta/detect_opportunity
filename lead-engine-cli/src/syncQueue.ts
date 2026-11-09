@@ -1,4 +1,4 @@
-import { readdir, readFile, rename, mkdir } from "node:fs/promises";
+import { readdir, readFile, rename, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { loadConfig } from "./config";
 import { pushLead } from "./sync/pushLead";
@@ -25,6 +25,86 @@ interface RawBattlecardFile {
   };
 }
 
+interface AuditFactsFile {
+  auditSummary?: string;
+  weaknesses?: string[];
+}
+
+interface QueueMeta {
+  id: string;
+  company_name: string;
+  opportunity_type?: string;
+}
+
+export const MANIFEST_PATH = "queue/pending_manifest.json";
+
+/**
+ * Assemble la battlecard et les constats d'audit d'un lead de la file à partir des fichiers écrits par l'agent.
+ * Renvoie `waiting` tant que l'agent n'a pas produit le contenu indispensable (cold email pour l'audit QA).
+ */
+export function buildQueueBattlecard(
+  meta: QueueMeta,
+  rawBc: RawBattlecardFile,
+  facts: AuditFactsFile | null,
+  appUrl: string,
+): { waiting: string } | { battlecard: Battlecard; summary: string; weaknesses: string[] } {
+  const isQa = meta.opportunity_type === "audit_qa_trackers";
+  const coldEmail = rawBc.coldEmail || (rawBc.subject && rawBc.body ? { subject: rawBc.subject, body: rawBc.body } : undefined);
+  if (isQa && !coldEmail) return { waiting: "coldEmail absent de battlecard.json (audit QA)" };
+
+  const demoUrl = `${appUrl}/demos/${meta.id}`;
+  const battlecard: Battlecard = isQa
+    ? {
+        closerBrief: rawBc.closerBrief || rawBc.executiveSummary || rawBc.auditSummary || facts?.auditSummary,
+        ourAdvantages: rawBc.ourAdvantages || rawBc.closingArguments || [
+          "Rapport technique en accès libre, preuve réseau à l'appui",
+          "Surveillance continue en CI/CD headless de tous les sites du portfolio",
+          "Alerte dès qu'une CMP saute ou qu'un nouveau tag fuit sans consentement",
+        ],
+        callScript: rawBc.callScript || "Opportunité 100% asynchrone par email (aucun appel téléphonique).",
+        objections: (rawBc.objections || []).map((o) => ({ objection: o.objection, reply: o.reply || o.response || "" })),
+        whatsappText: rawBc.whatsappText || "",
+        coldEmail,
+      }
+    : {
+        closerBrief: rawBc.closerBrief || rawBc.executiveSummary || rawBc.auditSummary,
+        ourAdvantages: rawBc.ourAdvantages || rawBc.closingArguments || [
+          "Barre d'appel d'urgence mobile collante en bas d'écran",
+          "Mise en avant immédiate des avis Google et du vrai logo client",
+          "Chargement ultra-rapide (< 0.5s) pensé pour convertir sur smartphone",
+        ],
+        callScript: rawBc.callScript || rawBc.openingPitch || "Bonjour, je vous contacte concernant votre site internet.",
+        objections: (rawBc.objections || []).map((o) => ({ objection: o.objection, reply: o.reply || o.response || "" })),
+        whatsappText: rawBc.whatsappText || `Bonjour ${meta.company_name}, voici la démo interactive de votre futur site web : ${demoUrl}`,
+        coldEmail,
+      };
+
+  const summary =
+    rawBc.auditSummary || rawBc.executiveSummary || facts?.auditSummary || "Audit de performance web & opportunité d'optimisation.";
+  const weaknesses =
+    rawBc.weaknesses ||
+    rawBc.currentSiteCritique ||
+    facts?.weaknesses ||
+    (isQa
+      ? []
+      : ["Site web existant lent à charger sur smartphone", "Absence de barre d'appel immédiate pour les urgences", "Avis clients Google non mis en valeur"]);
+
+  return { battlecard, summary, weaknesses };
+}
+
+/** Retire du manifeste les leads dont le dossier n'est plus dans queue/pending (synchronisés ou supprimés). */
+export async function pruneManifest(manifestPath = MANIFEST_PATH): Promise<void> {
+  if (!existsSync(manifestPath)) return;
+  try {
+    const list = JSON.parse(await readFile(manifestPath, "utf-8"));
+    if (!Array.isArray(list)) return;
+    const kept = list.filter((p: { dir?: string }) => typeof p?.dir === "string" && existsSync(p.dir));
+    if (kept.length !== list.length) await writeFile(manifestPath, JSON.stringify(kept, null, 2));
+  } catch (err) {
+    log("sync-queue", `⚠️ Manifeste illisible, non purgé : ${(err as Error).message}`);
+  }
+}
+
 export async function syncQueue(): Promise<void> {
   const cfg = loadConfig();
   const pendingDir = "queue/pending";
@@ -41,6 +121,7 @@ export async function syncQueue(): Promise<void> {
   const leadDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
 
   if (leadDirs.length === 0) {
+    await pruneManifest();
     console.log("Aucun prospect en attente dans queue/pending/.");
     return;
   }
@@ -80,38 +161,21 @@ export async function syncQueue(): Promise<void> {
       const battlecardRaw = await readFile(battlecardPath, "utf-8");
       const rawBc = JSON.parse(stripCodeFences(battlecardRaw)) as RawBattlecardFile;
 
-      const coldEmail = rawBc.coldEmail || (rawBc.subject && rawBc.body ? { subject: rawBc.subject, body: rawBc.body } : undefined);
-
-      const battlecard: Battlecard = {
-        closerBrief: rawBc.closerBrief || rawBc.executiveSummary || rawBc.auditSummary,
-        ourAdvantages: rawBc.ourAdvantages || rawBc.closingArguments || [
-          "Barre d'appel d'urgence mobile collante en bas d'écran",
-          "Mise en avant immédiate des avis Google et du vrai logo client",
-          "Chargement ultra-rapide (< 0.5s) pensé pour convertir sur smartphone",
-        ],
-        callScript: rawBc.callScript || rawBc.openingPitch || "Bonjour, je vous contacte concernant votre site internet.",
-        objections: (rawBc.objections || []).map((o) => ({
-          objection: o.objection,
-          reply: o.reply || o.response || "",
-        })),
-        whatsappText:
-          rawBc.whatsappText ||
-          `Bonjour ${meta.company_name}, voici la démo interactive de votre futur site web : ${cfg.REMOTE_APP_URL}/demos/${meta.id}`,
-        coldEmail,
-      };
+      const factsPath = `${dir}/audit_facts.json`;
+      const facts = existsSync(factsPath) ? (JSON.parse(await readFile(factsPath, "utf-8")) as AuditFactsFile) : null;
+      const built = buildQueueBattlecard(meta, rawBc, facts, cfg.REMOTE_APP_URL);
+      if ("waiting" in built) {
+        log("sync-queue", `⏳ ${id} : en attente de génération (${built.waiting})`);
+        waitingCount++;
+        continue;
+      }
+      const { battlecard, summary, weaknesses } = built;
 
       let flyerPdfBase64: string | null = null;
       if (existsSync(flyerPath)) {
         const flyerBuf = await readFile(flyerPath);
         flyerPdfBase64 = flyerBuf.toString("base64");
       }
-
-      const summary = rawBc.auditSummary || rawBc.executiveSummary || "Audit de performance web & opportunité d'optimisation.";
-      const weaknesses = rawBc.weaknesses || rawBc.currentSiteCritique || [
-        "Site web existant lent à charger sur smartphone",
-        "Absence de barre d'appel immédiate pour les urgences",
-        "Avis clients Google non mis en valeur",
-      ];
 
       const payload: SyncPayload = {
         id: meta.id,
@@ -172,6 +236,8 @@ export async function syncQueue(): Promise<void> {
       log("sync-queue", `✘ Erreur synchronisation ${id} : ${(err as Error).message}`);
     }
   }
+
+  await pruneManifest();
 
   console.log(`\n========================================================`);
   console.log(`🎉 Rapport de synchronisation :`);
