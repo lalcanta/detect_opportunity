@@ -2216,7 +2216,7 @@ document.addEventListener('click', async function (e) {
     var modal = $('scan_logs_modal');
     if (modal) {
       modal.classList.remove('hidden');
-      $('scan_logs_title').textContent = '📋 Journal d\'exécution du Scan #' + curActiveScanLogId + ' — ' + (logBtn.dataset.scanTitle || '');
+      $('scan_logs_title').textContent = "📋 Journal d'exécution du Scan #" + curActiveScanLogId + " — " + (logBtn.dataset.scanTitle || "");
       fetchAndDisplayScanLogs(curActiveScanLogId);
     }
     return;
