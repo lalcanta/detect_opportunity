@@ -42,6 +42,10 @@ Antigravity exécute :
 ### 3. Synchronisation Cloud CRM (1 commande)
 Une fois les fichiers `demo.html` et `battlecard.json` écrits :
 ```bash
+# Pour synchroniser vers Cloudflare Pages (Production) :
+npm run sync-queue:prod
+
+# Pour synchroniser vers le serveur local (http://localhost:8788) :
 npm run sync-queue
 ```
 Les leads sont poussés dans le Cloud CRM via `/api/sync` et déplacés dans `queue/completed/<leadId>/`.
