@@ -56,6 +56,7 @@ export type IconName =
   | "arrow-up-right"
   | "grip"
   | "credit-card"
+  | "alert-circle"
   | "check"
   | "x";
 
@@ -96,6 +97,7 @@ export function icon(name: IconName, className = "w-4 h-4"): string {
     "arrow-up-right": '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
     grip: '<circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>',
     "credit-card": '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+    "alert-circle": '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
     check: '<polyline points="20 6 9 17 4 12"/>',
     x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   };
