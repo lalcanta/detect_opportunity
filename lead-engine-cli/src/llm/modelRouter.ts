@@ -128,8 +128,22 @@ export class ModelRouter {
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} sur /api/worker/ai/run`);
-      const data = (await res.json()) as { ok?: boolean; text?: string; error?: string };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        text?: string;
+        error?: string;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
       if (!data.ok || !data.text) throw new Error(data.error || "Réponse Workers AI vide");
+
+      req.usageSink?.push({
+        task: req.task,
+        model: config.model,
+        inputTokens: data.usage?.prompt_tokens ?? Math.ceil(((req.prompt?.length || 0) + (req.system?.length || 0)) / 4),
+        outputTokens: data.usage?.completion_tokens ?? Math.ceil(data.text.length / 4),
+        thinkingTokens: 0,
+      });
+
       return {
         text: data.text,
         model: config.model,

@@ -346,8 +346,20 @@ scanRoutes.post("/api/worker/ai/run", async (c) => {
       messages,
       max_tokens: maxTokens,
     });
-    const text = typeof aiRes === "string" ? aiRes : (aiRes?.response || JSON.stringify(aiRes));
-    return c.json({ ok: true, text });
+    const text = typeof aiRes === "string" ? aiRes : ((aiRes as Record<string, unknown>)?.response as string || JSON.stringify(aiRes));
+    const rawUsage = (aiRes as Record<string, unknown>)?.usage as Record<string, number> | undefined;
+    const promptLen = (body.prompt?.length || 0) + (body.system?.length || 0);
+    const textLen = typeof text === "string" ? text.length : 0;
+    const inputTokens = rawUsage?.prompt_tokens ?? Math.ceil(promptLen / 4);
+    const outputTokens = rawUsage?.completion_tokens ?? Math.ceil(textLen / 4);
+    return c.json({
+      ok: true,
+      text,
+      usage: {
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+      },
+    });
   } catch (err) {
     return c.json({ error: (err as Error).message }, 500);
   }
