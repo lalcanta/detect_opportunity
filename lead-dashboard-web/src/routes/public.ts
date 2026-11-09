@@ -164,7 +164,7 @@ publicRoutes.get("/demos/:id", async (c) => {
   await ensureAuthSchema(c.env.DB);
   const id = c.req.param("id");
   const row = await c.env.DB.prepare(
-    "SELECT company_name, demo_html, demo_revoked, demo_expires_at, opportunity_type FROM leads WHERE id = ?",
+    "SELECT company_name, demo_html, demo_revoked, demo_expires_at, opportunity_type, audit_data FROM leads WHERE id = ?",
   )
     .bind(id)
     .first<{
@@ -173,6 +173,7 @@ publicRoutes.get("/demos/:id", async (c) => {
       demo_revoked?: number | null;
       demo_expires_at?: string | null;
       opportunity_type?: string | null;
+      audit_data?: string | null;
     }>();
   if (!row?.demo_html) return c.text("Démo introuvable", 404);
 
@@ -183,6 +184,25 @@ publicRoutes.get("/demos/:id", async (c) => {
     });
   }
 
+  let finalDemoHtml = row.demo_html;
+
+  // Récupération et injection du logo extrait si placeholder présent
+  if (row.audit_data && finalDemoHtml.includes("%%CLIENT_REAL_LOGO_URL%%")) {
+    try {
+      const parsedAudit = JSON.parse(row.audit_data);
+      if (parsedAudit.logoUrl) {
+        finalDemoHtml = finalDemoHtml.replaceAll("%%CLIENT_REAL_LOGO_URL%%", parsedAudit.logoUrl);
+      }
+    } catch {
+      // Ignorer si parsing audit échoue
+    }
+  }
+
+  // Empêche le blocage hotlinking des images et logos externes par l'hôte tiers
+  if (!finalDemoHtml.includes('name="referrer"')) {
+    finalDemoHtml = finalDemoHtml.replace(/<head[^>]*>/i, '$&\n<meta name="referrer" content="no-referrer">');
+  }
+
   const barHtml = renderInteractiveDemoFloatingBar({
     leadId: id,
     companyName: row.company_name,
@@ -190,9 +210,9 @@ publicRoutes.get("/demos/:id", async (c) => {
     opportunityType: row.opportunity_type,
   });
 
-  const htmlWithBar = row.demo_html.includes("</body>")
-    ? row.demo_html.replace("</body>", `${barHtml}\n</body>`)
-    : `${row.demo_html}\n${barHtml}`;
+  const htmlWithBar = finalDemoHtml.includes("</body>")
+    ? finalDemoHtml.replace("</body>", `${barHtml}\n</body>`)
+    : `${finalDemoHtml}\n${barHtml}`;
 
   return c.html(htmlWithBar, 200, {
     "Cache-Control": "no-store",

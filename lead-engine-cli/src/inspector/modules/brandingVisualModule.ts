@@ -55,10 +55,35 @@ export const brandingVisualModule: ScanModule = {
         }
       }
 
+      function getImgSrc(el: HTMLImageElement): string | null {
+        const isPlaceholder = (s: string | null) => !s || (s.startsWith("data:") && s.length < 500);
+        const candidates = [
+          el.getAttribute("data-lazy-src"),
+          el.getAttribute("data-src"),
+          el.getAttribute("data-original"),
+          el.currentSrc,
+          el.getAttribute("src"),
+        ];
+        for (const c of candidates) {
+          if (c && !isPlaceholder(c)) return c;
+        }
+        const srcset = el.getAttribute("data-srcset") || el.getAttribute("srcset");
+        if (srcset) {
+          const first = srcset.split(",")[0]?.trim().split(/\s+/)[0];
+          if (first && !isPlaceholder(first)) return first;
+        }
+        return el.currentSrc || el.getAttribute("src");
+      }
+
       const imgSelectors = [
         'header img[src*="logo" i]',
         'nav img[src*="logo" i]',
         '.navbar img[src*="logo" i]',
+        'img[class*="custom-logo" i]',
+        'img[class*="site-logo" i]',
+        '.site-branding img',
+        '.header-logo img',
+        'a[rel="home"] img',
         'img[alt*="logo" i]',
         '[class*="logo" i] img',
         '[id*="logo" i] img',
@@ -76,7 +101,7 @@ export const brandingVisualModule: ScanModule = {
       for (const sel of imgSelectors) {
         const els = Array.from(document.querySelectorAll<HTMLImageElement>(sel));
         for (const el of els) {
-          const src = el.currentSrc || el.getAttribute("src") || el.getAttribute("data-src");
+          const src = getImgSrc(el);
           const resolved = abs(src);
           if (resolved) {
             const rect = el.getBoundingClientRect();

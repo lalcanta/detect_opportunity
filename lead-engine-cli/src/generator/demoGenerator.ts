@@ -3,6 +3,8 @@ import type { ModelRouter } from "../llm/modelRouter";
 import type { MapsLead, SiteAudit, SiteInspection, TokenUsageRecord } from "../types";
 import { stripCodeFences } from "../utils/helpers";
 
+export const LOGO_PLACEHOLDER = "%%CLIENT_REAL_LOGO_URL%%";
+
 export interface DemoInput {
   leadId: string;
   lead: MapsLead;
@@ -51,9 +53,8 @@ export async function generateDemoHtml(
 ${
   inspection?.logoUrl
     ? `LE CLIENT POSSÈDE SON PROPRE LOGO RÉEL :
-- Source du logo : "${inspection.logoUrl}"
-- CONSIGNE STRICTE : Tu DOIS impérativement intégrer ce logo tel quel dans le header / navbar :
-  <img src="${inspection.logoUrl}" alt="${lead.name}" class="h-10 sm:h-12 w-auto object-contain max-w-[200px]" loading="eager">
+- CONSIGNE STRICTE : Tu DOIS impérativement intégrer ce logo tel quel dans le header / navbar en utilisant EXACTEMENT cette balise HTML :
+  <img src="${LOGO_PLACEHOLDER}" alt="${lead.name}" class="h-10 sm:h-12 w-auto object-contain max-w-[200px]" loading="eager">
 - INTERDICTION FORMELLE d'inventer, de dessiner ou de remplacer ce logo par une icône ou un faux logo !
 - LE DESIGN DOIT SE MODERNISER AUTOUR DE SON LOGO : toute la mise en page (boutons, bordures, cartes, accents) s'harmonise avec l'identité de son logo existant.`
     : `LE CLIENT N'A PAS DE FICHIER LOGO IMAGE DÉTECTÉ SUR SON ANCIEN SITE :
@@ -153,7 +154,27 @@ F. MOBILE-FIRST & BARRE FLOTTANTE D'APPEL DIRECT :
     usageSink,
   });
 
-  return injectTracker(stripCodeFences(text), input.leadId, input.remoteAppUrl);
+  let rawHtml = stripCodeFences(text);
+
+  // 1. Déterministiquement réinjecter le vrai logo client sans aucune altération/troncature LLM
+  if (inspection?.logoUrl) {
+    if (rawHtml.includes(LOGO_PLACEHOLDER)) {
+      rawHtml = rawHtml.replaceAll(LOGO_PLACEHOLDER, inspection.logoUrl);
+    } else {
+      // Si le LLM a substitué le placeholder par une URL ou un dessin de substitution dans le header
+      rawHtml = rawHtml.replace(
+        /(<header[\s\S]*?<img[^>]+src=["'])([^"']+)(["'][^>]*>)/i,
+        `$1${inspection.logoUrl}$3`,
+      );
+    }
+  }
+
+  // 2. Toujours injecter no-referrer pour éviter tout blocage hotlinking d'images externes (WordPress/Cloudflare)
+  if (!rawHtml.includes('name="referrer"')) {
+    rawHtml = rawHtml.replace(/<head[^>]*>/i, '$&\n    <meta name="referrer" content="no-referrer">');
+  }
+
+  return injectTracker(rawHtml, input.leadId, input.remoteAppUrl);
 }
 
 export function injectTracker(html: string, leadId: string, remoteAppUrl: string): string {

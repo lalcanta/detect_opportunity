@@ -283,6 +283,7 @@ async function processLead(
     opportunity_type: opportunityType || "website",
     audit_data: {
       ...audit,
+      logoUrl: inspection?.logoUrl ?? null,
       loadTimeMs: inspection?.loadTimeMs ?? null,
       isResponsive: inspection?.isResponsive ?? null,
       dominantColors: inspection?.dominantColors ?? [],

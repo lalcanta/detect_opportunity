@@ -293,3 +293,20 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
     .run();
   return c.json({ cancel: false });
 });
+
+/** Exécute un modèle Cloudflare Workers AI via le binding c.env.AI pour 0€ */
+scanRoutes.post("/api/worker/ai/run", async (c) => {
+  if (!bearerMatches(c.req.header("Authorization"), c.env.SYNC_SECRET_TOKEN)) return c.json({ error: "unauthorized" }, 401);
+  const body = await c.req.json<{ model?: string; prompt?: string; system?: string }>().catch(() => ({} as { model?: string; prompt?: string; system?: string }));
+  if (!c.env.AI) return c.json({ error: "no_ai_binding" }, 503);
+  try {
+    const messages: Array<{ role: string; content: string }> = [];
+    if (body.system) messages.push({ role: "system", content: body.system });
+    messages.push({ role: "user", content: body.prompt || "" });
+    const aiRes = await c.env.AI.run(body.model || "@cf/meta/llama-3.1-8b-instruct", { messages });
+    const text = typeof aiRes === "string" ? aiRes : (aiRes?.response || JSON.stringify(aiRes));
+    return c.json({ ok: true, text });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 500);
+  }
+});

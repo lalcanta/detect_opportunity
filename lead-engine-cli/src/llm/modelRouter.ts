@@ -4,7 +4,7 @@ import type { TokenUsageRecord } from "../types";
 import { log, sleep, stripCodeFences } from "../utils/helpers";
 
 export type ActionType = "demo" | "audit" | "battlecard" | "TASK_HEAVY" | "TASK_FAST";
-export type ModelProvider = "gemini" | "openai" | "anthropic" | "openrouter";
+export type ModelProvider = "gemini" | "openai" | "anthropic" | "openrouter" | "cloudflare";
 
 export interface ImageInput {
   mimeType: string;
@@ -96,6 +96,8 @@ export class ModelRouter {
     };
 
     switch (config.provider) {
+      case "cloudflare":
+        return await this.callCloudflareWorkersAi(config, req);
       case "openai":
         return await this.callOpenAI(config, req, false);
       case "openrouter":
@@ -105,6 +107,36 @@ export class ModelRouter {
       case "gemini":
       default:
         return await this.callGeminiWithFallback(config, req);
+    }
+  }
+
+  /* ------------------- CLOUDFLARE WORKERS AI ------------------- */
+
+  private async callCloudflareWorkersAi(config: ActionModelConfig, req: GenerateRequest): Promise<GenerateResult> {
+    try {
+      const res = await fetch(`${this.cfg.REMOTE_APP_URL}/api/worker/ai/run`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.cfg.SYNC_SECRET_TOKEN}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          prompt: req.prompt,
+          system: req.system,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status} sur /api/worker/ai/run`);
+      const data = (await res.json()) as { ok?: boolean; text?: string; error?: string };
+      if (!data.ok || !data.text) throw new Error(data.error || "Réponse Workers AI vide");
+      return {
+        text: data.text,
+        model: config.model,
+        provider: "cloudflare",
+      };
+    } catch (err) {
+      log("llm", `Workers AI (${config.model}) indisponible : ${(err as Error).message} → repli Gemini`);
+      return await this.callGeminiWithFallback(config, req);
     }
   }
 
