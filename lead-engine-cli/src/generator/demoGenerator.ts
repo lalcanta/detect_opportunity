@@ -174,6 +174,11 @@ F. MOBILE-FIRST & BARRE FLOTTANTE D'APPEL DIRECT :
     rawHtml = rawHtml.replace(/<head[^>]*>/i, '$&\n    <meta name="referrer" content="no-referrer">');
   }
 
+  // 3. Garantir la clôture du document HTML même en cas de coupure réseau ou token limit
+  if (!rawHtml.includes("</body>")) {
+    rawHtml += "\n</main>\n</body>\n</html>";
+  }
+
   return injectTracker(rawHtml, input.leadId, input.remoteAppUrl);
 }
 
@@ -181,5 +186,5 @@ export function injectTracker(html: string, leadId: string, remoteAppUrl: string
   const tracker = `<script>(function(){try{var k="seen_${leadId}";if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,"1");fetch(${JSON.stringify(
     remoteAppUrl,
   )}+"/api/tracker/open?leadId=${leadId}",{method:"GET",mode:"no-cors",keepalive:true,cache:"no-store"}).catch(function(){});}catch(e){}})();</script>`;
-  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${tracker}</body>`) : html + tracker;
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${tracker}\n</body>`) : `${html}\n${tracker}\n</body>\n</html>`;
 }

@@ -1,5 +1,11 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { z } from "zod";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const schema = z.object({
   GEMINI_API_KEY_1: z.string().optional(),
@@ -20,7 +26,7 @@ export function loadConfig(customEnv?: Record<string, string | undefined>): Conf
   const isProd = process.argv.includes("--prod") || process.argv.includes("--remote");
   const isLocal = process.argv.includes("--local");
 
-  const envCopy = { ...(customEnv ?? process.env) };
+  const envCopy = { ...process.env, ...customEnv };
   if (isProd) {
     envCopy.REMOTE_APP_URL = envCopy.REMOTE_APP_URL_PROD || "https://lead-dashboard-8bx.pages.dev";
   } else if (isLocal) {

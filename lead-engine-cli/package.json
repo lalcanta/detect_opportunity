@@ -13,6 +13,7 @@
     "prep:prod": "tsx src/prepScan.ts --prod",
     "sync-queue": "tsx src/syncQueue.ts",
     "sync-queue:prod": "tsx src/syncQueue.ts --prod",
+    "regen:demos:prod": "tsx src/regenerateExistingLeads.ts --prod",
     "typecheck": "tsc --noEmit",
     "postinstall": "playwright install chromium"
   },

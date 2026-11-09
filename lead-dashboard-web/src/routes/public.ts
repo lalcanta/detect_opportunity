@@ -212,7 +212,7 @@ publicRoutes.get("/demos/:id", async (c) => {
 
   const htmlWithBar = finalDemoHtml.includes("</body>")
     ? finalDemoHtml.replace("</body>", `${barHtml}\n</body>`)
-    : `${finalDemoHtml}\n${barHtml}`;
+    : `${finalDemoHtml}\n</main>\n${barHtml}\n</body>\n</html>`;
 
   return c.html(htmlWithBar, 200, {
     "Cache-Control": "no-store",

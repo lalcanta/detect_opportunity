@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ModelRouter } from "../llm/modelRouter";
 import type { Battlecard, MapsLead, SiteAudit, TokenUsageRecord } from "../types";
+import { extractJson, log } from "../utils/helpers";
 
 const battlecardSchema = z.object({
   closerBrief: z.string().optional(),
@@ -60,9 +61,22 @@ Tu es un agent d'automatisation chargé de rédiger des emails d'approche person
   "objections": []
 }`;
 
-    const { text } = await router.generate({ task: "battlecard", prompt, json: true, usageSink });
-    const card = battlecardSchema.parse(JSON.parse(text));
-    return card;
+    try {
+      const { text } = await router.generate({ task: "battlecard", prompt, json: true, usageSink });
+      const parsed = extractJson(text);
+      return battlecardSchema.parse(parsed);
+    } catch (err) {
+      log("battlecard", `Erreur génération battlecard async : ${(err as Error).message} → fallback`);
+      return {
+        callScript: "Opportunité 100% asynchrone par email (aucun appel téléphonique)",
+        whatsappText: "",
+        objections: [],
+        coldEmail: {
+          subject: `Audit technique & conformité web : ${lead.name}`,
+          body: `Bonjour l'équipe de ${lead.name},\n\nNous avons préparé un rapport technique interactif accessible ici : ${demoUrl}\n\nRestant à votre disposition,\nLoïc Alcantara`,
+        },
+      };
+    }
   }
 
   const best = [...lead.recentReviews].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
@@ -93,8 +107,31 @@ Réponds en JSON strict :
 }
 Français, ton chaleureux et professionnel, sans promesse mensongère.`;
 
-  const { text } = await router.generate({ task: "battlecard", prompt, json: true, usageSink });
-  const card = battlecardSchema.parse(JSON.parse(text));
-  if (card.whatsappText && !card.whatsappText.includes(demoUrl)) card.whatsappText += ` ${demoUrl}`;
-  return card;
+  try {
+    const { text } = await router.generate({ task: "battlecard", prompt, json: true, usageSink });
+    const parsed = extractJson(text);
+    const card = battlecardSchema.parse(parsed);
+    if (card.whatsappText && !card.whatsappText.includes(demoUrl)) card.whatsappText += ` ${demoUrl}`;
+    return card;
+  } catch (err) {
+    log("battlecard", `Erreur génération battlecard : ${(err as Error).message} → utilisation fallback`);
+    return {
+      closerBrief: `Artisan local (${lead.activity} à ${lead.city}). Notre démo personnalisée met en valeur ses services et facilite la prise de contact directe.`,
+      ourAdvantages: [
+        "Landing page ultra-rapide adaptée aux smartphones",
+        "Mise en valeur directe des coordonnées et avis clients",
+        "Boutons d'appel et de rappel immédiat",
+      ],
+      callScript: `Bonjour, je suis du cabinet digital partenaire. J'ai préparé pour ${lead.name} une maquette moderne et interactive de votre futur site web, visible sur ${demoUrl}. Souhaitez-vous que je vous l'envoie par SMS ou WhatsApp ?`,
+      objections: [
+        { objection: "J'ai déjà un site web", reply: "Absolument, notre démo est justement conçue pour moderniser l'existant et doubler les contacts mobiles sans changer vos habitudes." },
+        { objection: "Je n'ai pas le temps", reply: "La démo est 100% prête, cela vous prendra 30 secondes pour y jeter un œil sur votre téléphone." }
+      ],
+      whatsappText: `Bonjour ${lead.name}, voici la démo de votre nouveau site conçue sur-mesure pour votre activité : ${demoUrl}`,
+      coldEmail: {
+        subject: `Proposition de modernisation web pour ${lead.name}`,
+        body: `Bonjour,\n\nNous avons conçu une nouvelle version optimisée pour votre activité : ${demoUrl}\n\nN'hésitez pas si vous avez des questions !`
+      }
+    };
+  }
 }

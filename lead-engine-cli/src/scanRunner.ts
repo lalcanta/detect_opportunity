@@ -141,12 +141,13 @@ export async function runScan(
           await pushLead(cfg.REMOTE_APP_URL, cfg.SYNC_SECRET_TOKEN, payload);
         }
         ok++;
+        done++;
+        await hooks.onProgress?.(done, prospects.length, `✔ ${prefix} synchronisé (${ok}/${prospects.length} qualifiés · ${potentialCount} potentiels repérés)`);
       } catch (err) {
+        done++;
         log("main", `✘ ${lead.name} : ${(err as Error).message}`);
-        await hooks.onProgress?.(done, prospects.length, `${prefix} : ⚠️ Erreur (${(err as Error).message.slice(0, 80)})`);
+        await hooks.onProgress?.(done, prospects.length, `⚠️ Échec sur ${prefix} : ${(err as Error).message.slice(0, 100)}`);
       }
-      done++;
-      await hooks.onProgress?.(done, prospects.length, `✔ ${prefix} synchronisé (${done}/${prospects.length} qualifiés · ${potentialCount} potentiels repérés)`);
     }
     await hooks.onProgress?.(done, prospects.length, `🎉 Scan terminé : ${ok}/${prospects.length} leads qualifiés synchronisés dans le CRM (sur ${potentialCount} potentiels repérés sur la zone)`);
     log("main", `Terminé : ${ok}/${prospects.length} leads traités`);

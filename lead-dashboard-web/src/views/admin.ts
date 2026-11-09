@@ -838,14 +838,35 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               <td class="py-3">${modeBadge}</td>
               <td class="py-3"><span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ${badge[s.status] ?? ""}">${esc(s.status)}</span></td>
               <td class="py-3 font-mono text-zinc-700 font-medium">${s.processed}/${s.total || "?"}</td>
-              <td class="py-3 text-xs text-zinc-500 max-w-xs truncate">${esc(s.message || "–")}</td>
-              <td class="py-3">${s.status === "queued" || s.status === "running" ? `<button data-cancel="${s.id}" class="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md px-2.5 py-1 font-semibold">Annuler</button>` : `<span class="text-xs text-zinc-400">Terminé</span>`}</td>
+              <td class="py-3 text-xs text-zinc-500 max-w-xs truncate" title="${esc(s.message || '')}">${esc(s.message || "–")}</td>
+              <td class="py-3 flex items-center gap-1.5 whitespace-nowrap">
+                ${s.status === "queued" || s.status === "running" ? `<button data-cancel="${s.id}" class="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md px-2.5 py-1 font-semibold">Annuler</button>` : `<span class="text-xs text-zinc-400 font-medium">Terminé</span>`}
+                <button type="button" class="btn-view-scan-logs text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-md px-2 py-1 font-semibold inline-flex items-center gap-1 shadow-sm transition-colors" data-scan-id="${s.id}" data-scan-title="${esc(s.query)} · ${esc(s.city)}">📋 Logs</button>
+              </td>
             </tr>`;
               })
               .join("") || `<tr><td colspan="8" class="text-zinc-400 py-6 text-center">Aucun job de scan dans la file</td></tr>`
           }
           </tbody>
         </table>
+      </div>
+
+      <!-- Modal Logs de Scan en direct -->
+      <div id="scan_logs_modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+          <div class="px-5 py-3.5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/80">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span id="scan_logs_title" class="text-xs font-mono font-bold text-zinc-200">Logs du Scan</span>
+            </div>
+            <button type="button" onclick="document.getElementById('scan_logs_modal').classList.add('hidden')" class="text-zinc-400 hover:text-white text-sm font-bold px-2 py-1">✕</button>
+          </div>
+          <div class="p-4 overflow-y-auto font-mono text-[11px] text-zinc-300 bg-zinc-950/95 leading-relaxed whitespace-pre-wrap select-text max-h-[60vh]" id="scan_logs_content">Chargement des logs...</div>
+          <div class="px-5 py-2.5 border-t border-zinc-800 bg-zinc-950/80 flex items-center justify-between text-xs text-zinc-400">
+            <span>Journal temps réel (Playwright, Maps, IA, CRM)</span>
+            <button type="button" id="btn_refresh_cur_logs" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1 rounded font-semibold text-[11px]">🔄 Actualiser</button>
+          </div>
+        </div>
       </div>
     </section>`
       : ""
@@ -1980,8 +2001,11 @@ function updateScanUI(scans) {
         '<td class="py-3">' + modeBadge + '</td>' +
         '<td class="py-3"><span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ' + (badgeClasses[s.status] || '') + '">' + escHtml(s.status) + '</span></td>' +
         '<td class="py-3 font-mono text-zinc-700 font-medium">' + s.processed + '/' + (s.total || '?') + '</td>' +
-        '<td class="py-3 text-xs text-zinc-500 max-w-xs truncate">' + escHtml(s.message || '–') + '</td>' +
-        '<td class="py-3">' + (s.status === 'queued' || s.status === 'running' ? '<button data-cancel="' + s.id + '" class="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md px-2.5 py-1 font-semibold">Annuler</button>' : '<span class="text-xs text-zinc-400">Terminé</span>') + '</td>' +
+        '<td class="py-3 text-xs text-zinc-500 max-w-xs truncate" title="' + escHtml(s.message || '') + '">' + escHtml(s.message || '–') + '</td>' +
+        '<td class="py-3 flex items-center gap-1.5 whitespace-nowrap">' +
+          (s.status === 'queued' || s.status === 'running' ? '<button data-cancel="' + s.id + '" class="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md px-2.5 py-1 font-semibold">Annuler</button>' : '<span class="text-xs text-zinc-400 font-medium">Terminé</span>') +
+          ' <button type="button" class="btn-view-scan-logs text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-md px-2 py-1 font-semibold inline-flex items-center gap-1 shadow-sm transition-colors" data-scan-id="' + s.id + '" data-scan-title="' + escHtml(s.query) + ' · ' + escHtml(s.city) + '">📋 Logs</button>' +
+        '</td>' +
         '</tr>';
     });
     tbody.innerHTML = rowsHtml;
@@ -2157,6 +2181,25 @@ if ($('launch')) {
 }
 
 // Annulation d'un scan avec délégation d'événement
+var curActiveScanLogId = null;
+async function fetchAndDisplayScanLogs(scanId) {
+  var contentEl = $('scan_logs_content');
+  if (!contentEl) return;
+  contentEl.textContent = 'Chargement des logs en direct...';
+  try {
+    var res = await fetch('/api/admin/scans/' + scanId + '/logs');
+    var j = await res.json();
+    if (j.ok) {
+      contentEl.textContent = j.logs || 'Aucun log détaillé enregistré pour ce scan.';
+      contentEl.scrollTop = contentEl.scrollHeight;
+    } else {
+      contentEl.textContent = 'Erreur : ' + (j.error || 'introuvable');
+    }
+  } catch (err) {
+    contentEl.textContent = 'Erreur réseau : ' + err.message;
+  }
+}
+
 document.addEventListener('click', async function (e) {
   var b = e.target.closest('[data-cancel]');
   if (b) {
@@ -2164,8 +2207,27 @@ document.addEventListener('click', async function (e) {
     b.textContent = 'Annulation…';
     await post('/api/admin/scans/' + b.dataset.cancel + '/cancel');
     pollScansOnce();
+    return;
+  }
+
+  var logBtn = e.target.closest('.btn-view-scan-logs');
+  if (logBtn) {
+    curActiveScanLogId = logBtn.dataset.scanId;
+    var modal = $('scan_logs_modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      $('scan_logs_title').textContent = '📋 Journal d\'exécution du Scan #' + curActiveScanLogId + ' — ' + (logBtn.dataset.scanTitle || '');
+      fetchAndDisplayScanLogs(curActiveScanLogId);
+    }
+    return;
   }
 });
+
+if ($('btn_refresh_cur_logs')) {
+  $('btn_refresh_cur_logs').onclick = function () {
+    if (curActiveScanLogId) fetchAndDisplayScanLogs(curActiveScanLogId);
+  };
+}
 
 var ALL_MODELS = ${JSON.stringify(availableModels)};
 

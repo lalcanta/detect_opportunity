@@ -23,6 +23,7 @@ export interface ScanJob {
   processed: number;
   total: number;
   message: string | null;
+  logs?: string | null;
 }
 
 export interface ScheduledScan {
@@ -267,11 +268,20 @@ scanRoutes.post("/api/worker/claim", async (c) => {
   return c.json({ job: job ?? null, models: models.results });
 });
 
+scanRoutes.get("/api/admin/scans/:id/logs", requireUser("admin"), async (c) => {
+  const job = await c.env.DB.prepare("SELECT id, query, city, status, message, logs FROM scan_jobs WHERE id = ?")
+    .bind(c.req.param("id"))
+    .first<{ id: number; query: string; city: string; status: string; message: string; logs: string }>();
+  if (!job) return c.json({ error: "not_found" }, 404);
+  return c.json({ ok: true, logs: job.logs || job.message || "Aucun log enregistré pour ce scan." });
+});
+
 interface ProgressBody {
   status?: "running" | "done" | "failed";
   processed?: number;
   total?: number;
   message?: string;
+  log_entry?: string;
 }
 
 /** Progression ; la réponse indique au worker si l'admin a annulé. */
@@ -284,12 +294,34 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
   if (cur.status === "cancelled") return c.json({ cancel: true });
 
   const finished = b.status === "done" || b.status === "failed";
+  const now = new Date();
+  const timeStr = now.toISOString().slice(11, 19);
+  const logLine = b.log_entry ? `[${timeStr}] ${b.log_entry}` : null;
+
   await c.env.DB.prepare(
-    `UPDATE scan_jobs SET status = COALESCE(?1, status), processed = COALESCE(?2, processed),
-       total = COALESCE(?3, total), message = COALESCE(?4, message),
-       finished_at = CASE WHEN ?5 = 1 THEN ?6 ELSE finished_at END WHERE id = ?7`,
+    `UPDATE scan_jobs SET
+       status = COALESCE(?1, status),
+       processed = COALESCE(?2, processed),
+       total = COALESCE(?3, total),
+       message = COALESCE(?4, message),
+       logs = CASE
+         WHEN ?5 IS NULL THEN logs
+         WHEN logs IS NULL OR logs = '' THEN ?5
+         ELSE logs || '\n' || ?5
+       END,
+       finished_at = CASE WHEN ?6 = 1 THEN ?7 ELSE finished_at END
+     WHERE id = ?8`,
   )
-    .bind(b.status ?? null, b.processed ?? null, b.total ?? null, b.message?.slice(0, 500) ?? null, finished ? 1 : 0, new Date().toISOString(), id)
+    .bind(
+      b.status ?? null,
+      b.processed ?? null,
+      b.total ?? null,
+      b.message?.slice(0, 500) ?? null,
+      logLine,
+      finished ? 1 : 0,
+      now.toISOString(),
+      id,
+    )
     .run();
   return c.json({ cancel: false });
 });
@@ -297,13 +329,23 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
 /** Exécute un modèle Cloudflare Workers AI via le binding c.env.AI pour 0€ */
 scanRoutes.post("/api/worker/ai/run", async (c) => {
   if (!bearerMatches(c.req.header("Authorization"), c.env.SYNC_SECRET_TOKEN)) return c.json({ error: "unauthorized" }, 401);
-  const body = await c.req.json<{ model?: string; prompt?: string; system?: string }>().catch(() => ({} as { model?: string; prompt?: string; system?: string }));
+  interface AiRunBody {
+    model?: string;
+    prompt?: string;
+    system?: string;
+    max_tokens?: number;
+  }
+  const body = await c.req.json<AiRunBody>().catch(() => ({} as AiRunBody));
   if (!c.env.AI) return c.json({ error: "no_ai_binding" }, 503);
   try {
     const messages: Array<{ role: string; content: string }> = [];
     if (body.system) messages.push({ role: "system", content: body.system });
     messages.push({ role: "user", content: body.prompt || "" });
-    const aiRes = await c.env.AI.run(body.model || "@cf/meta/llama-3.1-8b-instruct-fp8", { messages });
+    const maxTokens = typeof body.max_tokens === "number" && body.max_tokens > 0 ? body.max_tokens : 8192;
+    const aiRes = await c.env.AI.run(body.model || "@cf/meta/llama-3.1-8b-instruct-fp8", {
+      messages,
+      max_tokens: maxTokens,
+    });
     const text = typeof aiRes === "string" ? aiRes : (aiRes?.response || JSON.stringify(aiRes));
     return c.json({ ok: true, text });
   } catch (err) {

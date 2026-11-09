@@ -59,7 +59,7 @@ async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Prom
         },
         {
           onProgress: async (processed, total, message) => {
-            const r = await report({ status: "running", processed, total, message }).catch(() => ({ cancel: false }));
+            const r = await report({ status: "running", processed, total, message, log_entry: message }).catch(() => ({ cancel: false }));
             return r.cancel ? false : undefined;
           },
         },
@@ -70,6 +70,7 @@ async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Prom
           processed: result.processed,
           total: result.total,
           message: `${result.processed}/${result.total} leads préparés dans queue/pending/ (prêts pour Antigravity CLI 0€)`,
+          log_entry: `🎉 Scan terminé : ${result.processed}/${result.total} leads préparés en local.`,
         });
       }
       return;
@@ -92,7 +93,7 @@ async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Prom
       router,
       {
         onProgress: async (processed, total, message) => {
-          const r = await report({ status: "running", processed, total, message }).catch(() => ({ cancel: false }));
+          const r = await report({ status: "running", processed, total, message, log_entry: message }).catch(() => ({ cancel: false }));
           return r.cancel ? false : undefined;
         },
       },
@@ -103,11 +104,12 @@ async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Prom
         processed: result.processed,
         total: result.total,
         message: `${result.processed}/${result.total} leads qualifiés synchronisés dans le CRM`,
+        log_entry: `🎉 Scan terminé : ${result.processed}/${result.total} leads qualifiés synchronisés dans le CRM.`,
       });
     }
   } catch (err) {
     log("worker", `Job #${job.id} en échec : ${(err as Error).message}`);
-    await report({ status: "failed", message: (err as Error).message }).catch(() => undefined);
+    await report({ status: "failed", message: (err as Error).message, log_entry: `❌ Erreur critique : ${(err as Error).message}` }).catch(() => undefined);
   }
 }
 

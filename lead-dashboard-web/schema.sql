@@ -83,7 +83,8 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
   finished_at     DATETIME,
   processed       INTEGER NOT NULL DEFAULT 0,
   total           INTEGER NOT NULL DEFAULT 0,
-  message         TEXT
+  message         TEXT,
+  logs            TEXT
 );
 
 CREATE TABLE IF NOT EXISTS scheduled_scans (

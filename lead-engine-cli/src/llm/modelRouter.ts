@@ -124,6 +124,7 @@ export class ModelRouter {
           model: config.model,
           prompt: req.prompt,
           system: req.system,
+          max_tokens: 8192,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} sur /api/worker/ai/run`);
