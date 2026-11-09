@@ -5,7 +5,7 @@ import type { AppEnv, Role, User } from "./types";
 const COOKIE = "lead_session";
 export const SESSION_COOKIE = COOKIE;
 
-const AUTH_SCHEMA_VERSION = 4;
+const AUTH_SCHEMA_VERSION = 5;
 let migrationChecked = 0;
 
 /** Assure que les colonnes Whitelist / Invitation / Password / Expiration démo, execution_mode et la table scheduled_scans existent. */
@@ -21,6 +21,11 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       "ALTER TABLE leads ADD COLUMN demo_expires_at DATETIME",
       "ALTER TABLE scan_jobs ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'full_auto'",
       "ALTER TABLE scheduled_scans ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'full_auto'",
+      "ALTER TABLE available_models ADD COLUMN is_flagship INTEGER NOT NULL DEFAULT 1",
+      "ALTER TABLE available_models ADD COLUMN speed TEXT DEFAULT 'fast'",
+      "ALTER TABLE available_models ADD COLUMN cost_tier TEXT DEFAULT 'eco'",
+      "ALTER TABLE available_models ADD COLUMN context_window TEXT DEFAULT '1M'",
+      "ALTER TABLE available_models ADD COLUMN recommended_for TEXT DEFAULT 'all'",
     ];
     for (const sql of alterCols) {
       await db.prepare(sql).run().catch(() => undefined);
@@ -69,6 +74,40 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       )
       .run()
       .catch(() => undefined);
+
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS available_models (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider          TEXT NOT NULL,
+        model_id          TEXT NOT NULL,
+        display_name      TEXT NOT NULL,
+        description       TEXT,
+        supports_vision   INTEGER NOT NULL DEFAULT 1,
+        supports_thinking INTEGER NOT NULL DEFAULT 0,
+        is_flagship       INTEGER NOT NULL DEFAULT 1,
+        speed             TEXT DEFAULT 'fast',
+        cost_tier         TEXT DEFAULT 'eco',
+        context_window    TEXT DEFAULT '1M',
+        recommended_for   TEXT DEFAULT 'all',
+        updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(provider, model_id)
+      )
+    `).run().catch(() => undefined);
+
+    const cfModels = [
+      ["cloudflare", "@cf/meta/llama-3.1-8b-instruct", "Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)", "Modèle ultrarapide hébergé nativement sur GPUs Cloudflare. 10 000 neurones/jour offerts. Idéal battlecards et pitchs commerciaux instantanés.", 0, 0, 1, "ultra", "eco", "128k tokens", "battlecard,audit"],
+      ["cloudflare", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "Meta Llama 3.3 70B (Cloudflare Workers AI)", "Flagship open-weights Meta sur GPUs Cloudflare. Puissance rédactionnelle maximale.", 0, 0, 1, "fast", "standard", "128k tokens", "battlecard,demo"],
+      ["cloudflare", "@cf/deepseek-ai/deepseek-r1-distill-llama-70b", "DeepSeek R1 70B (Cloudflare Workers AI)", "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.", 0, 1, 1, "deep", "standard", "64k tokens", "audit,battlecard"],
+    ];
+
+    for (const m of cfModels) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO available_models
+        (provider, model_id, display_name, description, supports_vision, supports_thinking, is_flagship, speed, cost_tier, context_window, recommended_for)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+      `).bind(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10]).run().catch(() => undefined);
+    }
+
     migrationChecked = AUTH_SCHEMA_VERSION;
   } catch {
     // Ignore

@@ -145,6 +145,43 @@ adminRoutes.post("/api/admin/models/refresh", requireUser("admin"), async (c) =>
     { provider: "openrouter", model_id: "openai/gpt-5", display_name: "OpenAI GPT-5 (via OpenRouter)", desc: "Accès à GPT-5 via OpenRouter.", vision: 1, thinking: 1, flagship: 1, speed: "fast", cost: "premium", ctx: "256k tokens" },
     { provider: "openrouter", model_id: "deepseek/deepseek-chat", display_name: "DeepSeek V3 (via OpenRouter)", desc: "Modèle open-weights ultra-performant et économique.", vision: 0, thinking: 0, flagship: 1, speed: "fast", cost: "eco", ctx: "64k tokens" },
     { provider: "openrouter", model_id: "deepseek/deepseek-r1", display_name: "DeepSeek R1 (Raisonnement via OpenRouter)", desc: "Modèle de raisonnement avec chaîne de pensée.", vision: 0, thinking: 1, flagship: 1, speed: "deep", cost: "eco", ctx: "64k tokens" },
+    // Cloudflare Workers AI (Free Tier 10k neurones/jour natif 0€)
+    {
+      provider: "cloudflare",
+      model_id: "@cf/meta/llama-3.1-8b-instruct",
+      display_name: "Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)",
+      desc: "Modèle ultrarapide hébergé nativement sur GPUs Cloudflare. 10 000 neurones/jour offerts. Idéal battlecards et pitchs commerciaux instantanés.",
+      vision: 0,
+      thinking: 0,
+      flagship: 1,
+      speed: "ultra",
+      cost: "eco",
+      ctx: "128k tokens",
+    },
+    {
+      provider: "cloudflare",
+      model_id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      display_name: "Meta Llama 3.3 70B (Cloudflare Workers AI)",
+      desc: "Flagship open-weights Meta sur GPUs Cloudflare. Puissance rédactionnelle maximale.",
+      vision: 0,
+      thinking: 0,
+      flagship: 1,
+      speed: "fast",
+      cost: "standard",
+      ctx: "128k tokens",
+    },
+    {
+      provider: "cloudflare",
+      model_id: "@cf/deepseek-ai/deepseek-r1-distill-llama-70b",
+      display_name: "DeepSeek R1 70B (Cloudflare Workers AI)",
+      desc: "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.",
+      vision: 0,
+      thinking: 1,
+      flagship: 1,
+      speed: "deep",
+      cost: "standard",
+      ctx: "64k tokens",
+    },
   ];
 
   for (const m of baseModels) {

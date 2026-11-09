@@ -24,7 +24,14 @@ function isCustomModel(provider: string, model: string, available: import("../ty
 }
 
 function renderModelSelectOptions(provider: string, selectedModel: string, available: import("../types").AvailableModel[]): string {
-  const filtered = available.filter((m) => m.provider === provider);
+  let filtered = available.filter((m) => m.provider === provider);
+  if (filtered.length === 0 && provider === "cloudflare") {
+    filtered = [
+      { id: 101, provider: "cloudflare", model_id: "@cf/meta/llama-3.1-8b-instruct", display_name: "Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)", description: "Modèle ultrarapide 0€.", supports_vision: 0, supports_thinking: 0, is_flagship: 1, speed: "ultra", cost_tier: "eco", context_window: "128k tokens", recommended_for: "battlecard,audit", updated_at: "" },
+      { id: 102, provider: "cloudflare", model_id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", display_name: "Meta Llama 3.3 70B (Cloudflare Workers AI)", description: "Flagship open-weights Meta sur GPUs Cloudflare.", supports_vision: 0, supports_thinking: 0, is_flagship: 1, speed: "fast", cost_tier: "standard", context_window: "128k tokens", recommended_for: "battlecard,demo", updated_at: "" },
+      { id: 103, provider: "cloudflare", model_id: "@cf/deepseek-ai/deepseek-r1-distill-llama-70b", display_name: "DeepSeek R1 70B (Cloudflare Workers AI)", description: "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.", supports_vision: 0, supports_thinking: 1, is_flagship: 1, speed: "deep", cost_tier: "standard", context_window: "64k tokens", recommended_for: "audit,battlecard", updated_at: "" },
+    ];
+  }
   const flagships = filtered.filter((m) => m.is_flagship !== 0);
   const others = filtered.filter((m) => m.is_flagship === 0);
 
@@ -1012,6 +1019,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <div class="space-y-1">
               <span class="text-[10px] font-semibold text-zinc-500 uppercase">Recommandés :</span>
               <div class="flex flex-wrap gap-1">
+                <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 shadow-sm transition-all" data-target="demo" data-prov="cloudflare" data-mod="@cf/meta/llama-3.3-70b-instruct-fp8-fast" data-thk="0">⚡ Llama 3.3 70B (0€)</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="demo" data-prov="anthropic" data-mod="claude-5-sonnet" data-thk="0">Claude Sonnet 5</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="demo" data-prov="openai" data-mod="gpt-5" data-thk="0">GPT-5</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="demo" data-prov="gemini" data-mod="gemini-3.1-pro-preview" data-thk="2048">Gemini 3.1 Pro</button>
@@ -1060,6 +1068,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <div class="space-y-1">
               <span class="text-[10px] font-semibold text-zinc-500 uppercase">Recommandés :</span>
               <div class="flex flex-wrap gap-1">
+                <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 shadow-sm transition-all" data-target="audit" data-prov="cloudflare" data-mod="@cf/meta/llama-3.1-8b-instruct" data-thk="0">⚡ Llama 3.1 8B (0€)</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="audit" data-prov="gemini" data-mod="gemini-3.8-flash" data-thk="0">Gemini 3.8 Flash</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="audit" data-prov="openai" data-mod="gpt-5-mini" data-thk="0">GPT-5 Mini</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="audit" data-prov="anthropic" data-mod="claude-5-haiku" data-thk="0">Claude Haiku 5</button>
@@ -2205,6 +2214,13 @@ document.querySelectorAll('.prov-select').forEach(function (ps) {
     if (!sel || !input) return;
 
     var filtered = ALL_MODELS.filter(function (m) { return m.provider === prov; });
+    if (filtered.length === 0 && prov === 'cloudflare') {
+      filtered = [
+        { provider: 'cloudflare', model_id: '@cf/meta/llama-3.1-8b-instruct', display_name: 'Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)', is_flagship: 1, speed: 'ultra', cost_tier: 'eco' },
+        { provider: 'cloudflare', model_id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', display_name: 'Meta Llama 3.3 70B (Cloudflare Workers AI)', is_flagship: 1, speed: 'fast', cost_tier: 'standard' },
+        { provider: 'cloudflare', model_id: '@cf/deepseek-ai/deepseek-r1-distill-llama-70b', display_name: 'DeepSeek R1 70B (Cloudflare Workers AI)', is_flagship: 1, speed: 'deep', cost_tier: 'standard' }
+      ];
+    }
     var flagships = filtered.filter(function (m) { return m.is_flagship !== 0; });
     var others = filtered.filter(function (m) { return m.is_flagship === 0; });
 
