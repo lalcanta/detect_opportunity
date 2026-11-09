@@ -26,61 +26,45 @@ pageRoutes.post("/login", async (c) => {
   const form = await c.req.parseBody();
   const emailRaw = typeof form["email"] === "string" ? form["email"].trim().toLowerCase() : "";
   const password = typeof form["password"] === "string" ? form["password"] : "";
-  const token = typeof form["token"] === "string" ? form["token"].trim() : "";
 
-  // 1. Connexion par Email (Whitelist) + Mot de passe
-  if (emailRaw) {
-    const user = await c.env.DB.prepare(
-      "SELECT id, email, password_hash, invite_code, access_token, is_active FROM users WHERE LOWER(email) = ?",
-    )
-      .bind(emailRaw)
-      .first<{
-        id: string;
-        email: string;
-        password_hash: string | null;
-        invite_code: string | null;
-        access_token: string;
-        is_active: number;
-      }>();
+  // Connexion uniquement par email whitelisté + mot de passe (plus de connexion par jeton brut : audit 5.1).
+  if (!emailRaw) return c.html(loginPage("Identifiants incorrects."), 401);
 
-    if (!user || !user.is_active) {
-      return c.html(
-        loginPage("Accès refusé : cette adresse email ne figure pas dans la liste blanche (Whitelist) autorisée.", emailRaw),
-        401,
-      );
-    }
+  const user = await c.env.DB.prepare(
+    "SELECT id, email, password_hash, invite_code, access_token, is_active FROM users WHERE LOWER(email) = ?",
+  )
+    .bind(emailRaw)
+    .first<{
+      id: string;
+      email: string;
+      password_hash: string | null;
+      invite_code: string | null;
+      access_token: string;
+      is_active: number;
+    }>();
 
-    // Si l'utilisateur autorisé n'a pas encore défini de mot de passe -> redirection vers sa page d'activation
-    if (!user.password_hash) {
-      let invCode = user.invite_code;
-      if (!invCode) {
-        invCode = `inv_${generateRandomHex(16)}`;
-        await c.env.DB.prepare("UPDATE users SET invite_code = ? WHERE id = ?").bind(invCode, user.id).run();
-      }
-      return c.redirect(`/invite/${invCode}`);
-    }
-
-    const ok = await verifyPassword(password, user.password_hash);
-    if (!ok) {
-      return c.html(loginPage("Mot de passe incorrect pour cette adresse autorisée.", emailRaw), 401);
-    }
-
-    setCookie(c, SESSION_COOKIE, user.access_token, {
-      httpOnly: true,
-      secure: new URL(c.req.url).protocol === "https:",
-      sameSite: "Lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 30,
-    });
-    return c.redirect("/");
+  if (!user || !user.is_active) {
+    return c.html(
+      loginPage("Accès refusé : cette adresse email ne figure pas dans la liste blanche (Whitelist) autorisée.", emailRaw),
+      401,
+    );
   }
 
-  // 2. Compatibilité API / Tests automatisés si un token est envoyé en POST
-  const userByToken = token
-    ? await c.env.DB.prepare("SELECT id FROM users WHERE access_token = ? AND is_active = 1").bind(token).first()
-    : null;
-  if (!userByToken) return c.html(loginPage("Jeton invalide ou identifiants incorrects"), 401);
-  setCookie(c, SESSION_COOKIE, token, {
+  // Compte pas encore activé : seul le lien d'invitation (secret) permet de définir le mot de passe.
+  // Ne jamais le révéler à partir de l'email seul, sinon n'importe qui prend le compte (audit 5.2).
+  if (!user.password_hash) {
+    return c.html(
+      loginPage("Compte pas encore activé : utilisez le lien d'invitation transmis par l'administrateur.", emailRaw),
+      403,
+    );
+  }
+
+  const ok = await verifyPassword(password, user.password_hash);
+  if (!ok) {
+    return c.html(loginPage("Mot de passe incorrect pour cette adresse autorisée.", emailRaw), 401);
+  }
+
+  setCookie(c, SESSION_COOKIE, user.access_token, {
     httpOnly: true,
     secure: new URL(c.req.url).protocol === "https:",
     sameSite: "Lax",

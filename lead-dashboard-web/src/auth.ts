@@ -60,7 +60,7 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
         `UPDATE users
          SET email = COALESCE(email, 'loic.alcantara@gmail.com'),
              name = CASE WHEN name = 'Admin' THEN 'Loïc Alcantara' ELSE name END,
-             invite_code = COALESCE(invite_code, 'inv_admin_loic_initial')
+             invite_code = COALESCE(invite_code, 'inv_' || lower(hex(randomblob(16))))
          WHERE id = 'u_admin'`,
       )
       .run()
@@ -69,7 +69,7 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       .prepare(
         `UPDATE users
          SET email = COALESCE(email, 'closer1@agence.local'),
-             invite_code = COALESCE(invite_code, 'inv_closer1_initial')
+             invite_code = COALESCE(invite_code, 'inv_' || lower(hex(randomblob(16))))
          WHERE id = 'u_closer1'`,
       )
       .run()

@@ -44,20 +44,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.equal(res.headers.get("Location"), "/login");
     });
 
-    it("POST /login avec un jeton erroné doit échouer (HTTP 401)", async () => {
-      const form = new URLSearchParams();
-      form.set("token", "jeton_completement_invalide");
-      const res = await fetch(`${BASE_URL}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: form.toString(),
-      });
-      assert.equal(res.status, 401);
-      const html = await res.text();
-      assert.ok(html.includes("Jeton invalide"));
-    });
-
-    it("POST /login avec un jeton Closer valide doit poser le cookie de session et rediriger vers /", async () => {
+    it("POST /login avec un jeton brut, même valide, doit être refusé (HTTP 401, audit 5.1)", async () => {
       const form = new URLSearchParams();
       form.set("token", "cls_d7e12e4e0eee45d8654fd44439726210");
       const res = await fetch(`${BASE_URL}/login`, {
@@ -66,10 +53,25 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
         body: form.toString(),
         redirect: "manual",
       });
-      assert.equal(res.status, 302);
-      assert.equal(res.headers.get("Location"), "/");
-      const setCookie = res.headers.get("set-cookie") || "";
-      assert.ok(setCookie.includes("lead_session="));
+      assert.equal(res.status, 401);
+      assert.ok(!(res.headers.get("set-cookie") || "").includes("lead_session="), "Aucune session ne doit être ouverte");
+    });
+
+    it("POST /login avec l'email d'un compte non activé ne doit pas révéler le lien d'invitation (audit 5.2)", async () => {
+      const form = new URLSearchParams();
+      form.set("email", "closer1@agence.local");
+      form.set("password", "peu-importe");
+      const res = await fetch(`${BASE_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+        redirect: "manual",
+      });
+      assert.equal(res.status, 403);
+      assert.ok(!(res.headers.get("Location") || "").includes("/invite/"), "Pas de redirection vers la page d'invitation");
+      const html = await res.text();
+      assert.ok(!html.includes("/invite/inv_"), "Le code d'invitation ne doit pas apparaître");
+      assert.ok(!(res.headers.get("set-cookie") || "").includes("lead_session="));
     });
 
     it("Accès Closer à la vue principale / doit répondre HTTP 200", async () => {

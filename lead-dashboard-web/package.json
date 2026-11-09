@@ -11,6 +11,8 @@
     "db:init:remote": "wrangler d1 execute lead-dashboard --remote --file=schema.sql",
     "db:migrate:local": "wrangler d1 execute DB --local --persist-to=/tmp/lead-d1-state --file=migrations/0001_leads_status_pending_generation.sql",
     "db:migrate:remote": "wrangler d1 execute lead-dashboard-db --remote --file=migrations/0001_leads_status_pending_generation.sql",
+    "db:rotate-seed-credentials:local": "wrangler d1 execute DB --local --persist-to=/tmp/lead-d1-state --file=migrations/0002_rotate_public_seed_credentials.sql",
+    "db:rotate-seed-credentials:remote": "wrangler d1 execute lead-dashboard-db --remote --file=migrations/0002_rotate_public_seed_credentials.sql",
     "deploy": "wrangler pages deploy public",
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && tsx --test src/tests/*.test.ts"

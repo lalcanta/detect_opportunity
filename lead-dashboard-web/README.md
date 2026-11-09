@@ -7,16 +7,19 @@ Plateforme de closing (Cloudflare Pages Functions + Hono + D1). Reçoit les lead
 npm install
 npx wrangler d1 create lead-dashboard        # copier le database_id dans wrangler.toml
 cp .env.example .dev.vars                    # puis éditer
-# éditer seed.sql : remplacer les jetons (openssl rand -hex 24)
 npm run db:init:local
-npx wrangler d1 execute lead-dashboard --local --file=seed.sql
-npm run dev                                  # http://localhost:8788  (connexion avec un jeton du seed)
+npm run db:seed:local                        # comptes de démo LOCAUX (jetons publics, jamais en prod)
+npm run dev                                  # http://localhost:8788
 ```
 
 ## Production
+⚠️ Ne jamais exécuter `seed.sql` en prod : ses jetons sont versionnés. Si c'est déjà arrivé, lancer
+`npm run db:rotate-seed-credentials:remote` (déconnecte ces sessions et régénère les codes d'invitation).
 ```bash
 npm run db:init:remote
-npx wrangler d1 execute lead-dashboard --remote --file=seed.sql
+# Premier admin (jeton et invitation aléatoires), puis ouvrir /invite/<invite_code> pour choisir le mot de passe :
+npx wrangler d1 execute lead-dashboard-db --remote --command "INSERT INTO users (id, name, email, role, phone_quota_weekly, invite_code, access_token) VALUES ('u_admin', 'Admin', 'vous@domaine.fr', 'admin', 0, 'inv_' || lower(hex(randomblob(16))), 'tok_' || lower(hex(randomblob(24))))"
+npx wrangler d1 execute lead-dashboard-db --remote --command "SELECT invite_code FROM users WHERE id = 'u_admin'"
 npx wrangler pages secret put SYNC_SECRET_TOKEN   # idem STRIPE_SECRET_KEY, TELEGRAM_*, DISCORD_WEBHOOK_URL, PUBLIC_APP_URL
 npm run deploy
 ```
