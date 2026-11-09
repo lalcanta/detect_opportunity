@@ -10,6 +10,17 @@ import { authGoogleRoutes } from "./routes/authGoogle";
 
 export const app = new Hono<AppEnv>();
 
+// Empêcher tout cache intempestif des pages HTML par les navigateurs ou le CDN Edge
+app.use("*", async (c, next) => {
+  await next();
+  const ct = c.res.headers.get("Content-Type") || "";
+  if (ct.includes("text/html")) {
+    c.res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    c.res.headers.set("Pragma", "no-cache");
+    c.res.headers.set("Expires", "0");
+  }
+});
+
 // Le tracker est appelé depuis la démo (potentiellement ouverte hors de ce domaine).
 app.use("/api/tracker/*", cors({ origin: "*", allowMethods: ["GET", "POST", "OPTIONS"] }));
 // Le webhook de capture de leads volontaires ("Demande de rappel") est appelé depuis la landing page publique dissociée.
