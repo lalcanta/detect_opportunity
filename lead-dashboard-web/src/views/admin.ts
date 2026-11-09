@@ -966,6 +966,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
           <div class="flex items-center gap-2">
             <h2 class="font-semibold text-sm text-zinc-900 flex items-center gap-2">${icon("cpu", "w-4 h-4 text-zinc-700")} Configuration des Modèles IA</h2>
             <span class="text-xs bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold px-2.5 py-0.5 rounded-md">${availableModels.length} modèles configurés</span>
+            <span class="text-[10px] bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold px-2 py-0.5 rounded-md">⚡ Cloudflare Workers AI Actif</span>
           </div>
           <p class="text-xs text-zinc-500">Sélectionnez le modèle idéal par type d'action. Tous les modèles sont stockés en cache local pour une exécution ultra-rapide.</p>
         </div>
