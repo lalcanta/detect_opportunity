@@ -4,7 +4,17 @@ import type { TokenUsageRecord } from "../types";
 import { log, sleep, stripCodeFences } from "../utils/helpers";
 
 export type ActionType = "demo" | "audit" | "battlecard" | "TASK_HEAVY" | "TASK_FAST";
-export type ModelProvider = "gemini" | "openai" | "anthropic" | "openrouter" | "cloudflare";
+export type ModelProvider = "gemini" | "openai" | "anthropic" | "openrouter" | "cloudflare" | "cli";
+
+/** Levée quand une action est réglée sur le provider "cli" (coupe-circuit 0 €) : aucune API ne doit être appelée. */
+export class ZeroCostModeError extends Error {
+  constructor(task: string) {
+    super(`Mode CLI 0 € actif pour « ${task} » : aucun appel API autorisé (génération à confier à l'agent CLI).`);
+    this.name = "ZeroCostModeError";
+  }
+}
+
+const GENERATIVE_ACTIONS = ["demo", "audit", "battlecard"] as const;
 
 export interface ImageInput {
   mimeType: string;
@@ -88,6 +98,11 @@ export class ModelRouter {
     }
   }
 
+  /** Vrai si le coupe-circuit a basculé toutes les actions génératives en provider "cli". */
+  isZeroCostMode(): boolean {
+    return GENERATIVE_ACTIONS.every((a) => this.actionConfigs.get(a)?.provider === "cli");
+  }
+
   async generate(req: GenerateRequest): Promise<GenerateResult> {
     const config = this.actionConfigs.get(req.task) ?? {
       provider: "gemini",
@@ -104,9 +119,13 @@ export class ModelRouter {
         return await this.callOpenAI(config, req, true);
       case "anthropic":
         return await this.callAnthropic(config, req);
+      case "cli":
+        throw new ZeroCostModeError(req.task);
       case "gemini":
-      default:
         return await this.callGeminiWithFallback(config, req);
+      default:
+        // Un provider inconnu ne doit pas retomber silencieusement sur une API payante.
+        throw new Error(`Provider IA inconnu « ${String(config.provider)} » pour « ${req.task} »`);
     }
   }
 

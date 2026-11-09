@@ -393,10 +393,11 @@ export function computeTokenMetrics(rawList: Array<{
       quotaCat = "cloudflare_free";
       const rate = m.includes("70b") ? 250 : 25;
       neuronsToday = Math.round(((r.input_today + r.output_today) / 1000) * rate);
+      // Seule la part de dépassement apportée par ce modèle lui est imputée (sinon double comptage entre modèles @cf).
+      const overBefore = Math.max(0, cloudflareNeuronsToday - 10000);
       cloudflareNeuronsToday += neuronsToday;
-      if (cloudflareNeuronsToday > 10000) {
-        cost = ((cloudflareNeuronsToday - 10000) / 1000) * 0.011 * 0.92;
-      }
+      const overAfter = Math.max(0, cloudflareNeuronsToday - 10000);
+      cost = ((overAfter - overBefore) / 1000) * 0.011 * 0.92;
     } else if (m.includes("antigravity") || m.includes("cli")) {
       quotaCat = "cli_0euro";
       cost = 0;

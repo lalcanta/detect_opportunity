@@ -24,21 +24,23 @@ interface RemoteJob {
   execution_mode?: "full_auto" | "prep_only";
 }
 
-async function api<T>(cfg: Config, path: string, body?: unknown): Promise<T> {
+async function api<T>(cfg: Config, path: string, body?: unknown, method: "GET" | "POST" = "POST"): Promise<T> {
   const res = await fetch(`${cfg.REMOTE_APP_URL}${path}`, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.SYNC_SECRET_TOKEN}` },
-    body: JSON.stringify(body ?? {}),
+    body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} sur ${path}`);
   return (await res.json()) as T;
 }
 
 async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Promise<void> {
-  const isPrep = job.execution_mode === "prep_only";
+  // Coupe-circuit 0 € actif : un job "full_auto" est exécuté en préparation seule (aucun appel API).
+  const forcedPrep = job.execution_mode !== "prep_only" && router.isZeroCostMode();
+  const isPrep = job.execution_mode === "prep_only" || forcedPrep;
   log(
     "worker",
-    `Job #${job.id} [${isPrep ? "Préparation CLI 0€" : "Cycle Complet"}] : ${job.query} / ${job.city} (limite ${job.lead_limit}${job.use_cdp ? ", CDP" : ""})`,
+    `Job #${job.id} [${isPrep ? "Préparation CLI 0€" : "Cycle Complet"}${forcedPrep ? " — forcé par le coupe-circuit" : ""}] : ${job.query} / ${job.city} (limite ${job.lead_limit}${job.use_cdp ? ", CDP" : ""})`,
   );
   const report = (b: Record<string, unknown>): Promise<{ cancel?: boolean }> =>
     api<{ cancel?: boolean }>(cfg, `/api/worker/jobs/${job.id}/progress`, b);
@@ -464,16 +466,19 @@ export function shouldTriggerScheduledScan(sched: RemoteScheduledScan, now = new
 
 async function checkAndTriggerSchedules(cfg: Config): Promise<void> {
   try {
-    const res = await api<{ scheduled: RemoteScheduledScan[] }>(cfg, "/api/worker/scheduled-scans", {});
+    const res = await api<{ scheduled: RemoteScheduledScan[] }>(cfg, "/api/worker/scheduled-scans", undefined, "GET");
     const now = new Date();
     for (const s of res.scheduled || []) {
       if (shouldTriggerScheduledScan(s, now)) {
         log("worker", `⏰ Déclenchement automatique de la programmation #${s.id} "${s.label}" (${s.time_of_day})`);
-        await api(cfg, `/api/worker/scheduled-scans/${s.id}/trigger`, {}).catch(() => undefined);
+        await api(cfg, `/api/worker/scheduled-scans/${s.id}/trigger`, {}).catch((err: Error) =>
+          log("worker", `⚠️ Déclenchement de la programmation #${s.id} échoué : ${err.message}`),
+        );
       }
     }
-  } catch {
-    // Silencieux si échec réseau temporaire
+  } catch (err) {
+    // Non bloquant (réseau temporaire), mais journalisé : une erreur systématique doit rester visible.
+    log("worker", `⚠️ Lecture des planifications échouée : ${(err as Error).message}`);
   }
 }
 
