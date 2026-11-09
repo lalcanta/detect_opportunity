@@ -333,8 +333,9 @@ export async function runPrepScan(
           status: "pending_generation",
           flyer_pdf_base64: flyerPdfBase64,
         });
-      } catch {
-        // En mode déconnecté, la sync échouera en silence et sera reprise par sync-queue
+      } catch (err) {
+        // Non bloquant : le dossier local reste dans queue/pending et sera repris par sync-queue
+        log("prep", `⚠️ Sync pending_generation échouée pour ${lead.name} (reprise par sync-queue) : ${(err as Error).message}`);
       }
 
       // Si opportunité Audit QA Traceurs : génération immédiate et déterministe du rapport HTML + brouillon Cold Email (0 attente)

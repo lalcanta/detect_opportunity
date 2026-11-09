@@ -61,7 +61,7 @@ function renderExpiredDemoHtml(companyName: string): string {
 </html>`;
 }
 
-/** POST /api/sync — réception sécurisée depuis le Mac. Idempotent (upsert par id). */
+/** POST /api/sync — réception sécurisée depuis le Mac. Idempotent (upsert par id), sans écraser le statut commercial existant. */
 publicRoutes.post("/api/sync", async (c) => {
   if (!bearerMatches(c.req.header("Authorization"), c.env.SYNC_SECRET_TOKEN)) {
     return c.json({ error: "unauthorized" }, 401);
@@ -76,6 +76,9 @@ publicRoutes.post("/api/sync", async (c) => {
 
   const flyerUrl = body.flyer_pdf_base64 ? `/api/leads/${body.id}/flyer` : null;
   const oppType = body.opportunity_type || "website";
+  // Le statut commercial n'est jamais écrasé par une re-synchronisation (re-scan, prep, sync-queue, regen) :
+  // seul un lead encore en `pending_generation` peut avancer vers le statut envoyé. De même, une re-préparation
+  // (payload `pending_generation`, audit partiel) ne remplace pas l'audit complet d'un lead déjà généré.
   const stmts: D1PreparedStatement[] = [
     c.env.DB.prepare(
       `INSERT INTO leads (id, company_name, activity, city, phone, email, website_url, google_rating,
@@ -85,11 +88,14 @@ publicRoutes.post("/api/sync", async (c) => {
          company_name = excluded.company_name, activity = excluded.activity, city = excluded.city,
          phone = COALESCE(excluded.phone, leads.phone), email = COALESCE(excluded.email, leads.email),
          website_url = excluded.website_url, google_rating = excluded.google_rating,
-         google_reviews_count = excluded.google_reviews_count, audit_data = excluded.audit_data,
+         google_reviews_count = excluded.google_reviews_count,
+         audit_data = CASE WHEN excluded.status = 'pending_generation' AND leads.status != 'pending_generation'
+                           THEN leads.audit_data ELSE excluded.audit_data END,
          demo_html = COALESCE(excluded.demo_html, leads.demo_html), flyer_pdf_url = COALESCE(excluded.flyer_pdf_url, leads.flyer_pdf_url),
          flyer_pdf_base64 = COALESCE(excluded.flyer_pdf_base64, leads.flyer_pdf_base64), battlecard_data = COALESCE(excluded.battlecard_data, leads.battlecard_data),
          opportunity_type = COALESCE(excluded.opportunity_type, leads.opportunity_type),
-         status = excluded.status`,
+         status = CASE WHEN leads.status = 'pending_generation' THEN excluded.status ELSE leads.status END
+       RETURNING status`,
     ).bind(
       body.id,
       body.company_name,
@@ -117,12 +123,13 @@ publicRoutes.post("/api/sync", async (c) => {
       ).bind(body.id, t.task, t.model, t.inputTokens | 0, t.outputTokens | 0, t.thinkingTokens | 0),
     );
   }
-  await c.env.DB.batch(stmts);
+  const results = await c.env.DB.batch(stmts);
+  const finalStatus = (results[0]?.results?.[0] as { status?: string } | undefined)?.status ?? targetStatus;
 
-  if (targetStatus !== "pending_generation" && c.env.AUTO_ASSIGN === "true") {
+  if (finalStatus !== "pending_generation" && c.env.AUTO_ASSIGN === "true") {
     await assignRoundRobin(c.env.DB);
   }
-  return c.json({ ok: true, id: body.id, status: targetStatus });
+  return c.json({ ok: true, id: body.id, status: finalStatus });
 });
 
 function renderInteractiveDemoFloatingBar(opts: {

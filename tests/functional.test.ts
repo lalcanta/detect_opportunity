@@ -236,6 +236,47 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.equal(leadData.lead.phone, "0561000001");
       assert.equal(leadData.lead.opportunity_type, "google_reviews");
     });
+
+    it("doit accepter un lead en 'pending_generation' (mode prep) puis le faire avancer en 'demo_ready' à la génération", async () => {
+      const pendingId = "beef" + Date.now().toString(16).slice(-12);
+      const post = (body: Record<string, unknown>) =>
+        fetch(`${BASE_URL}/api/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SYNC_SECRET}` },
+          body: JSON.stringify(body),
+        });
+
+      const prep = await post({
+        id: pendingId,
+        company_name: "Boulangerie Prep Test",
+        status: "pending_generation",
+        audit_data: { loadTimeMs: 1200 },
+      });
+      assert.equal(prep.status, 200, "La contrainte CHECK doit autoriser pending_generation");
+      assert.equal(((await prep.json()) as { status: string }).status, "pending_generation");
+
+      const done = await post({
+        id: pendingId,
+        company_name: "Boulangerie Prep Test",
+        audit_data: { summary: "Audit complet", score: 40, weaknesses: ["Lent"] },
+        demo_html: "<!DOCTYPE html><html><body>Démo prep</body></html>",
+        battlecard_data: { callScript: "Bonjour" },
+      });
+      assert.equal(((await done.json()) as { status: string }).status, "demo_ready");
+
+      // Une re-préparation ne doit ni rétrograder le statut ni écraser l'audit complet
+      const reprep = await post({
+        id: pendingId,
+        company_name: "Boulangerie Prep Test",
+        status: "pending_generation",
+        audit_data: { loadTimeMs: 999 },
+      });
+      assert.equal(((await reprep.json()) as { status: string }).status, "demo_ready");
+      const leadRes = await fetch(`${BASE_URL}/api/leads/${pendingId}`, { headers: { Cookie: ADMIN_COOKIE } });
+      const lead = ((await leadRes.json()) as { lead: { status: string; audit_data: string } }).lead;
+      assert.equal(lead.status, "demo_ready");
+      assert.equal(JSON.parse(lead.audit_data).summary, "Audit complet");
+    });
   });
 
   // =========================================================================
@@ -474,6 +515,25 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
         }),
       });
       assert.equal(res.status, 200);
+    });
+
+    it("Une re-synchronisation depuis le Mac (re-scan / sync-queue / regen) ne doit PAS écraser le statut 'won'", async () => {
+      const res = await fetch(`${BASE_URL}/api/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SYNC_SECRET}` },
+        body: JSON.stringify({
+          id: testLeadSyncId,
+          company_name: "Plomberie & Chauffage Test Functional (Mis à Jour)",
+          demo_html: "<!DOCTYPE html><html><body>Démo V3</body></html>",
+          battlecard_data: { callScript: "Script V3" },
+        }),
+      });
+      assert.equal(res.status, 200);
+      assert.equal(((await res.json()) as { status: string }).status, "won");
+
+      const leadRes = await fetch(`${BASE_URL}/api/leads/${testLeadSyncId}`, { headers: { Cookie: ADMIN_COOKIE } });
+      const lead = ((await leadRes.json()) as { lead: { status: string } }).lead;
+      assert.equal(lead.status, "won");
     });
 
     it("Règle d'inviolabilité Closer : un closer ne peut PAS modifier un dossier clôturé 'won' (HTTP 403 Forbidden)", async () => {

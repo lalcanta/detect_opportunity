@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS leads (
   demo_revoked         INTEGER NOT NULL DEFAULT 0,
   demo_expires_at      DATETIME,
   status               TEXT NOT NULL DEFAULT 'demo_ready'
-                       CHECK (status IN ('demo_ready','hot_lead','called','won','lost','callback_scheduled')),
+                       CHECK (status IN ('pending_generation','demo_ready','hot_lead','called','won','lost','callback_scheduled')),
   callback_scheduled_at DATETIME,
   call_notes           TEXT,
   google_calendar_event_id TEXT,
