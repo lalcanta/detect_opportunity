@@ -6,9 +6,13 @@
   "description": "Moteur local : scraping Maps, démo Tailwind, flyer PDF, battlecard IA, sync cloud",
   "scripts": {
     "scan": "tsx src/index.ts",
+    "scan:prod": "tsx src/index.ts --prod",
     "worker": "tsx src/worker.ts",
+    "worker:prod": "tsx src/worker.ts --prod",
     "prep": "tsx src/prepScan.ts",
+    "prep:prod": "tsx src/prepScan.ts --prod",
     "sync-queue": "tsx src/syncQueue.ts",
+    "sync-queue:prod": "tsx src/syncQueue.ts --prod",
     "typecheck": "tsc --noEmit",
     "postinstall": "playwright install chromium"
   },

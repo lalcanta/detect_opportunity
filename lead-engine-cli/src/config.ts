@@ -16,8 +16,18 @@ const schema = z.object({
 
 export type Config = z.infer<typeof schema>;
 
-export function loadConfig(): Config {
-  const parsed = schema.safeParse(process.env);
+export function loadConfig(customEnv?: Record<string, string | undefined>): Config {
+  const isProd = process.argv.includes("--prod") || process.argv.includes("--remote");
+  const isLocal = process.argv.includes("--local");
+
+  const envCopy = { ...(customEnv ?? process.env) };
+  if (isProd) {
+    envCopy.REMOTE_APP_URL = envCopy.REMOTE_APP_URL_PROD || "https://lead-dashboard-8bx.pages.dev";
+  } else if (isLocal) {
+    envCopy.REMOTE_APP_URL = "http://127.0.0.1:8788";
+  }
+
+  const parsed = schema.safeParse(envCopy);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `- ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Configuration .env invalide :\n${issues}`);

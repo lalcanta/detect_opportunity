@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { leadId, escapeHtml, stripCodeFences, parseDirectDomainLeads } from "../utils/helpers";
 import { getCompetitorBenchmark } from "../benchmarks/competitorBenchmarks";
@@ -383,6 +383,29 @@ describe("RÈGLES MÉTIER : Moteur Local & CLI (lead-engine-cli)", () => {
       assert.equal(resolveLogoUrl("https://cdn.artisan.fr/logo.webp", base), "https://cdn.artisan.fr/logo.webp");
       assert.equal(resolveLogoUrl("data:image/svg+xml;base64,PHN2Z...", base), "data:image/svg+xml;base64,PHN2Z...");
       assert.equal(resolveLogoUrl(null, base), null);
+    });
+  });
+
+  describe("Règle 25 : Bascule d'Environnement CLI (Local vs Cloudflare Pages)", () => {
+    const originalArgv = [...process.argv];
+    const testEnv = { SYNC_SECRET_TOKEN: "sync_test_token_valid_12345" };
+
+    afterEach(() => {
+      process.argv = [...originalArgv];
+    });
+
+    it("doit router automatiquement vers Cloudflare Pages en production avec le flag --prod ou --remote", async () => {
+      const { loadConfig } = await import("../config");
+      process.argv = ["node", "script.js", "--prod"];
+      const cfg = loadConfig(testEnv);
+      assert.equal(cfg.REMOTE_APP_URL, "https://lead-dashboard-8bx.pages.dev");
+    });
+
+    it("doit router explicitement vers l'environnement local avec le flag --local", async () => {
+      const { loadConfig } = await import("../config");
+      process.argv = ["node", "script.js", "--local"];
+      const cfg = loadConfig(testEnv);
+      assert.equal(cfg.REMOTE_APP_URL, "http://127.0.0.1:8788");
     });
   });
 });
