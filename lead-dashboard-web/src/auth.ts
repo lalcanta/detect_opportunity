@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 import type { AppEnv, Role, User } from "./types";
 
@@ -122,19 +122,23 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
   }
 }
 
+/** Utilisateur actif correspondant au cookie de session, ou null (visiteur anonyme). */
+export async function getSessionUser(c: Context<AppEnv>): Promise<User | null> {
+  const token = getCookie(c, COOKIE);
+  if (!token) return null;
+  return c.env.DB.prepare(
+    "SELECT id, name, email, invite_code, role, is_active, phone_quota_weekly, allowed_opportunities FROM users WHERE access_token = ? AND is_active = 1",
+  )
+    .bind(token)
+    .first<User>();
+}
+
 /** Authentifie via cookie HttpOnly contenant le access_token de l'utilisateur. */
 export const requireUser =
   (role?: Role, mode: "page" | "api" = "api"): MiddlewareHandler<AppEnv> =>
   async (c, next) => {
     await ensureAuthSchema(c.env.DB);
-    const token = getCookie(c, COOKIE);
-    const user = token
-      ? await c.env.DB.prepare(
-          "SELECT id, name, email, invite_code, role, is_active, phone_quota_weekly, allowed_opportunities FROM users WHERE access_token = ? AND is_active = 1",
-        )
-          .bind(token)
-          .first<User>()
-      : null;
+    const user = await getSessionUser(c);
     if (!user) return mode === "page" ? c.redirect("/login") : c.json({ error: "unauthorized" }, 401);
     if (role && user.role !== role && user.role !== "admin") return c.json({ error: "forbidden" }, 403);
     c.set("user", user);

@@ -332,6 +332,40 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       const afterCount = ((await afterRes.json()) as { lead: { demo_viewed_count: number } }).lead.demo_viewed_count;
       assert.equal(afterCount, beforeCount, "Les robots de prévisualisation WhatsApp/Slack ne doivent pas fausser les métriques");
     });
+
+    it("GET /demos/:id par un closer connecté doit afficher un aperçu interne sans bouton d'intérêt et neutraliser le pixel", async () => {
+      const res = await fetch(`${BASE_URL}/demos/${testLeadSyncId}`, { headers: { Cookie: CLOSER_COOKIE } });
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      assert.ok(html.includes("Aperçu interne"), "Le bandeau doit signaler l'aperçu interne");
+      assert.ok(!html.includes('id="le-btn-like"'), "Le bouton d'intérêt ne doit pas être proposé au closer");
+      assert.ok(html.includes(`seen_${testLeadSyncId}`), "Le pixel doit être neutralisé côté navigateur");
+
+      const anon = await (await fetch(`${BASE_URL}/demos/${testLeadSyncId}`)).text();
+      assert.ok(anon.includes('id="le-btn-like"'), "Le prospect anonyme garde le bouton d'intérêt");
+    });
+
+    it("Pixel et bouton d'intérêt avec un cookie de session interne ne doivent rien comptabiliser", async () => {
+      const read = async () =>
+        ((await (await fetch(`${BASE_URL}/api/leads/${testLeadSyncId}`, { headers: { Cookie: CLOSER_COOKIE } })).json()) as {
+          lead: { demo_viewed_count: number; call_notes: string | null };
+        }).lead;
+      const before = await read();
+
+      const open = await fetch(`${BASE_URL}/api/tracker/open?leadId=${testLeadSyncId}`, {
+        headers: { Cookie: ADMIN_COOKIE, "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15" },
+      });
+      assert.equal(open.status, 204);
+      const interest = await fetch(`${BASE_URL}/api/tracker/interest?leadId=${testLeadSyncId}`, {
+        method: "POST",
+        headers: { Cookie: CLOSER_COOKIE },
+      });
+      assert.equal(interest.status, 200);
+
+      const after = await read();
+      assert.equal(after.demo_viewed_count, before.demo_viewed_count, "Une ouverture interne ne doit pas compter comme vue");
+      assert.equal(after.call_notes, before.call_notes, "Un clic interne ne doit pas ajouter de note « intérêt client »");
+    });
   });
 
   // =========================================================================

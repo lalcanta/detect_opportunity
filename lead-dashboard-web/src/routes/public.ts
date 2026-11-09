@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv, SyncBody } from "../types";
-import { bearerMatches, ensureAuthSchema, generateRandomHex, requireUser } from "../auth";
+import { bearerMatches, ensureAuthSchema, generateRandomHex, getSessionUser, requireUser } from "../auth";
 import { assignRoundRobin } from "../services/assign";
 import { sendHotLeadAlert } from "../services/notify";
 import { esc } from "../views/layout";
@@ -137,6 +137,7 @@ function renderInteractiveDemoFloatingBar(opts: {
   companyName: string;
   demoExpiresAt?: string | null;
   opportunityType?: string | null;
+  internalPreview?: boolean;
 }): string {
   let expiryLabel = "Aperçu temporaire";
   if (opts.demoExpiresAt) {
@@ -148,6 +149,12 @@ function renderInteractiveDemoFloatingBar(opts: {
   }
   const isQa = opts.opportunityType === "audit_qa_trackers";
   const ctaLabel = isQa ? "✅ Ce rapport m'intéresse (CI/CD)" : "✅ Ce design me plaît, on en discute";
+  // Aperçu par un closer/admin connecté : pas de bouton d'intérêt, pour ne pas fausser le signal « lead chaud ».
+  const ctaHtml = opts.internalPreview
+    ? `<span style="background:rgba(251,191,36,0.15);color:#fde68a;border:1px solid rgba(251,191,36,0.4);border-radius:10px;padding:6px 10px;font-size:11px;font-weight:700;">👁️ Aperçu interne — vue non comptabilisée</span>`
+    : `<button id="le-btn-like" type="button" onclick="(function(btn){btn.disabled=true;btn.textContent='✔ Intérêt transmis ! Nous revenons vers vous.';btn.style.background='#059669';fetch('/api/tracker/interest?leadId=${encodeURIComponent(opts.leadId)}',{method:'POST'}).catch(function(){});})(this)" style="background:#4f46e5;color:#fff;border:none;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;">
+      ${ctaLabel}
+    </button>`;
 
   return `
 <!-- LeadEngine Interactive Prospect Bar -->
@@ -158,9 +165,7 @@ function renderInteractiveDemoFloatingBar(opts: {
       <span style="font-weight:600;color:#e4e4e7;">Préparé pour <strong style="color:#fff;">${esc(opts.companyName)}</strong></span>
       <span style="background:rgba(255,255,255,0.1);color:#fde68a;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:600;">⏳ ${esc(expiryLabel)}</span>
     </div>
-    <button id="le-btn-like" type="button" onclick="(function(btn){btn.disabled=true;btn.textContent='✔ Intérêt transmis ! Nous revenons vers vous.';btn.style.background='#059669';fetch('/api/tracker/interest?leadId=${encodeURIComponent(opts.leadId)}',{method:'POST'}).catch(function(){});})(this)" style="background:#4f46e5;color:#fff;border:none;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;">
-      ${ctaLabel}
-    </button>
+    ${ctaHtml}
     <button type="button" onclick="document.getElementById('le-floating-bar').style.display='none'" title="Masquer ce bandeau" style="background:transparent;color:#a1a1aa;border:none;padding:4px 6px;font-size:14px;cursor:pointer;line-height:1;">✕</button>
   </div>
 </div>`;
@@ -210,11 +215,23 @@ publicRoutes.get("/demos/:id", async (c) => {
     finalDemoHtml = finalDemoHtml.replace(/<head[^>]*>/i, '$&\n<meta name="referrer" content="no-referrer">');
   }
 
+  // Closer/admin connecté : la vue ne doit ni passer le lead en « chaud » ni déclencher d'alerte.
+  // Le pixel peut viser une autre origine (remoteAppUrl) sans le cookie : on le neutralise aussi côté
+  // navigateur en marquant la démo comme déjà vue (clé lue par injectTracker).
+  const internalPreview = (await getSessionUser(c)) !== null;
+  if (internalPreview) {
+    const muteTracker = `<script>try{sessionStorage.setItem(${JSON.stringify(`seen_${id}`)},"1")}catch(e){}</script>`;
+    finalDemoHtml = /<head[^>]*>/i.test(finalDemoHtml)
+      ? finalDemoHtml.replace(/<head[^>]*>/i, `$&\n${muteTracker}`)
+      : `${muteTracker}\n${finalDemoHtml}`;
+  }
+
   const barHtml = renderInteractiveDemoFloatingBar({
     leadId: id,
     companyName: row.company_name,
     demoExpiresAt: row.demo_expires_at,
     opportunityType: row.opportunity_type,
+    internalPreview,
   });
 
   const htmlWithBar = finalDemoHtml.includes("</body>")
@@ -232,6 +249,7 @@ publicRoutes.post("/api/tracker/interest", async (c) => {
   await ensureAuthSchema(c.env.DB);
   const leadId = c.req.query("leadId") ?? "";
   if (!/^[a-f0-9]{8,64}$/.test(leadId)) return c.json({ error: "invalid_id" }, 400);
+  if (await getSessionUser(c)) return c.json({ ok: true, ignored: "internal_viewer" });
 
   const lead = await c.env.DB.prepare("SELECT company_name, status, call_notes FROM leads WHERE id = ?")
     .bind(leadId)
@@ -269,6 +287,8 @@ publicRoutes.get("/api/tracker/open", async (c) => {
   const leadId = c.req.query("leadId") ?? "";
   const pixel = new Response(null, { status: 204 });
   if (!/^[a-f0-9]{8,64}$/.test(leadId) || BOT_UA.test(c.req.header("User-Agent") ?? "")) return pixel;
+  // Ouverture par un closer/admin connecté (lien « Démo » du Kanban, vérification avant appel) : ignorée.
+  if (await getSessionUser(c)) return pixel;
 
   const lead = await c.env.DB.prepare(
     "SELECT company_name, status, last_demo_viewed_at, demo_revoked, demo_expires_at FROM leads WHERE id = ?",

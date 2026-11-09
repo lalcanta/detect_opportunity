@@ -14,11 +14,13 @@
     "sync-queue": "tsx src/syncQueue.ts",
     "sync-queue:prod": "tsx src/syncQueue.ts --prod",
     "regen:demos:prod": "tsx src/regenerateExistingLeads.ts --prod",
+    "mcp": "tsx src/mcp/server.ts",
     "typecheck": "tsc --noEmit",
     "postinstall": "playwright install chromium"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "dotenv": "^16.4.5",
     "playwright": "^1.48.0",
     "qrcode": "^1.5.4",
