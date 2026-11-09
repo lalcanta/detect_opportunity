@@ -303,7 +303,7 @@ scanRoutes.post("/api/worker/ai/run", async (c) => {
     const messages: Array<{ role: string; content: string }> = [];
     if (body.system) messages.push({ role: "system", content: body.system });
     messages.push({ role: "user", content: body.prompt || "" });
-    const aiRes = await c.env.AI.run(body.model || "@cf/meta/llama-3.1-8b-instruct", { messages });
+    const aiRes = await c.env.AI.run(body.model || "@cf/meta/llama-3.1-8b-instruct-fp8", { messages });
     const text = typeof aiRes === "string" ? aiRes : (aiRes?.response || JSON.stringify(aiRes));
     return c.json({ ok: true, text });
   } catch (err) {

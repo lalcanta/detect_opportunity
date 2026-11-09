@@ -148,8 +148,8 @@ adminRoutes.post("/api/admin/models/refresh", requireUser("admin"), async (c) =>
     // Cloudflare Workers AI (Free Tier 10k neurones/jour natif 0€)
     {
       provider: "cloudflare",
-      model_id: "@cf/meta/llama-3.1-8b-instruct",
-      display_name: "Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)",
+      model_id: "@cf/meta/llama-3.1-8b-instruct-fp8",
+      display_name: "Meta Llama 3.1 8B FP8 (Cloudflare Workers AI - 0€)",
       desc: "Modèle ultrarapide hébergé nativement sur GPUs Cloudflare. 10 000 neurones/jour offerts. Idéal battlecards et pitchs commerciaux instantanés.",
       vision: 0,
       thinking: 0,
@@ -161,7 +161,7 @@ adminRoutes.post("/api/admin/models/refresh", requireUser("admin"), async (c) =>
     {
       provider: "cloudflare",
       model_id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-      display_name: "Meta Llama 3.3 70B (Cloudflare Workers AI)",
+      display_name: "Meta Llama 3.3 70B Fast (Cloudflare Workers AI)",
       desc: "Flagship open-weights Meta sur GPUs Cloudflare. Puissance rédactionnelle maximale.",
       vision: 0,
       thinking: 0,
@@ -172,8 +172,8 @@ adminRoutes.post("/api/admin/models/refresh", requireUser("admin"), async (c) =>
     },
     {
       provider: "cloudflare",
-      model_id: "@cf/deepseek-ai/deepseek-r1-distill-llama-70b",
-      display_name: "DeepSeek R1 70B (Cloudflare Workers AI)",
+      model_id: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+      display_name: "DeepSeek R1 32B (Cloudflare Workers AI)",
       desc: "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.",
       vision: 0,
       thinking: 1,

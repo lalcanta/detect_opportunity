@@ -59,13 +59,13 @@ export class ModelRouter {
       cooldownUntil: new Map(),
     }));
 
-    // Configurations par défaut
+    // Configurations par défaut (Cloudflare Workers AI 0€ natif)
     this.actionConfigs = new Map<string, ActionModelConfig>([
-      ["demo", { provider: "gemini", model: "gemini-3.1-pro-preview", thinkingBudget: cfg.THINKING_BUDGET_HEAVY }],
-      ["audit", { provider: "gemini", model: "gemini-3-flash-preview", thinkingBudget: 0 }],
-      ["battlecard", { provider: "gemini", model: "gemini-3-flash-preview", thinkingBudget: 0 }],
-      ["TASK_HEAVY", { provider: "gemini", model: "gemini-3.1-pro-preview", thinkingBudget: cfg.THINKING_BUDGET_HEAVY }],
-      ["TASK_FAST", { provider: "gemini", model: "gemini-3-flash-preview", thinkingBudget: 0 }],
+      ["demo", { provider: "cloudflare", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", thinkingBudget: 0 }],
+      ["audit", { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinkingBudget: 0 }],
+      ["battlecard", { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinkingBudget: 0 }],
+      ["TASK_HEAVY", { provider: "cloudflare", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", thinkingBudget: 0 }],
+      ["TASK_FAST", { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinkingBudget: 0 }],
     ]);
   }
 
@@ -144,7 +144,10 @@ export class ModelRouter {
 
   private async callGeminiWithFallback(config: ActionModelConfig, req: GenerateRequest): Promise<GenerateResult> {
     const fallbackModel = "gemini-3-flash-preview";
-    const modelsToTry = config.model === fallbackModel ? [fallbackModel] : [config.model, fallbackModel];
+    const modelsToTry =
+      config.model === fallbackModel || config.model.startsWith("@cf/") || config.provider === "cloudflare"
+        ? [fallbackModel]
+        : [config.model, fallbackModel];
     let lastError: unknown;
 
     for (const model of modelsToTry) {

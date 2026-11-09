@@ -27,9 +27,9 @@ function renderModelSelectOptions(provider: string, selectedModel: string, avail
   let filtered = available.filter((m) => m.provider === provider);
   if (filtered.length === 0 && provider === "cloudflare") {
     filtered = [
-      { id: 101, provider: "cloudflare", model_id: "@cf/meta/llama-3.1-8b-instruct", display_name: "Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)", description: "Modèle ultrarapide 0€.", supports_vision: 0, supports_thinking: 0, is_flagship: 1, speed: "ultra", cost_tier: "eco", context_window: "128k tokens", recommended_for: "battlecard,audit", updated_at: "" },
-      { id: 102, provider: "cloudflare", model_id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", display_name: "Meta Llama 3.3 70B (Cloudflare Workers AI)", description: "Flagship open-weights Meta sur GPUs Cloudflare.", supports_vision: 0, supports_thinking: 0, is_flagship: 1, speed: "fast", cost_tier: "standard", context_window: "128k tokens", recommended_for: "battlecard,demo", updated_at: "" },
-      { id: 103, provider: "cloudflare", model_id: "@cf/deepseek-ai/deepseek-r1-distill-llama-70b", display_name: "DeepSeek R1 70B (Cloudflare Workers AI)", description: "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.", supports_vision: 0, supports_thinking: 1, is_flagship: 1, speed: "deep", cost_tier: "standard", context_window: "64k tokens", recommended_for: "audit,battlecard", updated_at: "" },
+      { id: 101, provider: "cloudflare", model_id: "@cf/meta/llama-3.1-8b-instruct-fp8", display_name: "Meta Llama 3.1 8B FP8 (Cloudflare Workers AI - 0€)", description: "Modèle ultrarapide 0€.", supports_vision: 0, supports_thinking: 0, is_flagship: 1, speed: "ultra", cost_tier: "eco", context_window: "128k tokens", recommended_for: "battlecard,audit", updated_at: "" },
+      { id: 102, provider: "cloudflare", model_id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", display_name: "Meta Llama 3.3 70B Fast (Cloudflare Workers AI)", description: "Flagship open-weights Meta sur GPUs Cloudflare.", supports_vision: 0, supports_thinking: 0, is_flagship: 1, speed: "fast", cost_tier: "standard", context_window: "128k tokens", recommended_for: "battlecard,demo", updated_at: "" },
+      { id: 103, provider: "cloudflare", model_id: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", display_name: "DeepSeek R1 32B (Cloudflare Workers AI)", description: "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.", supports_vision: 0, supports_thinking: 1, is_flagship: 1, speed: "deep", cost_tier: "standard", context_window: "64k tokens", recommended_for: "audit,battlecard", updated_at: "" },
     ];
   }
   const flagships = filtered.filter((m) => m.is_flagship !== 0);
@@ -304,9 +304,9 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
   const hot = stats.byStatus.find((s) => s.status === "hot_lead")?.n ?? 0;
   const card = "bg-white rounded-2xl shadow-sm border border-zinc-200/80 p-5";
 
-  const mDemo = models.find((m) => m.action_type === "demo") || { provider: "gemini", model: "gemini-3.1-pro-preview", thinking_budget: 2048 };
-  const mAudit = models.find((m) => m.action_type === "audit") || { provider: "gemini", model: "gemini-3-flash-preview", thinking_budget: 0 };
-  const mCard = models.find((m) => m.action_type === "battlecard") || { provider: "gemini", model: "gemini-3-flash-preview", thinking_budget: 0 };
+  const mDemo = models.find((m) => m.action_type === "demo") || { provider: "cloudflare", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", thinking_budget: 0 };
+  const mAudit = models.find((m) => m.action_type === "audit") || { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinking_budget: 0 };
+  const mCard = models.find((m) => m.action_type === "battlecard") || { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinking_budget: 0 };
 
   const pendingLeads = leads.filter((l) => l.status === "pending_generation");
   const pendingCount = pendingLeads.length;
@@ -347,9 +347,9 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
     <option value="gpt-5-mini">OpenAI GPT-5 Mini (Rapide & Économique)</option>
     <option value="o3">OpenAI o3 (Raisonnement Approfondi)</option>
     <option value="o3-mini">OpenAI o3-mini (Thinking Économique)</option>
-    <option value="@cf/meta/llama-3.1-8b-instruct">Llama 3.1 8B (Cloudflare Workers AI - 0€)</option>
-    <option value="@cf/meta/llama-3.3-70b-instruct-fp8-fast">Llama 3.3 70B (Cloudflare Workers AI)</option>
-    <option value="@cf/deepseek-ai/deepseek-r1-distill-llama-70b">DeepSeek R1 70B (Cloudflare Workers AI)</option>
+    <option value="@cf/meta/llama-3.1-8b-instruct-fp8">Llama 3.1 8B FP8 (Cloudflare Workers AI - 0€)</option>
+    <option value="@cf/meta/llama-3.3-70b-instruct-fp8-fast">Llama 3.3 70B Fast (Cloudflare Workers AI)</option>
+    <option value="@cf/deepseek-ai/deepseek-r1-distill-qwen-32b">DeepSeek R1 32B (Cloudflare Workers AI)</option>
     <option value="deepseek/deepseek-chat">DeepSeek V3 (via OpenRouter)</option>
     <option value="deepseek/deepseek-r1">DeepSeek R1 (via OpenRouter)</option>
     <option value="anthropic/claude-5-sonnet">Claude Sonnet 5 (via OpenRouter)</option>
@@ -1068,7 +1068,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <div class="space-y-1">
               <span class="text-[10px] font-semibold text-zinc-500 uppercase">Recommandés :</span>
               <div class="flex flex-wrap gap-1">
-                <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 shadow-sm transition-all" data-target="audit" data-prov="cloudflare" data-mod="@cf/meta/llama-3.1-8b-instruct" data-thk="0">⚡ Llama 3.1 8B (0€)</button>
+                <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 shadow-sm transition-all" data-target="audit" data-prov="cloudflare" data-mod="@cf/meta/llama-3.1-8b-instruct-fp8" data-thk="0">⚡ Llama 3.1 8B (0€)</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="audit" data-prov="gemini" data-mod="gemini-3.8-flash" data-thk="0">Gemini 3.8 Flash</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="audit" data-prov="openai" data-mod="gpt-5-mini" data-thk="0">GPT-5 Mini</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="audit" data-prov="anthropic" data-mod="claude-5-haiku" data-thk="0">Claude Haiku 5</button>
@@ -1117,7 +1117,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <div class="space-y-1">
               <span class="text-[10px] font-semibold text-zinc-500 uppercase">Recommandés :</span>
               <div class="flex flex-wrap gap-1">
-                <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 shadow-sm transition-all" data-target="card" data-prov="cloudflare" data-mod="@cf/meta/llama-3.1-8b-instruct" data-thk="0">⚡ Llama 3.1 8B (0€)</button>
+                <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 shadow-sm transition-all" data-target="card" data-prov="cloudflare" data-mod="@cf/meta/llama-3.1-8b-instruct-fp8" data-thk="0">⚡ Llama 3.1 8B (0€)</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="card" data-prov="gemini" data-mod="gemini-3.8-flash" data-thk="0">Gemini 3.8 Flash</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="card" data-prov="openai" data-mod="gpt-5" data-thk="0">GPT-5</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="card" data-prov="openrouter" data-mod="deepseek/deepseek-chat" data-thk="0">DeepSeek V3</button>
@@ -2216,9 +2216,9 @@ document.querySelectorAll('.prov-select').forEach(function (ps) {
     var filtered = ALL_MODELS.filter(function (m) { return m.provider === prov; });
     if (filtered.length === 0 && prov === 'cloudflare') {
       filtered = [
-        { provider: 'cloudflare', model_id: '@cf/meta/llama-3.1-8b-instruct', display_name: 'Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)', is_flagship: 1, speed: 'ultra', cost_tier: 'eco' },
-        { provider: 'cloudflare', model_id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', display_name: 'Meta Llama 3.3 70B (Cloudflare Workers AI)', is_flagship: 1, speed: 'fast', cost_tier: 'standard' },
-        { provider: 'cloudflare', model_id: '@cf/deepseek-ai/deepseek-r1-distill-llama-70b', display_name: 'DeepSeek R1 70B (Cloudflare Workers AI)', is_flagship: 1, speed: 'deep', cost_tier: 'standard' }
+        { provider: 'cloudflare', model_id: '@cf/meta/llama-3.1-8b-instruct-fp8', display_name: 'Meta Llama 3.1 8B FP8 (Cloudflare Workers AI - 0€)', is_flagship: 1, speed: 'ultra', cost_tier: 'eco' },
+        { provider: 'cloudflare', model_id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', display_name: 'Meta Llama 3.3 70B Fast (Cloudflare Workers AI)', is_flagship: 1, speed: 'fast', cost_tier: 'standard' },
+        { provider: 'cloudflare', model_id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', display_name: 'DeepSeek R1 32B (Cloudflare Workers AI)', is_flagship: 1, speed: 'deep', cost_tier: 'standard' }
       ];
     }
     var flagships = filtered.filter(function (m) { return m.is_flagship !== 0; });

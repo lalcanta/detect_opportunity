@@ -95,16 +95,24 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
     `).run().catch(() => undefined);
 
     const cfModels = [
-      ["cloudflare", "@cf/meta/llama-3.1-8b-instruct", "Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)", "Modèle ultrarapide hébergé nativement sur GPUs Cloudflare. 10 000 neurones/jour offerts. Idéal battlecards et pitchs commerciaux instantanés.", 0, 0, 1, "ultra", "eco", "128k tokens", "battlecard,audit"],
-      ["cloudflare", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "Meta Llama 3.3 70B (Cloudflare Workers AI)", "Flagship open-weights Meta sur GPUs Cloudflare. Puissance rédactionnelle maximale.", 0, 0, 1, "fast", "standard", "128k tokens", "battlecard,demo"],
-      ["cloudflare", "@cf/deepseek-ai/deepseek-r1-distill-llama-70b", "DeepSeek R1 70B (Cloudflare Workers AI)", "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.", 0, 1, 1, "deep", "standard", "64k tokens", "audit,battlecard"],
+      ["cloudflare", "@cf/meta/llama-3.1-8b-instruct-fp8", "Meta Llama 3.1 8B FP8 (Cloudflare Workers AI - 0€)", "Modèle ultrarapide hébergé nativement sur GPUs Cloudflare. 10 000 neurones/jour offerts. Idéal battlecards et pitchs commerciaux instantanés.", 0, 0, 1, "ultra", "eco", "128k tokens", "battlecard,audit"],
+      ["cloudflare", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "Meta Llama 3.3 70B Fast (Cloudflare Workers AI)", "Flagship open-weights Meta sur GPUs Cloudflare. Puissance rédactionnelle maximale.", 0, 0, 1, "fast", "standard", "128k tokens", "battlecard,demo"],
+      ["cloudflare", "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", "DeepSeek R1 32B (Cloudflare Workers AI)", "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.", 0, 1, 1, "deep", "standard", "64k tokens", "audit,battlecard"],
     ];
 
     for (const m of cfModels) {
       await db.prepare(`
-        INSERT OR IGNORE INTO available_models
+        INSERT INTO available_models
         (provider, model_id, display_name, description, supports_vision, supports_thinking, is_flagship, speed, cost_tier, context_window, recommended_for)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        ON CONFLICT(provider, model_id) DO UPDATE SET
+          display_name = excluded.display_name,
+          description = excluded.description,
+          is_flagship = excluded.is_flagship,
+          speed = excluded.speed,
+          cost_tier = excluded.cost_tier,
+          context_window = excluded.context_window,
+          recommended_for = excluded.recommended_for
       `).bind(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10]).run().catch(() => undefined);
     }
 

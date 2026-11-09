@@ -328,8 +328,8 @@ async function syncDiscoveredModels(cfg: Config): Promise<void> {
     // 3. bis Cloudflare Workers AI (Free Tier 10k neurones/jour natif)
     {
       provider: "cloudflare",
-      model_id: "@cf/meta/llama-3.1-8b-instruct",
-      display_name: "Meta Llama 3.1 8B (Cloudflare Workers AI - 0€)",
+      model_id: "@cf/meta/llama-3.1-8b-instruct-fp8",
+      display_name: "Meta Llama 3.1 8B FP8 (Cloudflare Workers AI - 0€)",
       description: "Modèle ultrarapide hébergé nativement sur Cloudflare. 10 000 neurones/jour offerts. Idéal battlecards et pitchs commerciaux instantanés.",
       supports_vision: 0,
       supports_thinking: 0,
@@ -342,7 +342,7 @@ async function syncDiscoveredModels(cfg: Config): Promise<void> {
     {
       provider: "cloudflare",
       model_id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-      display_name: "Meta Llama 3.3 70B (Cloudflare Workers AI)",
+      display_name: "Meta Llama 3.3 70B Fast (Cloudflare Workers AI)",
       description: "Flagship open-weights Meta sur GPUs Cloudflare. Puissance rédactionnelle maximale.",
       supports_vision: 0,
       supports_thinking: 0,
@@ -354,15 +354,15 @@ async function syncDiscoveredModels(cfg: Config): Promise<void> {
     },
     {
       provider: "cloudflare",
-      model_id: "@cf/deepseek-ai/deepseek-r1-distill-llama-70b",
-      display_name: "DeepSeek R1 70B (Cloudflare Workers AI)",
+      model_id: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+      display_name: "DeepSeek R1 32B (Cloudflare Workers AI)",
       description: "Raisonnement stratégique avec chaîne de pensée sur GPUs Cloudflare.",
       supports_vision: 0,
       supports_thinking: 1,
       is_flagship: 1,
       speed: "deep",
       cost_tier: "standard",
-      context_window: "128k tokens",
+      context_window: "64k tokens",
       recommended_for: "audit",
     },
   );
