@@ -114,6 +114,8 @@ export function layout(title: string, body: string, nav = "", headExtra = ""): s
 <style>
   body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 ${headExtra}</head>
 <body class="bg-zinc-100/80 text-zinc-900 min-h-screen antialiased">${nav}${body}</body></html>`;

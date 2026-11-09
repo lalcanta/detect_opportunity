@@ -336,13 +336,13 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
   </datalist>
 
   <!-- Sub-Navbar Navigation Admin -->
-  <div class="bg-white border-b border-zinc-200/80 px-4 sm:px-6 py-2.5 shadow-sm sticky top-[49px] z-20">
-    <div class="max-w-7xl mx-auto flex items-center justify-between gap-2 overflow-x-auto">
-      <div class="flex items-center gap-1">
+  <div class="bg-white border-b border-zinc-200/80 shadow-sm sticky top-[49px] z-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-2.5 min-w-0">
         ${adminTabs
           .map(
             ([k, ic, label]) =>
-              `<a href="/admin?tab=${k}" class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              `<a href="/admin?tab=${k}" class="shrink-0 flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 tab === k
                   ? "bg-zinc-900 text-white shadow-sm"
                   : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
@@ -350,7 +350,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
           )
           .join("")}
       </div>
-      <a href="/" class="shrink-0 hidden md:inline-flex items-center gap-1 text-xs text-zinc-700 font-semibold hover:text-indigo-600 px-2.5 py-1 rounded-lg hover:bg-zinc-50 transition-colors">
+      <a href="/" class="shrink-0 hidden md:inline-flex items-center gap-1 text-xs text-zinc-700 font-semibold hover:text-indigo-600 px-2.5 py-1.5 rounded-lg hover:bg-zinc-50 transition-colors">
         <span>Pipeline Closer</span>
         ${icon("external", "w-3 h-3 text-zinc-400")}
       </a>
