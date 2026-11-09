@@ -10,6 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectArtDirection } from "./artDirectionEngine";
+import { injectTracker } from "../generator/demoGenerator";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,28 +18,19 @@ const ROOT_DIR = path.resolve(__dirname, "../../..");
 const WEB_DIR = path.resolve(ROOT_DIR, "lead-dashboard-web");
 const REMOTE_APP_URL = "https://lead-dashboard-8bx.pages.dev";
 
-function wrapWithTracker(html: string, leadId: string, companyName: string): string {
-  const trackerSnippet = `<script>(function(){try{var k="seen_${leadId}";if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,"1");fetch("${REMOTE_APP_URL}"+"/api/tracker/open?leadId=${leadId}",{method:"GET",mode:"no-cors",keepalive:true,cache:"no-store"}).catch(function(){});}catch(e){}})();</script>
+// Les ids viennent de sha1 (hex) : on refuse tout le reste avant de les interpoler dans le SQL wrangler.
+const LEAD_ID_RE = /^[a-f0-9]{8,64}$/;
 
-<!-- LeadEngine Interactive Prospect Bar -->
-<div id="le-floating-bar" style="position:fixed;bottom:16px;right:16px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:calc(100vw - 32px);">
-  <div style="background:rgba(9,9,11,0.94);backdrop-filter:blur(10px);color:#fff;border:1px solid rgba(255,255,255,0.14);border-radius:16px;padding:10px 14px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.4);display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:12px;">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:9999px;background:#10b981;"></span>
-      <span style="font-weight:600;color:#e4e4e7;">Préparé pour <strong style="color:#fff;">${companyName}</strong></span>
-      <span style="background:rgba(255,255,255,0.1);color:#fde68a;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:600;">⏳ Expire dans 5j</span>
-    </div>
-    <button id="le-btn-like" type="button" onclick="(function(btn){btn.disabled=true;btn.textContent='✔ Intérêt transmis ! Nous revenons vers vous.';btn.style.background='#059669';fetch('/api/tracker/interest?leadId=${leadId}',{method:'POST'}).catch(function(){});})(this)" style="background:#4f46e5;color:#fff;border:none;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;">
-      ✅ Ce design me plaît, on en discute
-    </button>
-    <button type="button" onclick="document.getElementById('le-floating-bar').style.display='none'" title="Masquer ce bandeau" style="background:transparent;color:#a1a1aa;border:none;padding:4px 6px;font-size:14px;cursor:pointer;line-height:1;">✕</button>
-  </div>
-</div>`;
+function requireLeadId(value: unknown): string {
+  const leadId = String(value || "").trim();
+  if (!LEAD_ID_RE.test(leadId)) throw new Error("lead_id invalide (identifiant hexadécimal attendu)");
+  return leadId;
+}
 
-  if (html.includes("</body>")) {
-    return html.replace("</body>", `${trackerSnippet}\n</body>`);
-  }
-  return `${html}\n${trackerSnippet}\n</body>\n</html>`;
+// Seul le pixel d'ouverture est stocké : le bandeau prospect est ajouté au rendu par /demos/:id
+// (qui le remplace par un badge « Aperçu interne » pour un closer connecté).
+function withTracker(html: string, leadId: string): string {
+  return html.includes("/api/tracker/open") ? html : injectTracker(html, leadId, REMOTE_APP_URL);
 }
 
 // Outils MCP
@@ -124,7 +116,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // 1. LIST TASKS
     if (name === "leadengine_list_tasks") {
       const filter = (args?.filter as string) || "all";
-      const limit = Number(args?.limit) || 20;
+      const limit = Math.min(Math.max(Math.trunc(Number(args?.limit)) || 20, 1), 200);
 
       const whereClause = filter === "pending_only" ? "WHERE status = 'pending_generation'" : "";
       const sql = `SELECT id, company_name, activity, city, phone, website_url, google_rating, google_reviews_count, status, (demo_html IS NOT NULL AND length(demo_html) > 500) AS has_demo FROM leads ${whereClause} ORDER BY created_at DESC LIMIT ${limit};`;
@@ -166,8 +158,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // 2. GET TASK CONTEXT
     if (name === "leadengine_get_task_context") {
-      const leadId = String(args?.lead_id || "").trim();
-      if (!leadId) throw new Error("lead_id requis");
+      const leadId = requireLeadId(args?.lead_id);
 
       const sql = `SELECT id, company_name, activity, city, phone, email, website_url, google_rating, google_reviews_count, audit_data, status FROM leads WHERE id = '${leadId}';`;
       const raw = execSync(
@@ -227,27 +218,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // 3. SUBMIT ASSETS
     if (name === "leadengine_submit_assets") {
-      const leadId = String(args?.lead_id || "").trim();
+      const leadId = requireLeadId(args?.lead_id);
       const rawHtml = String(args?.demo_html || "").trim();
-      if (!leadId || !rawHtml) throw new Error("lead_id et demo_html requis");
+      if (!rawHtml) throw new Error("demo_html requis");
 
-      // Récupérer le nom de l'entreprise pour le bandeau prospect
-      const infoSql = `SELECT company_name FROM leads WHERE id = '${leadId}';`;
+      const infoSql = `SELECT company_name, opportunity_type FROM leads WHERE id = '${leadId}';`;
       const rawInfo = execSync(
         `npx wrangler d1 execute lead-dashboard-db --remote --json --command="${infoSql}"`,
         { cwd: WEB_DIR, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
       );
-      const companyName = JSON.parse(rawInfo)[0]?.results?.[0]?.company_name || "Votre Entreprise";
+      const info = JSON.parse(rawInfo)[0]?.results?.[0] as { company_name: string; opportunity_type?: string } | undefined;
+      if (!info) throw new Error(`Lead introuvable pour l'id : ${leadId}`);
+      if (info.opportunity_type === "audit_qa_trackers") {
+        // Le rapport QA est généré de façon déterministe et le lead attend un cold email : passer par la file + sync-queue.
+        throw new Error("Lead audit QA : la démo est le rapport généré par prep, ne pas la remplacer (utiliser la file / sync-queue)");
+      }
+      const companyName = info.company_name;
 
-      // Injection du script de tracking et du bandeau interactif
-      const finalHtml = wrapWithTracker(rawHtml, leadId, companyName);
+      const finalHtml = withTracker(rawHtml, leadId);
 
       // Sauvegarde temporaire pour exécution SQL
       const sqlFile = path.resolve(ROOT_DIR, `tmp_mcp_update_${leadId}.sql`);
       const escapedHtml = finalHtml.replace(/'/g, "''");
       fs.writeFileSync(
         sqlFile,
-        `UPDATE leads SET demo_html = '${escapedHtml}', status = 'demo_ready' WHERE id = '${leadId}';`,
+        // Comme /api/sync : seul un lead encore en attente de génération change de statut (audit 1.1).
+        `UPDATE leads SET demo_html = '${escapedHtml}',
+           status = CASE WHEN status = 'pending_generation' THEN 'demo_ready' ELSE status END
+         WHERE id = '${leadId}';`,
         "utf8"
       );
 
