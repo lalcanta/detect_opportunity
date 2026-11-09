@@ -10,6 +10,12 @@ import { adminPage } from "../views/admin";
 
 export const pageRoutes = new Hono<AppEnv>();
 
+pageRoutes.use("*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  c.header("Pragma", "no-cache");
+});
+
 pageRoutes.get("/login", async (c) => {
   await ensureAuthSchema(c.env.DB);
   return c.html(loginPage());
