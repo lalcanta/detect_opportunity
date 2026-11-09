@@ -5,6 +5,7 @@ export type LeadStatus = (typeof LEAD_STATUSES)[number] | "pending_generation";
 
 export interface Bindings {
   DB: D1Database;
+  AI?: any;
   SYNC_SECRET_TOKEN: string;
   PUBLIC_APP_URL?: string;
   GEMINI_API_KEY?: string;

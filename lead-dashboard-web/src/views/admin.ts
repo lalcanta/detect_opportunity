@@ -309,6 +309,17 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
     ["scanner", "target", `Scanner Local & Jobs${hasActive ? ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500 text-white font-extrabold animate-pulse">en cours</span>' : ""}`],
     ["pending", "clock", `File CLI 0€${pendingCount > 0 ? ` <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-extrabold">${pendingCount}</span>` : ""}`],
     ["models", "cpu", "Modèles IA par Action"],
+    [
+      "quotas",
+      "shield",
+      `Quotas & Coûts IA${
+        stats.quotas?.safetyStatus === "danger"
+          ? ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-extrabold animate-pulse">Alerte</span>'
+          : stats.quotas?.safetyStatus === "warning"
+            ? ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-extrabold">70%</span>'
+            : ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500 text-white font-extrabold">0€</span>'
+      }`,
+    ],
     ["benchmarks", "sparkles", "Benchmarks Concurrents"],
     ["team", "users", "Équipe & Closers"],
     ["attribution", "layers", "Attribution des Leads"],
@@ -329,6 +340,9 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
     <option value="gpt-5-mini">OpenAI GPT-5 Mini (Rapide & Économique)</option>
     <option value="o3">OpenAI o3 (Raisonnement Approfondi)</option>
     <option value="o3-mini">OpenAI o3-mini (Thinking Économique)</option>
+    <option value="@cf/meta/llama-3.1-8b-instruct">Llama 3.1 8B (Cloudflare Workers AI - 0€)</option>
+    <option value="@cf/meta/llama-3.3-70b-instruct-fp8-fast">Llama 3.3 70B (Cloudflare Workers AI)</option>
+    <option value="@cf/deepseek-ai/deepseek-r1-distill-llama-70b">DeepSeek R1 70B (Cloudflare Workers AI)</option>
     <option value="deepseek/deepseek-chat">DeepSeek V3 (via OpenRouter)</option>
     <option value="deepseek/deepseek-r1">DeepSeek R1 (via OpenRouter)</option>
     <option value="anthropic/claude-5-sonnet">Claude Sonnet 5 (via OpenRouter)</option>
@@ -1007,6 +1021,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Fournisseur :</label>
               <select id="prov_demo" data-target="demo" class="prov-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium bg-white">
+                <option value="cloudflare" ${mDemo.provider === "cloudflare" ? "selected" : ""}>Cloudflare Workers AI (0€)</option>
                 <option value="gemini" ${mDemo.provider === "gemini" ? "selected" : ""}>Google Gemini</option>
                 <option value="openai" ${mDemo.provider === "openai" ? "selected" : ""}>OpenAI</option>
                 <option value="anthropic" ${mDemo.provider === "anthropic" ? "selected" : ""}>Anthropic Claude</option>
@@ -1054,6 +1069,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Fournisseur :</label>
               <select id="prov_audit" data-target="audit" class="prov-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium bg-white">
+                <option value="cloudflare" ${mAudit.provider === "cloudflare" ? "selected" : ""}>Cloudflare Workers AI (0€)</option>
                 <option value="gemini" ${mAudit.provider === "gemini" ? "selected" : ""}>Google Gemini</option>
                 <option value="openai" ${mAudit.provider === "openai" ? "selected" : ""}>OpenAI</option>
                 <option value="anthropic" ${mAudit.provider === "anthropic" ? "selected" : ""}>Anthropic Claude</option>
@@ -1092,6 +1108,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <div class="space-y-1">
               <span class="text-[10px] font-semibold text-zinc-500 uppercase">Recommandés :</span>
               <div class="flex flex-wrap gap-1">
+                <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 shadow-sm transition-all" data-target="card" data-prov="cloudflare" data-mod="@cf/meta/llama-3.1-8b-instruct" data-thk="0">⚡ Llama 3.1 8B (0€)</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="card" data-prov="gemini" data-mod="gemini-3.8-flash" data-thk="0">Gemini 3.8 Flash</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="card" data-prov="openai" data-mod="gpt-5" data-thk="0">GPT-5</button>
                 <button type="button" class="btn-preset-model text-[11px] px-2 py-1 rounded-md border font-semibold bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 shadow-sm transition-all" data-target="card" data-prov="openrouter" data-mod="deepseek/deepseek-chat" data-thk="0">DeepSeek V3</button>
@@ -1101,6 +1118,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Fournisseur :</label>
               <select id="prov_card" data-target="card" class="prov-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium bg-white">
+                <option value="cloudflare" ${mCard.provider === "cloudflare" ? "selected" : ""}>Cloudflare Workers AI (0€)</option>
                 <option value="gemini" ${mCard.provider === "gemini" ? "selected" : ""}>Google Gemini</option>
                 <option value="openai" ${mCard.provider === "openai" ? "selected" : ""}>OpenAI</option>
                 <option value="anthropic" ${mCard.provider === "anthropic" ? "selected" : ""}>Anthropic Claude</option>
@@ -1210,6 +1228,216 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
         <p class="text-blue-800">Les clés des fournisseurs choisis (<code>GEMINI_API_KEY_1</code>, <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, etc.) se renseignent dans le fichier <code>lead-engine-cli/.env</code> de votre Mac.</p>
       </div>
     </section>`
+      : ""
+  }
+
+  ${
+    /* ========================================================================= */
+    /* ONGLET : COCKPIT DE SÉCURITÉ DES QUOTAS & COÛTS IA                       */
+    /* ========================================================================= */
+    tab === "quotas"
+      ? `<div class="space-y-6">
+      <!-- 1. En-tête : Avertisseur de Sécurité & Statut Financier -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border ${
+        stats.quotas?.safetyStatus === "danger"
+          ? "border-rose-300 bg-rose-50/40"
+          : stats.quotas?.safetyStatus === "warning"
+            ? "border-amber-300 bg-amber-50/40"
+            : "border-emerald-200/80 bg-emerald-50/30"
+      }">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+              stats.quotas?.safetyStatus === "danger"
+                ? "bg-rose-600 text-white shadow-rose-600/20"
+                : stats.quotas?.safetyStatus === "warning"
+                  ? "bg-amber-500 text-white shadow-amber-500/20"
+                  : "bg-emerald-600 text-white shadow-emerald-600/20"
+            }">
+              ${icon("shield", "w-6 h-6")}
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-xs uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-full ${
+                  stats.quotas?.safetyStatus === "danger"
+                    ? "bg-rose-100 text-rose-800"
+                    : stats.quotas?.safetyStatus === "warning"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-emerald-100 text-emerald-800"
+                }">
+                  ${
+                    stats.quotas?.safetyStatus === "danger"
+                      ? "🛑 RISQUE DE FACTURATION"
+                      : stats.quotas?.safetyStatus === "warning"
+                        ? "⚠️ SEUIL GRATUIT PROCHE"
+                        : "✅ FEU VERT : 100% GRATUIT"
+                  }
+                </span>
+                <span class="text-xs text-zinc-500">Puis-je continuer à utiliser l'application ?</span>
+              </div>
+              <h2 class="text-lg font-bold text-zinc-900">${esc(stats.quotas?.safetyMessage || "Feu vert : aucun frais engagé.")}</h2>
+              <p class="text-xs text-zinc-600">
+                ${
+                  stats.quotas?.canContinueSafely
+                    ? "Toutes vos opérations actuelles tournent sous les quotas gratuits Cloudflare (10 000 neurones/jour offerts) ou en mode CLI 0€. Aucun centime n'est engagé."
+                    : "Attention, un dépassement de quota ou un modèle payant a été détecté. Activez le coupe-circuit ci-contre pour bloquer immédiatement tout appel API externe."
+                }
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <button type="button" id="btn-circuit-breaker" class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all ${
+              stats.quotas?.safetyStatus === "danger"
+                ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/30 animate-pulse"
+                : "bg-zinc-900 hover:bg-zinc-800 text-white"
+            }">
+              ${icon("zap", "w-4 h-4 text-amber-400")}
+              <span>Coupe-Circuit 0€ (Stop API)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Les 3 Jauges Clés : Cloudflare Neurones, Coût Estimé, Nuances Design -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Carte 1 : Cloudflare Free Tier -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-zinc-200/80 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Cloudflare Workers AI</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">10k neurones/j</span>
+          </div>
+          <div class="space-y-1.5">
+            <div class="flex items-baseline justify-between">
+              <span class="text-2xl font-extrabold text-zinc-900 font-mono">${(stats.quotas?.cloudflareNeuronsToday || 0).toLocaleString()}</span>
+              <span class="text-xs font-semibold text-zinc-400">/ 10 000 neurones</span>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/60">
+              <div class="h-full transition-all duration-500 rounded-full ${
+                (stats.quotas?.cloudflareUsedPercent || 0) >= 90
+                  ? "bg-rose-500"
+                  : (stats.quotas?.cloudflareUsedPercent || 0) >= 70
+                    ? "bg-amber-500"
+                    : "bg-emerald-500"
+              }" style="width: ${Math.max(2, stats.quotas?.cloudflareUsedPercent || 0)}%;"></div>
+            </div>
+          </div>
+          <p class="text-[11px] text-zinc-500 flex items-center justify-between">
+            <span>Consommé aujourd'hui : <strong>${stats.quotas?.cloudflareUsedPercent || 0}%</strong></span>
+            <span>Reset à minuit UTC</span>
+          </p>
+        </div>
+
+        <!-- Carte 2 : Coût Réel Estimé du Mois -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-zinc-200/80 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Coût Estimé Facturable</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">En direct</span>
+          </div>
+          <div class="space-y-1">
+            <div class="text-2xl font-extrabold text-zinc-900 font-mono flex items-baseline gap-1">
+              <span>${(stats.quotas?.totalCostEstimateEur || 0).toFixed(2)}</span>
+              <span class="text-base font-bold text-zinc-400">€</span>
+            </div>
+            <p class="text-xs text-zinc-500">
+              ${
+                (stats.quotas?.totalCostEstimateEur || 0) === 0
+                  ? "Zéro euro engagé. Vous profitez pleinement des quotas gratuits."
+                  : "Dépassement en cours sur les modèles payants configurés."
+              }
+            </p>
+          </div>
+          <p class="text-[11px] text-zinc-400">Basé sur les tarifs officiels par million de tokens.</p>
+        </div>
+
+        <!-- Carte 3 : Registre des Archétypes & Nuances Design -->
+        <div class="bg-gradient-to-br from-indigo-900 via-indigo-950 to-zinc-900 text-white rounded-2xl p-5 border border-indigo-500/30 shadow-sm space-y-3 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Design Frontend Craft</span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-400/30">Sur-mesure</span>
+            </div>
+            <h3 class="text-sm font-bold text-white mt-2">Nuances & Archétypes de Design</h3>
+            <p class="text-xs text-zinc-300 mt-1">Chaque métier dispose de sa propre palette chromatique et de composants interactifs pour éviter les templates répétitifs.</p>
+          </div>
+          <a href="/admin?tab=benchmarks" class="inline-flex items-center gap-1.5 text-xs text-indigo-300 font-semibold hover:text-white transition-colors">
+            <span>Consulter les benchmarks & styles</span>
+            ${icon("external", "w-3 h-3")}
+          </a>
+        </div>
+      </div>
+
+      <!-- 3. Tableau Détaillé par Modèle -->
+      <div class="bg-white rounded-2xl shadow-sm border border-zinc-200/80 p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-sm text-zinc-900">Détail des Consommations & Tarification par Modèle</h3>
+            <p class="text-xs text-zinc-500 mt-0.5">Historique précis des tokens échangés et estimation financière associée.</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs sm:text-sm">
+            <thead>
+              <tr class="text-left text-zinc-500 border-b border-zinc-200 pb-2">
+                <th class="py-2">Modèle</th>
+                <th class="py-2">Régime de Quota</th>
+                <th class="py-2 text-center">Appels (Aujourd'hui / Total)</th>
+                <th class="py-2 text-right">Tokens Entrée</th>
+                <th class="py-2 text-right">Tokens Sortie</th>
+                <th class="py-2 text-right">Coût Estimé</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-100">
+              ${
+                stats.tokens.length > 0
+                  ? stats.tokens
+                      .map(
+                        (t) => `
+                    <tr class="hover:bg-zinc-50 transition-colors">
+                      <td class="py-2.5 font-mono font-medium text-zinc-800">${esc(t.model)}</td>
+                      <td class="py-2.5">
+                        ${
+                          t.quotaCategory === "cloudflare_free"
+                            ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Cloudflare Free Tier (10k neurones/j)</span>'
+                            : t.quotaCategory === "gemini_free_tier"
+                              ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Google Free Tier (1500 req/j)</span>'
+                              : t.quotaCategory === "cli_0euro"
+                                ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Mode CLI 0€ (Antigravity)</span>'
+                                : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">Pay-As-You-Go</span>'
+                        }
+                      </td>
+                      <td class="py-2.5 text-center font-mono text-zinc-600">${t.callsToday} / ${t.totalCalls}</td>
+                      <td class="py-2.5 text-right font-mono text-zinc-600">${t.input.toLocaleString()}</td>
+                      <td class="py-2.5 text-right font-mono text-zinc-600">${t.output.toLocaleString()}</td>
+                      <td class="py-2.5 text-right font-mono font-bold ${t.estimatedCostEur > 0 ? "text-rose-600" : "text-emerald-600"}">${t.estimatedCostEur.toFixed(4)} €</td>
+                    </tr>
+                  `,
+                      )
+                      .join("")
+                  : `<tr><td colspan="6" class="text-zinc-400 py-6 text-center">Aucune consommation enregistrée pour le moment. Vos appels tournent en 0€ de frais.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 4. Guide Pratique Anti-Dépassement -->
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="p-4 bg-zinc-50 border border-zinc-200 rounded-xl space-y-1.5 text-xs">
+          <p class="font-bold text-zinc-900 flex items-center gap-1.5">${icon("shield", "w-4 h-4 text-emerald-600")} 1. Privilégier le mode CLI 0€</p>
+          <p class="text-zinc-600">Pour le gros volume (cartographie Maps, scraping, génération du code HTML Tailwind lourd), utilisez le mode <strong>Préparation CLI 0€</strong>. Zéro coût de token, illimité.</p>
+        </div>
+        <div class="p-4 bg-zinc-50 border border-zinc-200 rounded-xl space-y-1.5 text-xs">
+          <p class="font-bold text-zinc-900 flex items-center gap-1.5">${icon("zap", "w-4 h-4 text-indigo-600")} 2. Llama 3.1 8B pour les Battlecards</p>
+          <p class="text-zinc-600">Sur Cloudflare, <strong>Llama 3.1 8B</strong> consomme 10 fois moins de neurones que les 70B. Il vous permet de faire jusqu'à <strong>400 générations gratuites par jour</strong>.</p>
+        </div>
+        <div class="p-4 bg-zinc-50 border border-zinc-200 rounded-xl space-y-1.5 text-xs">
+          <p class="font-bold text-zinc-900 flex items-center gap-1.5">${icon("alert-circle", "w-4 h-4 text-amber-600")} 3. Le Coupe-Circuit de secours</p>
+          <p class="text-zinc-600">En cas de doute ou si vous prêtez l'accès à un closer, cliquez sur <em>« Coupe-Circuit 0€ »</em> en haut à droite : toutes les requêtes basculeront sur la file locale sans coût.</p>
+        </div>
+      </div>
+    </div>`
       : ""
   }
 
@@ -2329,6 +2557,24 @@ if ($('adduser')) {
         '</div>';
     } else {
       $('newtoken').textContent = 'Erreur : ' + (j.error || "Impossible de créer l'accès");
+    }
+  };
+}
+
+// Coupe-circuit 0€ (Stop API)
+if ($('btn-circuit-breaker')) {
+  $('btn-circuit-breaker').onclick = async function () {
+    if (!confirm("Activer le Coupe-Circuit 0€ ?\\n\\nToutes les actions de génération seront immédiatement basculées sur le mode local 0€ (aucun appel externe ni frais).")) return;
+    try {
+      var r = await post('/api/admin/models/circuit-breaker');
+      if (r.ok) {
+        alert("✔ Coupe-circuit activé : tous les modèles ont été coupés au profit du mode CLI 0€.");
+        location.reload();
+      } else {
+        alert("Erreur lors de l'activation du coupe-circuit.");
+      }
+    } catch (e) {
+      alert("Erreur réseau.");
     }
   };
 }

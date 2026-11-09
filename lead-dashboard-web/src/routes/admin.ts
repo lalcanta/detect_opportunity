@@ -301,24 +301,169 @@ export async function listAvailableModels(db: D1Database): Promise<import("../ty
   return r.results;
 }
 
+export interface TokenUsageRow {
+  model: string;
+  input: number;
+  output: number;
+  thinking: number;
+  totalCalls: number;
+  inputToday: number;
+  outputToday: number;
+  callsToday: number;
+  estimatedCostEur: number;
+  estimatedNeuronsToday: number;
+  quotaCategory: "cloudflare_free" | "gemini_free_tier" | "paid" | "cli_0euro";
+}
+
+export interface QuotaCockpit {
+  safetyStatus: "safe" | "warning" | "danger";
+  safetyMessage: string;
+  totalCostEstimateEur: number;
+  cloudflareNeuronsToday: number;
+  cloudflareDailyQuota: number;
+  cloudflareUsedPercent: number;
+  canContinueSafely: boolean;
+}
+
 export interface AdminStats {
   byStatus: { status: string; n: number }[];
   total: number;
   won: number;
-  tokens: { model: string; input: number; output: number; thinking: number }[];
+  tokens: TokenUsageRow[];
+  quotas: QuotaCockpit;
+}
+
+export function computeTokenMetrics(rawList: Array<{
+  model: string;
+  input: number;
+  output: number;
+  thinking: number;
+  total_calls: number;
+  input_today: number;
+  output_today: number;
+  calls_today: number;
+}>): { tokens: TokenUsageRow[]; quotas: QuotaCockpit } {
+  let totalCostEstimateEur = 0;
+  let cloudflareNeuronsToday = 0;
+
+  const tokens: TokenUsageRow[] = rawList.map((r) => {
+    const m = r.model.toLowerCase();
+    let cost = 0;
+    let neuronsToday = 0;
+    let quotaCat: TokenUsageRow["quotaCategory"] = "paid";
+
+    if (m.startsWith("@cf/") || m.includes("cloudflare")) {
+      quotaCat = "cloudflare_free";
+      const rate = m.includes("70b") ? 250 : 25;
+      neuronsToday = Math.round(((r.input_today + r.output_today) / 1000) * rate);
+      cloudflareNeuronsToday += neuronsToday;
+      if (cloudflareNeuronsToday > 10000) {
+        cost = ((cloudflareNeuronsToday - 10000) / 1000) * 0.011 * 0.92;
+      }
+    } else if (m.includes("antigravity") || m.includes("cli")) {
+      quotaCat = "cli_0euro";
+      cost = 0;
+    } else if (m.includes("flash")) {
+      quotaCat = "gemini_free_tier";
+      if (r.calls_today > 1500) {
+        cost = (r.input / 1_000_000) * 0.075 * 0.92 + (r.output / 1_000_000) * 0.30 * 0.92;
+      }
+    } else if (m.includes("pro")) {
+      quotaCat = "paid";
+      cost = (r.input / 1_000_000) * 1.25 * 0.92 + (r.output / 1_000_000) * 5.00 * 0.92;
+    } else if (m.includes("claude")) {
+      quotaCat = "paid";
+      cost = (r.input / 1_000_000) * 3.00 * 0.92 + (r.output / 1_000_000) * 15.00 * 0.92;
+    } else if (m.includes("gpt-4") || m.includes("gpt-5")) {
+      quotaCat = "paid";
+      cost = (r.input / 1_000_000) * 2.50 * 0.92 + (r.output / 1_000_000) * 10.00 * 0.92;
+    }
+
+    totalCostEstimateEur += cost;
+
+    return {
+      model: r.model,
+      input: r.input,
+      output: r.output,
+      thinking: r.thinking,
+      totalCalls: r.total_calls,
+      inputToday: r.input_today,
+      outputToday: r.output_today,
+      callsToday: r.calls_today,
+      estimatedCostEur: Number(cost.toFixed(4)),
+      estimatedNeuronsToday: neuronsToday,
+      quotaCategory: quotaCat,
+    };
+  });
+
+  const cloudflareDailyQuota = 10000;
+  const cloudflareUsedPercent = Math.min(100, Math.round((cloudflareNeuronsToday / cloudflareDailyQuota) * 100));
+
+  let safetyStatus: "safe" | "warning" | "danger" = "safe";
+  let safetyMessage = "Feu vert : vos appels sont 100% gratuits et sous les quotas.";
+  let canContinueSafely = true;
+
+  if (totalCostEstimateEur > 0 || cloudflareUsedPercent >= 90) {
+    safetyStatus = "danger";
+    safetyMessage = "Attention facturation : Quota gratuit dépassé ou modèle payant utilisé. Basculez en mode CLI 0€ !";
+    canContinueSafely = false;
+  } else if (cloudflareUsedPercent >= 70) {
+    safetyStatus = "warning";
+    safetyMessage = "Attention : Vous avez consommé plus de 70% du quota quotidien gratuit Cloudflare.";
+  }
+
+  return {
+    tokens,
+    quotas: {
+      safetyStatus,
+      safetyMessage,
+      totalCostEstimateEur: Number(totalCostEstimateEur.toFixed(2)),
+      cloudflareNeuronsToday,
+      cloudflareDailyQuota,
+      cloudflareUsedPercent,
+      canContinueSafely,
+    },
+  };
 }
 
 export async function loadStats(db: D1Database): Promise<AdminStats> {
   const byStatus = await db.prepare("SELECT status, COUNT(*) AS n FROM leads GROUP BY status").all<{ status: string; n: number }>();
-  const tokens = await db
+  const rawTokens = await db
     .prepare(
-      `SELECT model, SUM(input_tokens) AS input, SUM(output_tokens) AS output, SUM(thinking_tokens) AS thinking
-       FROM token_usage GROUP BY model`,
+      `SELECT model,
+              SUM(input_tokens) AS input,
+              SUM(output_tokens) AS output,
+              SUM(thinking_tokens) AS thinking,
+              COUNT(*) AS total_calls,
+              SUM(CASE WHEN created_at >= date('now', 'start of day') THEN input_tokens ELSE 0 END) AS input_today,
+              SUM(CASE WHEN created_at >= date('now', 'start of day') THEN output_tokens ELSE 0 END) AS output_today,
+              SUM(CASE WHEN created_at >= date('now', 'start of day') THEN 1 ELSE 0 END) AS calls_today
+       FROM token_usage
+       GROUP BY model`,
     )
-    .all<{ model: string; input: number; output: number; thinking: number }>();
+    .all<{
+      model: string;
+      input: number;
+      output: number;
+      thinking: number;
+      total_calls: number;
+      input_today: number;
+      output_today: number;
+      calls_today: number;
+    }>();
+
   const total = byStatus.results.reduce((s, r) => s + r.n, 0);
   const won = byStatus.results.find((r) => r.status === "won")?.n ?? 0;
-  return { byStatus: byStatus.results, total, won, tokens: tokens.results };
+  const { tokens, quotas } = computeTokenMetrics(rawTokens.results);
+  return { byStatus: byStatus.results, total, won, tokens, quotas };
 }
 
 adminRoutes.get("/api/admin/stats", requireUser("admin"), async (c) => c.json(await loadStats(c.env.DB)));
+
+/** POST /api/admin/models/circuit-breaker — coupe immédiatement toutes les API pour forcer le mode CLI 0€ */
+adminRoutes.post("/api/admin/models/circuit-breaker", requireUser("admin"), async (c) => {
+  await c.env.DB.prepare(
+    "UPDATE model_settings SET provider = 'cli', model = 'antigravity-0euro', thinking_budget = 0",
+  ).run();
+  return c.json({ ok: true, message: "Coupe-circuit activé : toutes les actions sont basculées en mode CLI 0€." });
+});

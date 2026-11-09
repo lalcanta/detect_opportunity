@@ -408,4 +408,38 @@ describe("RÈGLES MÉTIER : Moteur Local & CLI (lead-engine-cli)", () => {
       assert.equal(cfg.REMOTE_APP_URL, "http://127.0.0.1:8788");
     });
   });
+
+  describe("Règle 26 : Direction Artistique par Métier & Diversité Frontend (detectArtisanArchetype)", () => {
+    it("doit classer les métiers du gros œuvre (couvreur, maçon, toiture) dans l'archétype Matière & Bâtiment", async () => {
+      const { detectArtisanArchetype } = await import("../prepScan");
+      const res = detectArtisanArchetype("Couvreur Zingueur");
+      assert.match(res.archetype, /MATIÈRE/i);
+      assert.match(res.palette, /Terre cuite/i);
+      assert.match(res.signatureComponent, /Avant \/ Après/i);
+    });
+
+    it("doit classer les métiers de bouche (boulangerie, traiteur) dans l'archétype Gourmand & Proximité", async () => {
+      const { detectArtisanArchetype } = await import("../prepScan");
+      const res = detectArtisanArchetype("Boulangerie Pâtisserie");
+      assert.match(res.archetype, /GOURMAND/i);
+      assert.match(res.palette, /Crème/i);
+      assert.match(res.signatureComponent, /Actuellement Ouvert/i);
+    });
+
+    it("doit classer les métiers de dépannage (plomberie, électricité, serrurier) dans l'archétype Haute Vélocité & Urgence", async () => {
+      const { detectArtisanArchetype } = await import("../prepScan");
+      const res = detectArtisanArchetype("Plombier Chauffagiste Dépannage");
+      assert.match(res.archetype, /HAUTE VÉLOCITÉ/i);
+      assert.match(res.palette, /Orange sécurité|Bleu électrique/i);
+      assert.match(res.signatureComponent, /Astreinte Immédiate/i);
+    });
+
+    it("doit classer la décoration et l'agencement dans l'archétype Studio & Métiers d'Art", async () => {
+      const { detectArtisanArchetype } = await import("../prepScan");
+      const res = detectArtisanArchetype("Menuiserie & Cuisiniste");
+      assert.match(res.archetype, /STUDIO/i);
+      assert.match(res.palette, /Greige/i);
+      assert.match(res.signatureComponent, /Nuancier|Simulateur/i);
+    });
+  });
 });

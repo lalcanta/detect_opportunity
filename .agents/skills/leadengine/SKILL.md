@@ -28,11 +28,13 @@ Antigravity exécute :
 2. Pour chaque lead `leadDir = lead-engine-cli/queue/pending/<id>` :
    - Lit `meta.json`, `prompt_demo.md`, et `prompt_battlecard.md`.
    - Inspecte `screenshot.png` si présent pour analyser les faiblesses du site actuel.
-   - Écrit `leadDir/demo.html` :
-     - Code HTML5 complet avec CDN Tailwind.
+   - Écrit `leadDir/demo.html` en appliquant rigoureusement le skill `.agents/skills/artisan-frontend-craft/SKILL.md` :
+     - Code HTML5 complet avec CDN Tailwind (aucun template générique).
+     - Respect de l'archétype métier (Matière & Bâtiment, Bouche & Gourmand, Urgence & Vélocité, ou Studio Déco).
+     - Palette et typographie adaptées au secteur (fond chaleureux/minéral/technique).
+     - Au moins 1 composant interactif signature (Avant/Après rénovation, indicateur d'ouverture live, ou simulateur 3 étapes).
      - Sticky bottom call bar mobile (`tel:`, WhatsApp).
-     - Couleurs de marque et logo client respectés.
-     - Preuve sociale (vrais avis Google) et grille de services locale.
+     - Preuve sociale (vrais avis Google Maps) et grille de prestations locale.
    - Écrit `leadDir/battlecard.json` :
      - Script d'appel closer mot-à-mot.
      - Objections et répliques.

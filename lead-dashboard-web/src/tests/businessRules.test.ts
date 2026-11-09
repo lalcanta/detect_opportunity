@@ -401,4 +401,81 @@ describe("RÈGLES MÉTIER : Dashboard Web & Pipeline Commercial (lead-dashboard-
       assert.deepEqual(adminPending.map((l) => l.id), ["l1", "l4"]);
     });
   });
+
+  describe("Règle 27 : Cockpit des Quotas & Sécurité Financière Anti-Dépassement (computeTokenMetrics)", () => {
+    it("doit renvoyer un statut 'safe' (Feu vert 100% gratuit) sous les 10 000 neurones Cloudflare ou en mode CLI", async () => {
+      const { computeTokenMetrics } = await import("../routes/admin");
+      const raw = [
+        {
+          model: "@cf/meta/llama-3.1-8b-instruct",
+          input: 50000,
+          output: 20000,
+          thinking: 0,
+          total_calls: 30,
+          input_today: 10000,
+          output_today: 4000,
+          calls_today: 10,
+        },
+        {
+          model: "antigravity-0euro",
+          input: 100000,
+          output: 80000,
+          thinking: 0,
+          total_calls: 5,
+          input_today: 20000,
+          output_today: 15000,
+          calls_today: 2,
+        },
+      ];
+
+      const { tokens, quotas } = computeTokenMetrics(raw);
+      assert.equal(quotas.safetyStatus, "safe");
+      assert.equal(quotas.canContinueSafely, true);
+      assert.equal(quotas.totalCostEstimateEur, 0);
+      assert.ok(quotas.cloudflareUsedPercent < 70);
+      assert.equal(tokens[0].quotaCategory, "cloudflare_free");
+      assert.equal(tokens[1].quotaCategory, "cli_0euro");
+    });
+
+    it("doit basculer en 'warning' dès que le quota Cloudflare dépasse 70% des 10 000 neurones", async () => {
+      const { computeTokenMetrics } = await import("../routes/admin");
+      const raw = [
+        {
+          model: "@cf/meta/llama-3.1-8b-instruct",
+          input: 300000,
+          output: 100000,
+          thinking: 0,
+          total_calls: 100,
+          input_today: 200000,
+          output_today: 100000, // 300k tokens * 25 neurones/k = 7500 neurones (75%)
+          calls_today: 80,
+        },
+      ];
+
+      const { quotas } = computeTokenMetrics(raw);
+      assert.equal(quotas.safetyStatus, "warning");
+      assert.ok(quotas.cloudflareUsedPercent >= 70 && quotas.cloudflareUsedPercent < 90);
+    });
+
+    it("doit basculer en 'danger' (Coupe-circuit recommandé) si un modèle payant ou un dépassement survient", async () => {
+      const { computeTokenMetrics } = await import("../routes/admin");
+      const raw = [
+        {
+          model: "claude-3-5-sonnet",
+          input: 500000,
+          output: 100000,
+          thinking: 0,
+          total_calls: 10,
+          input_today: 100000,
+          output_today: 20000,
+          calls_today: 5,
+        },
+      ];
+
+      const { quotas } = computeTokenMetrics(raw);
+      assert.equal(quotas.safetyStatus, "danger");
+      assert.equal(quotas.canContinueSafely, false);
+      assert.ok(quotas.totalCostEstimateEur > 0);
+    });
+  });
 });
