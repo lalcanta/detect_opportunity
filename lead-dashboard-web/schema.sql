@@ -154,6 +154,14 @@ CREATE TABLE IF NOT EXISTS model_settings (
   updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Limites gratuites Gemini saisies dans l'admin (sinon valeurs par défaut de shared/llm/geminiQuotas.ts)
+CREATE TABLE IF NOT EXISTS model_quotas (
+  model       TEXT PRIMARY KEY,
+  rpm         INTEGER,
+  rpd         INTEGER NOT NULL,
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS available_models (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   provider          TEXT NOT NULL,

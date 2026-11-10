@@ -2,6 +2,7 @@ import { ALL_OPPORTUNITY_IDS, isChannelId } from "../../../shared/opportunities"
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { requireUser, bearerMatches } from "../auth";
+import { loadGeminiQuotas, parseQuotaLimit, type GeminiQuotaSummary } from "../services/geminiQuota";
 import { assignRoundRobin } from "../services/assign";
 
 export const adminRoutes = new Hono<AppEnv>();
@@ -426,6 +427,7 @@ export interface AdminStats {
   won: number;
   tokens: TokenUsageRow[];
   quotas: QuotaCockpit;
+  gemini?: GeminiQuotaSummary;
 }
 
 export function computeTokenMetrics(rawList: Array<{
@@ -588,10 +590,29 @@ export async function loadStats(db: D1Database): Promise<AdminStats> {
   const total = byStatus.results.reduce((s, r) => s + r.n, 0);
   const won = byStatus.results.find((r) => r.status === "won")?.n ?? 0;
   const { tokens, quotas } = computeTokenMetrics(rawTokens.results);
-  return { byStatus: byStatus.results, total, won, tokens, quotas };
+  const gemini = await loadGeminiQuotas(db).catch(() => undefined);
+  return { byStatus: byStatus.results, total, won, tokens, quotas, gemini };
 }
 
 adminRoutes.get("/api/admin/stats", requireUser("admin"), async (c) => c.json(await loadStats(c.env.DB)));
+
+/** POST /api/admin/model-quotas — limite gratuite par jour d'un modèle Gemini ; rpd vide = valeur par défaut. */
+adminRoutes.post("/api/admin/model-quotas", requireUser("admin"), async (c) => {
+  const b = await c.req.json<{ model?: unknown; rpd?: unknown; rpm?: unknown }>().catch(() => ({}) as { model?: unknown; rpd?: unknown; rpm?: unknown });
+  const model = typeof b.model === "string" ? b.model.trim() : "";
+  if (!model || model.length > 120 || !/^[\w.:/-]+$/.test(model)) return c.json({ error: "Modèle invalide" }, 400);
+  const rpd = parseQuotaLimit(b.rpd);
+  const rpm = parseQuotaLimit(b.rpm);
+  if (rpd === "invalid" || rpm === "invalid") return c.json({ error: "Limite invalide : nombre entier positif attendu" }, 400);
+  if (rpd === null) {
+    await c.env.DB.prepare("DELETE FROM model_quotas WHERE model = ?").bind(model).run();
+  } else {
+    await c.env.DB.prepare(
+      "INSERT INTO model_quotas (model, rpm, rpd, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(model) DO UPDATE SET rpm = excluded.rpm, rpd = excluded.rpd, updated_at = CURRENT_TIMESTAMP",
+    ).bind(model, rpm, rpd).run();
+  }
+  return c.json({ ok: true });
+});
 
 /** POST /api/admin/models/circuit-breaker — coupe immédiatement toutes les API pour forcer le mode CLI 0€ */
 adminRoutes.post("/api/admin/models/circuit-breaker", requireUser("admin"), async (c) => {

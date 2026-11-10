@@ -3,6 +3,8 @@ import { CHANNEL_IDS, CHANNEL_LABELS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEF
 import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedChannels, parseAllowedOpportunities } from "../types";
 import { tokenRowForDisplay, type AdminStats, type ModelSettingRow } from "../routes/admin";
 import type { ScanJob, ScheduledScan } from "../routes/scans";
+import { modelPickerScript, renderFallbackPicker, renderModelFilter } from "./modelPicker";
+import type { GeminiQuotaRow, GeminiQuotaSummary } from "../services/geminiQuota";
 import { esc, icon, layout, navbar, type IconName } from "./layout";
 import { formatStatusLabel, opportunityBadgeMeta, renderStatusPill as formatStatusPill } from "./components";
 import { COMPETITOR_BENCHMARKS } from "../data/benchmarks";
@@ -86,20 +88,65 @@ function renderModelInfoBox(target: string, initialModelId: string, available: i
   </div>`;
 }
 
-/** Modèles de secours d'une action, essayés dans l'ordre si le principal est en quota ou indisponible. */
-function renderFallbackInput(target: string, raw?: string | null): string {
-  let list: string[] = [];
-  try {
-    const parsed = JSON.parse(raw || "[]");
-    if (Array.isArray(parsed)) list = parsed.filter((x): x is string => typeof x === "string");
-  } catch {
-    list = [];
-  }
-  return `<div>
-    <label for="fb_${target}" class="text-xs font-semibold text-zinc-700 block mb-1">Modèles de secours (facultatif, dans l'ordre) :</label>
-    <input id="fb_${target}" list="model-presets" value="${esc(list.join(", "))}" placeholder="ex : gemini-3.6-flash, gemini-3-flash-preview" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-mono bg-white">
-    <p class="text-[10px] text-zinc-500 mt-1">Essayés si le principal est en quota, saturé ou introuvable. Vide : repli historique sur gemini-3-flash-preview. Préfixe possible « openai: », « anthropic: »…</p>
-  </div>`;
+const QUOTA_STATE_STYLE: Record<GeminiQuotaRow["state"], { bar: string; label: string; text: string }> = {
+  ok: { bar: "bg-emerald-500", label: "Disponible", text: "text-emerald-700" },
+  warning: { bar: "bg-amber-500", label: "Bientôt atteint", text: "text-amber-700" },
+  exhausted: { bar: "bg-rose-500", label: "Atteint", text: "text-rose-700" },
+  no_free_tier: { bar: "bg-zinc-300", label: "Pas de palier gratuit", text: "text-zinc-500" },
+  unknown: { bar: "bg-zinc-300", label: "Limite inconnue", text: "text-zinc-500" },
+};
+
+/** Carte « Quotas Gemini du jour » : appels comptés par l'outil face aux limites gratuites de la console. */
+function renderGeminiQuotaCard(g: GeminiQuotaSummary | undefined): string {
+  if (!g) return "";
+  const reset = new Date(g.resetAt).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" });
+  const rows = g.rows.length
+    ? g.rows
+        .map((r) => {
+          const st = QUOTA_STATE_STYLE[r.state];
+          return `<tr class="align-top">
+            <td class="py-2.5 pr-3">
+              <div class="font-mono font-medium text-zinc-800 whitespace-nowrap">${esc(r.model)}</div>
+              <div class="text-[10px] text-zinc-500 mt-0.5">${r.usedBy.length ? esc(r.usedBy.join(" · ")) : "Non utilisé par une action"}</div>
+            </td>
+            <td class="py-2.5 pr-3 w-[38%] min-w-[140px]">
+              <div class="flex items-baseline justify-between gap-2 text-xs">
+                <span class="font-mono font-bold text-zinc-900">${r.callsToday}${r.rpd !== null ? ` / ${r.rpd}` : ""}</span>
+                <span class="text-[10px] font-semibold ${st.text}">${st.label}</span>
+              </div>
+              <div class="h-1.5 rounded-full bg-zinc-100 mt-1 overflow-hidden" role="img" aria-label="${r.callsToday} appels sur ${r.rpd ?? "?"}">
+                <div class="h-full ${st.bar}" style="width:${r.rpd ? Math.max(r.callsToday ? 2 : 0, r.percent) : 0}%"></div>
+              </div>
+              ${r.rpm ? `<div class="text-[10px] text-zinc-400 mt-1">${r.rpm} requêtes / minute</div>` : ""}
+            </td>
+            <td class="py-2.5">
+              <div class="flex items-center gap-1 justify-end">
+                <input type="number" min="0" step="1" value="${r.rpd ?? ""}" data-quota-model="${esc(r.model)}" aria-label="Limite par jour de ${esc(r.model)}" class="quota-input w-20 border border-zinc-200 rounded-md px-2 py-1 text-xs font-mono text-right bg-white">
+                <button type="button" class="quota-save text-[11px] font-semibold px-2 py-1 rounded-md bg-zinc-900 text-white hover:bg-zinc-700" data-quota-model="${esc(r.model)}">OK</button>
+              </div>
+              <div class="text-[10px] text-right mt-0.5 ${r.custom ? "text-indigo-600" : "text-zinc-400"}">${r.custom ? "saisie manuelle" : "valeur console"}</div>
+            </td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="3" class="py-6 text-center text-zinc-400">Aucun modèle Gemini configuré ni utilisé aujourd'hui.</td></tr>`;
+  return `
+      <div class="bg-white rounded-2xl shadow-sm border border-zinc-200/80 p-5 space-y-3">
+        <div>
+          <h3 class="font-bold text-sm text-zinc-900">Quotas Gemini du jour</h3>
+          <p class="text-xs text-zinc-500 mt-0.5">Appels comptés par l'outil depuis minuit heure du Pacifique, face aux limites gratuites par jour. Remise à zéro à ${reset} (heure de Paris). Les appels faits ailleurs avec la même clé ne sont pas comptés ; avec deux clés sur deux projets Google, la limite réelle est doublée.</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead class="text-[10px] uppercase tracking-wider text-zinc-500 border-b border-zinc-200">
+              <tr><th class="text-left font-semibold py-2">Modèle</th><th class="text-left font-semibold py-2">Appels du jour</th><th class="text-right font-semibold py-2">Limite / jour</th></tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-100">${rows}</tbody>
+          </table>
+        </div>
+        <p id="quota_msg" class="text-xs text-zinc-500" role="status"></p>
+      </div>
+`;
 }
 
 function renderThinkingSlider(target: string, value: number): string {
@@ -359,28 +406,6 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
   ];
 
   const body = `<div class="w-full min-h-screen bg-zinc-100/70 pb-16 font-sans">
-  <!-- Datalist presets modèles -->
-  <datalist id="model-presets">
-    <option value="gemini-3.8-flash">Gemini 3.8 Flash (Vitesse maximale & vision)</option>
-    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Raisonnement lourd)</option>
-    <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-    <option value="gemini-flash-latest">Gemini Flash Latest (Stable)</option>
-    <option value="gemini-pro-latest">Gemini Pro Latest (Stable)</option>
-    <option value="claude-5-sonnet">Claude Sonnet 5 (Top Design Tailwind & Frontend)</option>
-    <option value="claude-5-5-opus">Claude Opus 5.5 (Code d'élite & Raisonnement)</option>
-    <option value="claude-5-haiku">Claude Haiku 5 (Ultra-rapide)</option>
-    <option value="gpt-5">OpenAI GPT-5 (Flagship Multimodal)</option>
-    <option value="gpt-5-mini">OpenAI GPT-5 Mini (Rapide & Économique)</option>
-    <option value="o3">OpenAI o3 (Raisonnement Approfondi)</option>
-    <option value="o3-mini">OpenAI o3-mini (Thinking Économique)</option>
-    <option value="@cf/meta/llama-3.1-8b-instruct-fp8">Llama 3.1 8B FP8 (Cloudflare Workers AI - 0€)</option>
-    <option value="@cf/meta/llama-3.3-70b-instruct-fp8-fast">Llama 3.3 70B Fast (Cloudflare Workers AI)</option>
-    <option value="@cf/deepseek-ai/deepseek-r1-distill-qwen-32b">DeepSeek R1 32B (Cloudflare Workers AI)</option>
-    <option value="deepseek/deepseek-chat">DeepSeek V3 (via OpenRouter)</option>
-    <option value="deepseek/deepseek-r1">DeepSeek R1 (via OpenRouter)</option>
-    <option value="anthropic/claude-5-sonnet">Claude Sonnet 5 (via OpenRouter)</option>
-    <option value="openai/gpt-5">OpenAI GPT-5 (via OpenRouter)</option>
-  </datalist>
 
   <!-- Sub-Navbar Navigation Admin -->
   <div class="bg-white border-b border-zinc-200/80 shadow-sm sticky top-[49px] z-20">
@@ -1111,6 +1136,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             </div>
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Sélectionner un modèle :</label>
+              ${renderModelFilter("demo")}
               <select id="sel_mod_demo" data-target="demo" class="mod-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
                 ${renderModelSelectOptions(mDemo.provider, mDemo.model, availableModels)}
               </select>
@@ -1120,7 +1146,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               <input id="mod_demo" value="${esc(mDemo.model)}" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-mono bg-white">
             </div>
             ${renderThinkingSlider("demo", mDemo.thinking_budget)}
-            ${renderFallbackInput("demo", mDemo.fallback_models)}
+            ${renderFallbackPicker("demo", mDemo.fallback_models)}
           </div>
 
           <!-- Info Box Dynamique -->
@@ -1161,6 +1187,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             </div>
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Sélectionner un modèle :</label>
+              ${renderModelFilter("audit")}
               <select id="sel_mod_audit" data-target="audit" class="mod-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
                 ${renderModelSelectOptions(mAudit.provider, mAudit.model, availableModels)}
               </select>
@@ -1170,7 +1197,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               <input id="mod_audit" value="${esc(mAudit.model)}" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-mono bg-white">
             </div>
             ${renderThinkingSlider("audit", mAudit.thinking_budget)}
-            ${renderFallbackInput("audit", mAudit.fallback_models)}
+            ${renderFallbackPicker("audit", mAudit.fallback_models)}
           </div>
 
           <!-- Info Box Dynamique -->
@@ -1211,6 +1238,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             </div>
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Sélectionner un modèle :</label>
+              ${renderModelFilter("card")}
               <select id="sel_mod_card" data-target="card" class="mod-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
                 ${renderModelSelectOptions(mCard.provider, mCard.model, availableModels)}
               </select>
@@ -1220,7 +1248,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               <input id="mod_card" value="${esc(mCard.model)}" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-mono bg-white">
             </div>
             ${renderThinkingSlider("card", mCard.thinking_budget)}
-            ${renderFallbackInput("card", mCard.fallback_models)}
+            ${renderFallbackPicker("card", mCard.fallback_models)}
           </div>
 
           <!-- Info Box Dynamique -->
@@ -1452,6 +1480,8 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
         </div>
       </div>
 
+      ${renderGeminiQuotaCard(stats.gemini)}
+
       <!-- 3. Tableau Détaillé par Modèle -->
       <div class="bg-white rounded-2xl shadow-sm border border-zinc-200/80 p-5 space-y-4">
         <div class="flex items-center justify-between">
@@ -1487,7 +1517,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
                           t.quotaCategory === "cloudflare_free"
                             ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Cloudflare Free Tier (10k neurones/j)</span>'
                             : t.quotaCategory === "gemini_free_tier"
-                              ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Google Free Tier (1500 req/j)</span>'
+                              ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Google Free Tier</span>'
                               : t.quotaCategory === "cli_0euro"
                                 ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Mode CLI 0€ (Antigravity)</span>'
                                 : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">Pay-As-You-Go</span>'
@@ -2368,6 +2398,9 @@ document.querySelectorAll('.prov-select').forEach(function (ps) {
     }
     html += '<optgroup label="Saisie manuelle"><option value="__custom__">Saisie personnalisée / autre...</option></optgroup>';
     sel.innerHTML = html;
+    sel._fullHtml = html;
+    var search = document.querySelector('.mod-search[data-target="' + target + '"]');
+    if (search) search.value = '';
 
     if (filtered.length > 0) {
       var pick = flagships.length > 0 ? flagships[0].model_id : filtered[0].model_id;
@@ -2398,6 +2431,22 @@ document.querySelectorAll('.mod-select').forEach(function (ms) {
   };
 });
 
+${modelPickerScript("ALL_MODELS")}
+
+// Limites gratuites Gemini par jour (carte Quotas Gemini du jour)
+document.querySelectorAll('.quota-save').forEach(function (btn) {
+  btn.onclick = async function () {
+    var model = btn.dataset.quotaModel;
+    var input = Array.prototype.find.call(document.querySelectorAll('.quota-input'), function (x) { return x.dataset.quotaModel === model; });
+    var msg = document.getElementById('quota_msg');
+    btn.disabled = true;
+    var r = await post('/api/admin/model-quotas', { model: model, rpd: input ? input.value : '' });
+    if (r.ok) { location.reload(); return; }
+    var j = await r.json().catch(function () { return {}; });
+    if (msg) msg.textContent = j.error || 'Enregistrement impossible.';
+    btn.disabled = false;
+  };
+});
 // Boutons Presets en 1 clic
 document.querySelectorAll('.btn-preset-model').forEach(function (btn) {
   btn.onclick = function () {

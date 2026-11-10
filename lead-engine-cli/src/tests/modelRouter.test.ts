@@ -112,3 +112,12 @@ describe("ModelRouter — modèles de secours configurés", () => {
     await assert.rejects(router.generate({ task: "demo", prompt: "x" } as never), /429 quota/);
   });
 });
+
+describe("pause d'un modèle Gemini en quota", () => {
+  it("dit quelle limite est atteinte", async () => {
+    const { describeQuotaPause } = await import("../llm/modelRouter");
+    assert.match(describeQuotaPause({ scope: "day", retryMs: null, quotaId: null, limit: 20 }, 3_600_000), /quota du jour atteint \(20 requêtes\), en pause jusqu'à/);
+    assert.equal(describeQuotaPause({ scope: "minute", retryMs: 12_000, quotaId: null, limit: null }, 12_000), "quota par minute atteint, en pause 12 s");
+    assert.equal(describeQuotaPause(null, 60_000), "indisponible, en pause 60 s");
+  });
+});

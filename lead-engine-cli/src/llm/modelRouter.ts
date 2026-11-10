@@ -2,6 +2,7 @@ import { GoogleGenAI, type Part } from "@google/genai";
 import type { Config } from "../config";
 import type { TokenUsageRecord } from "../types";
 import { log, sleep, stripCodeFences } from "../utils/helpers";
+import { parseGeminiQuotaError, quotaCooldownMs, type GeminiQuotaError } from "../../../shared/llm/geminiQuotas";
 
 export type ActionType = "demo" | "audit" | "battlecard" | "TASK_HEAVY" | "TASK_FAST";
 export type ModelProvider = "gemini" | "openai" | "anthropic" | "openrouter" | "cloudflare" | "cli";
@@ -274,8 +275,10 @@ export class ModelRouter {
       } catch (err) {
         lastError = err;
         if (!isRetryable(err)) break;
-        slot.cooldownUntil.set(model, Date.now() + COOLDOWN_MS);
-        log("llm", `${slot.label}/${model} en quota ou indisponible → clé suivante`);
+        const quota = parseGeminiQuotaError(err);
+        const pauseMs = quota ? quotaCooldownMs(quota) : COOLDOWN_MS;
+        slot.cooldownUntil.set(model, Date.now() + pauseMs);
+        log("llm", `${slot.label}/${model} ${describeQuotaPause(quota, pauseMs)} → clé suivante`);
       }
     }
     if (this.geminiSlots.length === 0) throw new Error("Aucune clé GEMINI_API_KEY configurée");
@@ -449,6 +452,17 @@ export class ModelRouter {
     });
     return { text: req.json ? stripCodeFences(text) : text, model: config.model, provider: "anthropic" };
   }
+}
+
+/** Message de log : quelle limite est atteinte et jusqu'à quand le modèle est mis de côté. */
+export function describeQuotaPause(quota: GeminiQuotaError | null, pauseMs: number): string {
+  if (!quota) return `indisponible, en pause ${Math.round(pauseMs / 1000)} s`;
+  if (quota.scope === "day") {
+    const until = new Date(Date.now() + pauseMs).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    return `quota du jour atteint${quota.limit ? ` (${quota.limit} requêtes)` : ""}, en pause jusqu'à ${until}`;
+  }
+  const what = quota.scope === "minute" ? "quota par minute atteint" : "quota atteint";
+  return `${what}, en pause ${Math.round(pauseMs / 1000)} s`;
 }
 
 function isRetryable(err: unknown): boolean {
