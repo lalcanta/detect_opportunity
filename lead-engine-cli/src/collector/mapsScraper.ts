@@ -233,10 +233,14 @@ async function scrapeRecentReviews(page: Page): Promise<Review[]> {
   try {
     await page.locator('button[role="tab"]:has-text("Avis")').first().click({ timeout: 3000 });
     await page.waitForSelector("div.jftiEf", { timeout: 6000 });
-    // Tri "Les plus récents"
-    await page.locator('button[aria-label*="Trier"], button[data-value="Trier"]').first().click({ timeout: 2500 });
-    await page.locator('div[role="menuitemradio"]:has-text("récents")').first().click({ timeout: 2500 });
-    await page.waitForTimeout(1500);
+    // Tri "Les plus récents" : facultatif. S'il échoue, on garde les avis affichés par défaut (les plus pertinents).
+    try {
+      await page.locator('button[aria-label*="Trier"], button[data-value="Trier"]').first().click({ timeout: 2500 });
+      await page.locator('div[role="menuitemradio"]:has-text("récents")').first().click({ timeout: 2500 });
+      await page.waitForTimeout(1500);
+    } catch {
+      log("maps", "Tri des avis par date indisponible : avis par défaut conservés");
+    }
 
     return await page.$$eval("div.jftiEf", (nodes) =>
       nodes.slice(0, 3).map((n) => {
