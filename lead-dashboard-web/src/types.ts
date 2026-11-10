@@ -1,3 +1,14 @@
+import {
+  ALL_OPPORTUNITY_IDS,
+  OPPORTUNITIES,
+  isOpportunityId,
+  opportunityIdOf,
+  type BadgeTone,
+  type BusinessModel,
+  type OpportunityDefinition as SharedOpportunityDefinition,
+  type OpportunityId,
+} from "../../shared/opportunities";
+
 export type Role = "admin" | "closer";
 
 export const LEAD_STATUSES = ["demo_ready", "hot_lead", "called", "won", "lost", "callback_scheduled"] as const;
@@ -55,101 +66,58 @@ export interface User {
   allowed_opportunities?: string | null;
 }
 
+// Les opportunités sont définies dans shared/opportunities (source unique pour le CLI et le dashboard).
+// Ce module en dérive la vue utilisée par les écrans et le JavaScript client.
 export type OpportunityChannel = "vocal_closer" | "async_email";
-export type BusinessModel = "one_shot" | "recurring" | "both";
-export type ProofType = "demo_web" | "audit_report" | "audit_score" | "none";
-export type PitchType = "phone_battlecard" | "cold_email";
+export type { BusinessModel, BadgeTone } from "../../shared/opportunities";
 
 export interface OpportunityDefinition {
   id: string;
+  status: "active" | "draft";
   label: string;
   badge: string;
+  tone: BadgeTone;
   icon: string;
+  /** Mode de l'écran du closer, déduit du premier canal de l'opportunité. */
   channel: OpportunityChannel;
   businessModel: BusinessModel;
-  proofType: ProofType;
-  pitchType: PitchType;
+  proofType: "demo_web" | "audit_report";
+  pitchType: "phone_battlecard" | "cold_email";
   pitchFocus: string;
 }
 
-export const OPPORTUNITY_TYPES = [
-  {
-    id: "website",
-    label: "Création / Refonte de Site Web",
-    badge: "🌐 Site Web",
-    icon: "globe",
-    channel: "vocal_closer",
-    businessModel: "one_shot",
-    proofType: "demo_web",
-    pitchType: "phone_battlecard",
-    pitchFocus: "Présence web moderne, conversion mobile & Blueprint concurrentiel",
-  },
-  {
-    id: "audit_qa_trackers",
-    label: "Audit QA Régression & Traceurs RGPD",
-    badge: "🛡️ Audit QA Traceurs",
-    icon: "shield",
-    channel: "async_email",
-    businessModel: "recurring",
-    proofType: "audit_report",
-    pitchType: "cold_email",
-    pitchFocus: "Détection fuites CMP / tags marketing avant consentement & filet CI/CD",
-  },
-  {
-    id: "google_reviews",
-    label: "E-Réputation & Avis Google",
-    badge: "⭐ Avis Google",
-    icon: "star",
-    channel: "vocal_closer",
-    businessModel: "one_shot",
-    proofType: "none",
-    pitchType: "phone_battlecard",
-    pitchFocus: "Boost de note moyenne & flyers QR avis",
-  },
-  {
-    id: "seo_local",
-    label: "Visibilité & SEO Local (Maps)",
-    badge: "📍 SEO Local",
-    icon: "map-pin",
-    channel: "vocal_closer",
-    businessModel: "recurring",
-    proofType: "audit_score",
-    pitchType: "phone_battlecard",
-    pitchFocus: "Positionnement en tête de Google Maps",
-  },
-  {
-    id: "ads_acquisition",
-    label: "Campagnes Ads & Acquisition",
-    badge: "⚡ Ads Acquisition",
-    icon: "zap",
-    channel: "vocal_closer",
-    businessModel: "recurring",
-    proofType: "audit_score",
-    pitchType: "phone_battlecard",
-    pitchFocus: "Acquisition de chantiers par publicité ciblée",
-  },
-  {
-    id: "custom",
-    label: "Besoin Sur-Mesure",
-    badge: "🎯 Sur-Mesure",
-    icon: "target",
-    channel: "async_email",
-    businessModel: "both",
-    proofType: "audit_report",
-    pitchType: "cold_email",
-    pitchFocus: "Offre personnalisée adaptée au prospect",
-  },
-] as const;
+export function toOpportunityView(def: SharedOpportunityDefinition): OpportunityDefinition {
+  return {
+    id: def.id,
+    status: def.status,
+    label: def.label,
+    badge: def.badge.text,
+    tone: def.badge.tone,
+    icon: def.icon,
+    channel: def.channels[0] === "phone" ? "vocal_closer" : "async_email",
+    businessModel: def.commercial.businessModel,
+    proofType: def.proof.kind,
+    pitchType: def.pitch.kind,
+    pitchFocus: def.commercial.pitchFocus,
+  };
+}
 
-export type OpportunityTypeId = (typeof OPPORTUNITY_TYPES)[number]["id"];
+export const OPPORTUNITY_TYPES: readonly OpportunityDefinition[] = OPPORTUNITIES.map(toOpportunityView);
+
+/** Opportunités proposées au lancement d'un scan (hors brouillons). */
+export const SCANNABLE_OPPORTUNITY_TYPES: readonly OpportunityDefinition[] = OPPORTUNITY_TYPES.filter((o) => o.status === "active");
+
+export type OpportunityTypeId = OpportunityId;
 
 export function getOpportunity(id?: string | null): OpportunityDefinition {
-  const found = OPPORTUNITY_TYPES.find((o) => o.id === id);
+  const found = OPPORTUNITY_TYPES.find((o) => o.id === opportunityIdOf(id));
   if (found) return found;
   return {
     id: id || "custom",
+    status: "active",
     label: id || "Opportunité",
     badge: `🎯 ${id || "Opportunité"}`,
+    tone: "zinc",
     icon: "target",
     channel: "async_email",
     businessModel: "both",
@@ -160,16 +128,16 @@ export function getOpportunity(id?: string | null): OpportunityDefinition {
 }
 
 export function parseAllowedOpportunities(raw?: string | null): OpportunityTypeId[] {
-  const allIds = OPPORTUNITY_TYPES.map((o) => o.id);
+  const allIds = ALL_OPPORTUNITY_IDS;
   if (!raw) return allIds;
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      const valid = parsed.filter((id) => allIds.includes(id as OpportunityTypeId)) as OpportunityTypeId[];
+      const valid = parsed.filter(isOpportunityId);
       return valid.length > 0 ? valid : allIds;
     }
   } catch {
-    const parts = raw.split(",").map((s) => s.trim()).filter((id) => allIds.includes(id as OpportunityTypeId)) as OpportunityTypeId[];
+    const parts = raw.split(",").map((s) => s.trim()).filter(isOpportunityId);
     if (parts.length > 0) return parts;
   }
   return allIds;

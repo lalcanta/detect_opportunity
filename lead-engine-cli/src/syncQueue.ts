@@ -1,3 +1,4 @@
+import { getOpportunityOrDefault, opportunityIdOf } from "../../shared/opportunities";
 import { readdir, readFile, rename, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { loadConfig } from "./config";
@@ -48,12 +49,13 @@ export function buildQueueBattlecard(
   facts: AuditFactsFile | null,
   appUrl: string,
 ): { waiting: string } | { battlecard: Battlecard; summary: string; weaknesses: string[] } {
-  const isQa = meta.opportunity_type === "audit_qa_trackers";
+  // Un message de type cold email est indispensable : le lead attend tant que l'agent ne l'a pas écrit.
+  const isColdEmail = getOpportunityOrDefault(meta.opportunity_type).pitch.kind === "cold_email";
   const coldEmail = rawBc.coldEmail || (rawBc.subject && rawBc.body ? { subject: rawBc.subject, body: rawBc.body } : undefined);
-  if (isQa && !coldEmail) return { waiting: "coldEmail absent de battlecard.json (audit QA)" };
+  if (isColdEmail && !coldEmail) return { waiting: "coldEmail absent de battlecard.json (audit QA)" };
 
   const demoUrl = `${appUrl}/demos/${meta.id}`;
-  const battlecard: Battlecard = isQa
+  const battlecard: Battlecard = isColdEmail
     ? {
         closerBrief: rawBc.closerBrief || rawBc.executiveSummary || rawBc.auditSummary || facts?.auditSummary,
         ourAdvantages: rawBc.ourAdvantages || rawBc.closingArguments || [
@@ -85,7 +87,7 @@ export function buildQueueBattlecard(
     rawBc.weaknesses ||
     rawBc.currentSiteCritique ||
     facts?.weaknesses ||
-    (isQa
+    (isColdEmail
       ? []
       : ["Site web existant lent à charger sur smartphone", "Absence de barre d'appel immédiate pour les urgences", "Avis clients Google non mis en valeur"]);
 
@@ -187,7 +189,7 @@ export async function syncQueue(): Promise<void> {
         website_url: meta.website_url,
         google_rating: meta.google_rating,
         google_reviews_count: meta.google_reviews_count,
-        opportunity_type: meta.opportunity_type || "website",
+        opportunity_type: opportunityIdOf(meta.opportunity_type),
         audit_data: {
           score: meta.loadTimeMs && meta.loadTimeMs > 4000 ? 35 : 45,
           summary,

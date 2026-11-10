@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
   google_token_expiry  INTEGER,
   google_calendar_id   TEXT DEFAULT 'primary',
   google_email         TEXT,
-  allowed_opportunities TEXT NOT NULL DEFAULT '["website","google_reviews","seo_local","ads_acquisition","custom"]'
+  -- Doit lister tous les identifiants de shared/opportunities (ALL_OPPORTUNITY_IDS) ; vérifié par un test.
+  allowed_opportunities TEXT NOT NULL DEFAULT '["website","audit_qa_trackers","google_reviews","seo_local","ads_acquisition","custom"]'
 );
 
 CREATE TABLE IF NOT EXISTS leads (

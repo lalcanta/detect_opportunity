@@ -1,3 +1,4 @@
+import { opportunityIdOf } from "../../../shared/opportunities";
 import { Hono } from "hono";
 import { LEAD_STATUSES, parseAllowedOpportunities, type AppEnv, type Battlecard, type LeadRow, type LeadStatus, type OpportunityTypeId } from "../types";
 import { requireUser } from "../auth";
@@ -23,7 +24,7 @@ leadRoutes.post("/api/leads/:id/lock", requireUser("closer"), async (c) => {
       return c.json({ error: "forbidden", message: "Ce lead ne vous est pas attribué." }, 403);
     }
     const allowed = parseAllowedOpportunities(user.allowed_opportunities);
-    const opp = (currentLead.opportunity_type || "website") as OpportunityTypeId;
+    const opp = opportunityIdOf(currentLead.opportunity_type) as OpportunityTypeId;
     if (!allowed.includes(opp)) {
       return c.json({ error: "forbidden", message: "Ce type d'opportunité n'est pas activé pour vous." }, 403);
     }
@@ -79,7 +80,7 @@ leadRoutes.post("/api/leads/:id/status", requireUser("closer"), async (c) => {
       return c.json({ error: "forbidden", message: "Ce lead ne vous est pas attribué." }, 403);
     }
     const allowed = parseAllowedOpportunities(user.allowed_opportunities);
-    const opp = (lead.opportunity_type || "website") as OpportunityTypeId;
+    const opp = opportunityIdOf(lead.opportunity_type) as OpportunityTypeId;
     if (!allowed.includes(opp)) {
       return c.json({ error: "forbidden", message: "Ce type d'opportunité n'est pas activé pour vous." }, 403);
     }
@@ -197,7 +198,7 @@ leadRoutes.post("/api/leads/:id/email-sent", requireUser("closer"), async (c) =>
       return c.json({ error: "forbidden", message: "Ce lead ne vous est pas attribué." }, 403);
     }
     const allowed = parseAllowedOpportunities(user.allowed_opportunities);
-    if (!allowed.includes((current.opportunity_type || "website") as OpportunityTypeId)) {
+    if (!allowed.includes(opportunityIdOf(current.opportunity_type) as OpportunityTypeId)) {
       return c.json({ error: "forbidden", message: "Ce type d'opportunité n'est pas activé pour vous." }, 403);
     }
   }
@@ -239,7 +240,7 @@ leadRoutes.post("/api/leads/:id/update", requireUser("closer"), async (c) => {
       return c.json({ error: "forbidden", message: "Ce lead ne vous est pas attribué." }, 403);
     }
     const allowed = parseAllowedOpportunities(user.allowed_opportunities);
-    const opp = (current.opportunity_type || "website") as OpportunityTypeId;
+    const opp = opportunityIdOf(current.opportunity_type) as OpportunityTypeId;
     if (!allowed.includes(opp)) {
       return c.json({ error: "forbidden", message: "Ce type d'opportunité n'est pas activé pour vous." }, 403);
     }
@@ -305,7 +306,7 @@ leadRoutes.get("/api/leads/:id", requireUser("closer"), async (c) => {
       return c.json({ error: "forbidden", message: "Ce lead ne vous est pas attribué." }, 403);
     }
     const allowed = parseAllowedOpportunities(user.allowed_opportunities);
-    const opp = (row.opportunity_type || "website") as OpportunityTypeId;
+    const opp = opportunityIdOf(row.opportunity_type) as OpportunityTypeId;
     if (!allowed.includes(opp)) {
       return c.json({ error: "forbidden", message: "Ce type d'opportunité n'est pas activé pour vous." }, 403);
     }

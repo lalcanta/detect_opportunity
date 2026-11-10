@@ -3,8 +3,10 @@ import { loadConfig } from "./config";
 import { ModelRouter } from "./llm/modelRouter";
 import { runScan } from "./scanRunner";
 
+import { ALL_OPPORTUNITY_IDS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../shared/opportunities";
+
 const USAGE = `Usage: npm run scan -- --query "plombier" --city "Lyon" [--limit 10] [--opportunity website] [--website-filter all] [--lat 45.76 --lng 4.83 --radius 10] [--cdp] [--dry-run]
-  --opportunity     Type d'opportunité : website | audit_qa_trackers | google_reviews | seo_local | ads_acquisition | custom
+  --opportunity     Type d'opportunité : ${ALL_OPPORTUNITY_IDS.join(" | ")}
   --website-filter  Filtre présence web : all | no_website | has_website
   --domains         Liste de domaines en direct sans Maps (ex: --domains "digidop.fr, studio.fr")
   --cdp             Se connecte au Chrome ouvert avec --remote-debugging-port=9222
@@ -18,7 +20,7 @@ async function main(): Promise<void> {
       domains: { type: "string" },
       city: { type: "string", default: "France" },
       limit: { type: "string", default: "10" },
-      opportunity: { type: "string", default: "website" },
+      opportunity: { type: "string" },
       target: { type: "string" },
       "website-filter": { type: "string", default: "all" },
       lat: { type: "string" },
@@ -35,7 +37,7 @@ async function main(): Promise<void> {
     console.error(USAGE);
     process.exit(1);
   }
-  const oppType = String(values.target || values.opportunity || (values.domains ? "audit_qa_trackers" : "website"));
+  const oppType = String(values.target || values.opportunity || (values.domains ? DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID : DEFAULT_OPPORTUNITY_ID));
   const wfRaw = String(values["website-filter"] ?? "all");
   const websiteFilter = wfRaw === "no_website" || wfRaw === "has_website" ? wfRaw : "all";
 

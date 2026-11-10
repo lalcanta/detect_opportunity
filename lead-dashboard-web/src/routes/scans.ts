@@ -1,3 +1,4 @@
+import { opportunityIdOf } from "../../../shared/opportunities";
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { bearerMatches, requireUser } from "../auth";
@@ -72,7 +73,7 @@ scanRoutes.post("/api/admin/scans", requireUser("admin"), async (c) => {
   const lat = typeof b.lat === "number" ? b.lat : null;
   const lng = typeof b.lng === "number" ? b.lng : null;
   const radius_km = typeof b.radius_km === "number" ? b.radius_km : null;
-  const oppType = b.opportunity_type?.trim() || "website";
+  const oppType = opportunityIdOf(b.opportunity_type?.trim());
   const webFilter = b.website_filter?.trim() || "all";
   const execMode = b.execution_mode === "prep_only" ? "prep_only" : "full_auto";
 
@@ -139,7 +140,7 @@ scanRoutes.post("/api/admin/scheduled-scans", requireUser("admin"), async (c) =>
   const lat = typeof b.lat === "number" ? b.lat : null;
   const lng = typeof b.lng === "number" ? b.lng : null;
   const radius_km = typeof b.radius_km === "number" ? b.radius_km : null;
-  const oppType = b.opportunity_type?.trim() || "website";
+  const oppType = opportunityIdOf(b.opportunity_type?.trim());
   const webFilter = b.website_filter?.trim() || "all";
   const execMode = b.execution_mode === "prep_only" ? "prep_only" : "full_auto";
 

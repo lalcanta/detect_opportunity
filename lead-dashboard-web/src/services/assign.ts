@@ -1,3 +1,4 @@
+import { opportunityIdOf } from "../../../shared/opportunities";
 import { parseAllowedOpportunities, type OpportunityTypeId } from "../types";
 
 /** Répartit les leads non assignés entre les closers actifs qualifiés (selon le type d'opportunité activé). */
@@ -26,7 +27,7 @@ export async function assignRoundRobin(db: D1Database): Promise<number> {
   const stmts: D1PreparedStatement[] = [];
 
   for (const lead of leads.results) {
-    const oppType = (lead.opportunity_type || "website") as OpportunityTypeId;
+    const oppType = opportunityIdOf(lead.opportunity_type) as OpportunityTypeId;
     // Trouver les closers qualifiés pour ce type d'opportunité précis
     const eligible = closerMeta.filter((c) => c.allowed.includes(oppType));
     if (eligible.length === 0) continue; // Reste non assigné tant qu'aucun closer n'est activé pour ce besoin

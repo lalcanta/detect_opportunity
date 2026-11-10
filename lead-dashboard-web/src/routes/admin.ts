@@ -1,3 +1,4 @@
+import { ALL_OPPORTUNITY_IDS } from "../../../shared/opportunities";
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { requireUser, bearerMatches } from "../auth";
@@ -47,7 +48,7 @@ adminRoutes.post("/api/admin/users", requireUser("admin"), async (c) => {
   const opps =
     Array.isArray(body.opportunities) && body.opportunities.length > 0
       ? JSON.stringify(body.opportunities)
-      : '["website","audit_qa_trackers","google_reviews","seo_local","ads_acquisition","custom"]';
+      : JSON.stringify(ALL_OPPORTUNITY_IDS);
 
   try {
     await c.env.DB.prepare(

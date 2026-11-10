@@ -1,3 +1,4 @@
+import type { OpportunityId } from "../../../shared/opportunities";
 /**
  * Système de templating des emails.
  *
@@ -13,7 +14,8 @@ export interface EmailTemplate {
   id: string;
   label: string;
   /** Opportunités pour lesquelles le template est proposé ("*" = toutes). */
-  opportunities: string[];
+  /** Identifiants de shared/opportunities, ou "*" pour toutes. */
+  opportunities: (OpportunityId | "*")[];
   /** Étape du cycle : premier contact, relance, etc. */
   stage: "first_contact" | "follow_up" | "proof" | "closing";
   subject: string;
@@ -183,7 +185,7 @@ export function renderTemplate(tpl: string, vars: Record<string, string>): strin
 
 /** Templates proposés pour une opportunité donnée (spécifiques d'abord, puis génériques). */
 export function templatesForOpportunity(opportunityId: string): EmailTemplate[] {
-  const specific = EMAIL_TEMPLATES.filter((t) => t.opportunities.includes(opportunityId));
+  const specific = EMAIL_TEMPLATES.filter((t) => (t.opportunities as string[]).includes(opportunityId));
   const generic = EMAIL_TEMPLATES.filter((t) => t.opportunities.includes("*"));
   return [...specific, ...generic];
 }

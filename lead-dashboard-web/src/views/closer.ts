@@ -1,3 +1,4 @@
+import { DEFAULT_OPPORTUNITY_ID, opportunityIdOf } from "../../../shared/opportunities";
 import { OPPORTUNITY_TYPES, parseAllowedOpportunities, type Battlecard, type LeadRow, type User } from "../types";
 import { EMAIL_TEMPLATES, buildTemplateVars } from "../templates/emailTemplates";
 import { esc, icon, layout, navbar, telHref, toWaNumber } from "./layout";
@@ -510,7 +511,7 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
           ]
         : [
             ["all", `Tous mes besoins (${allowedOpps.length})`],
-            ...OPPORTUNITY_TYPES.filter((o) => allowedOpps.includes(o.id)).map((o) => [o.id, o.badge] as [string, string]),
+            ...OPPORTUNITY_TYPES.filter((o) => (allowedOpps as string[]).includes(o.id)).map((o) => [o.id, o.badge] as [string, string]),
           ]
       )
         .map(([k, label]) => `<a href="/?scope=${scope}&view=${view}&opp=${k}" class="whitespace-nowrap px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${opp === k ? "bg-indigo-600 text-white shadow-sm" : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 border border-zinc-200/80"}">${label}</a>`)
@@ -869,7 +870,7 @@ var LEADS_MAP = ${JSON.stringify(
       google_rating: l.google_rating,
       google_reviews_count: l.google_reviews_count || 0,
       status: l.status,
-      opportunity_type: l.opportunity_type || "website",
+      opportunity_type: opportunityIdOf(l.opportunity_type),
       callback_scheduled_at: l.callback_scheduled_at || "",
       call_notes: l.call_notes || "",
       demo_viewed_count: l.demo_viewed_count || 0,
@@ -1021,7 +1022,7 @@ function openSidepanel(id) {
   $('sp_status_badge').textContent = col.label;
   $('sp_status_badge').className = 'px-2 py-0.5 rounded text-xs font-semibold ' + col.badgeBg;
 
-  var oppDef = ALL_OPPORTUNITIES.find(function(o) { return o.id === (lead.opportunity_type || 'website'); }) || {
+  var oppDef = ALL_OPPORTUNITIES.find(function(o) { return o.id === (lead.opportunity_type || ${JSON.stringify(DEFAULT_OPPORTUNITY_ID)}); }) || {
     badge: '🎯 ' + (lead.opportunity_type || 'Opportunité'),
     channel: 'vocal_closer'
   };

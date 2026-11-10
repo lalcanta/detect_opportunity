@@ -1,16 +1,8 @@
 import type { Page } from "playwright";
 import type { SiteInspection } from "../../types";
 
-export type ScanModuleId =
-  | "trackers_cmp"
-  | "tech_stack"
-  | "contacts_legal"
-  | "social_links"
-  | "dirigeant_sirene"
-  | "branding_visual"
-  | "perf_mobile"
-  | "ads_pixel_spy"
-  | "freshness_ssl";
+export type { ScanModuleId } from "../../../../shared/opportunities";
+import { SCAN_MODULE_IDS, scanModulesFor, type ScanModuleId } from "../../../../shared/opportunities";
 
 export interface ScanModuleContext {
   page: Page;
@@ -30,32 +22,10 @@ export interface ScanModule {
   afterNavigate?: (ctx: ScanModuleContext) => Promise<void> | void;
 }
 
-/**
- * Recettes de modules par type d'opportunité :
- * chaque opportunité assemble uniquement les briques dont elle a besoin.
- */
-export const OPPORTUNITY_SCAN_RECIPES: Record<string, ScanModuleId[]> = {
-  audit_qa_trackers: ["trackers_cmp", "ads_pixel_spy", "tech_stack", "contacts_legal", "social_links", "dirigeant_sirene", "branding_visual", "freshness_ssl"],
-  website: ["branding_visual", "perf_mobile", "freshness_ssl", "ads_pixel_spy", "contacts_legal", "social_links", "dirigeant_sirene", "tech_stack"],
-  google_reviews: ["branding_visual", "contacts_legal", "social_links", "dirigeant_sirene", "perf_mobile", "freshness_ssl"],
-  seo_local: ["perf_mobile", "freshness_ssl", "ads_pixel_spy", "tech_stack", "contacts_legal", "social_links", "dirigeant_sirene", "branding_visual"],
-  ads_acquisition: ["trackers_cmp", "ads_pixel_spy", "perf_mobile", "freshness_ssl", "contacts_legal", "social_links", "dirigeant_sirene", "branding_visual"],
-  custom: ["trackers_cmp", "ads_pixel_spy", "tech_stack", "freshness_ssl", "contacts_legal", "social_links", "dirigeant_sirene", "branding_visual", "perf_mobile"],
-};
+/** Toutes les vérifications, pour une opportunité inconnue ou absente. */
+export const ALL_SCAN_MODULES: ScanModuleId[] = [...SCAN_MODULE_IDS];
 
-export const ALL_SCAN_MODULES: ScanModuleId[] = [
-  "trackers_cmp",
-  "ads_pixel_spy",
-  "tech_stack",
-  "freshness_ssl",
-  "contacts_legal",
-  "social_links",
-  "dirigeant_sirene",
-  "branding_visual",
-  "perf_mobile",
-];
-
+/** Vérifications déclarées par l'opportunité dans shared/opportunities. */
 export function getModulesForOpportunity(opportunityType?: string | null): ScanModuleId[] {
-  if (!opportunityType) return ALL_SCAN_MODULES;
-  return OPPORTUNITY_SCAN_RECIPES[opportunityType] ?? ALL_SCAN_MODULES;
+  return [...scanModulesFor(opportunityType)];
 }

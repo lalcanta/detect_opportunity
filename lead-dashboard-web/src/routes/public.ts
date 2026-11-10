@@ -1,3 +1,4 @@
+import { DEFAULT_OPPORTUNITY_ID, getOpportunityOrDefault, opportunityIdOf } from "../../../shared/opportunities";
 import { Hono } from "hono";
 import type { AppEnv, SyncBody } from "../types";
 import { bearerMatches, ensureAuthSchema, generateRandomHex, getSessionUser, requireUser } from "../auth";
@@ -75,7 +76,7 @@ publicRoutes.post("/api/sync", async (c) => {
   const targetStatus = isPending ? "pending_generation" : (body.status || "demo_ready");
 
   const flyerUrl = body.flyer_pdf_base64 ? `/api/leads/${body.id}/flyer` : null;
-  const oppType = body.opportunity_type || "website";
+  const oppType = opportunityIdOf(body.opportunity_type);
   // Le statut commercial n'est jamais écrasé par une re-synchronisation (re-scan, prep, sync-queue, regen) :
   // seul un lead encore en `pending_generation` peut avancer vers le statut envoyé. De même, une re-préparation
   // (payload `pending_generation`, audit partiel) ne remplace pas l'audit complet d'un lead déjà généré.
@@ -147,8 +148,7 @@ function renderInteractiveDemoFloatingBar(opts: {
       expiryLabel = `Expire dans ${daysLeft}j`;
     }
   }
-  const isQa = opts.opportunityType === "audit_qa_trackers";
-  const ctaLabel = isQa ? "✅ Ce rapport m'intéresse (CI/CD)" : "✅ Ce design me plaît, on en discute";
+  const ctaLabel = getOpportunityOrDefault(opts.opportunityType).proof.interestCta;
   // Aperçu par un closer/admin connecté : pas de bouton d'intérêt, pour ne pas fausser le signal « lead chaud ».
   const ctaHtml = opts.internalPreview
     ? `<span style="background:rgba(251,191,36,0.15);color:#fde68a;border:1px solid rgba(251,191,36,0.4);border-radius:10px;padding:6px 10px;font-size:11px;font-weight:700;">👁️ Aperçu interne — vue non comptabilisée</span>`
@@ -394,7 +394,7 @@ publicRoutes.post("/api/public/inbound-lead", async (c) => {
   const now = new Date();
   const stamp = now.toISOString().slice(0, 16).replace("T", " ");
   const tierLabel = INBOUND_TIER_LABELS[offerTier]!;
-  const oppType = offerTier === "custom" ? "custom" : "website";
+  const oppType = offerTier === "custom" ? "custom" : DEFAULT_OPPORTUNITY_ID;
 
   // Si le prospect a choisi un créneau ISO valide, on programme directement le rappel dans Ma Journée & Agenda
   let callbackScheduledAt: string | null = null;

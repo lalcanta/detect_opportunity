@@ -44,7 +44,7 @@ Code : `lead-engine-cli/src/scanRunner.ts`.
    Qualifié = **a un téléphone** + respecte `website_filter` (`all` / `no_website` / `has_website`).
    Variante : `--domains "a.fr, b.fr"` (ou requête `domains:...`) court-circuite Maps (`parseDirectDomainLeads`).
 2. **Inspection** (`inspector/siteInspector.ts`) : une seule ouverture de page ; les modules actifs dépendent de
-   l'opportunité (`inspector/modules/types.ts → OPPORTUNITY_SCAN_RECIPES`) : traceurs/CMP, pixels pub, stack,
+   l'opportunité (`scanModules` dans `shared/opportunities/definitions/`) : traceurs/CMP, pixels pub, stack,
    fraîcheur/SSL, emails/dirigeants, réseaux sociaux, SIREN (API recherche-entreprises), branding (couleurs, logo
    base64, capture), perf mobile. Sans site : seul le lookup SIREN est fait.
 3. **Audit** (`inspector/siteAuditor.ts`) : LLM (tâche `audit`) sur capture + mesures, fallback déterministe.
@@ -118,10 +118,14 @@ pending_generation ──(sync-queue)──► demo_ready ──(démo ouverte /
 
 ## 6. Types d'opportunité
 
-Définis dans `lead-dashboard-web/src/types.ts` (`OPPORTUNITY_TYPES`) et, en parallèle, dans le CLI
-(`prepScan.ts`, `scanRunner.ts`, `battlecard.ts`, recettes d'inspection).
+Définis une seule fois dans `shared/opportunities/` (un fichier par opportunité dans `definitions/`, registre dans
+`index.ts`), importé par le CLI et par le dashboard. Chaque définition déclare ses canaux, ses vérifications de site,
+sa preuve, son message et le flyer. Le CLI exécute les générateurs déclarés (`lead-engine-cli/src/opportunities/generators.ts`) ;
+le dashboard en dérive badges, sélecteurs et mode de l'écran du closer (`lead-dashboard-web/src/types.ts`).
+La cohérence du registre est vérifiée par `shared/opportunities/registry.test.ts`.
+Refonte en cours : [`PLAN_REFONTE_LEADS.md`](./PLAN_REFONTE_LEADS.md).
 
-| id | Canal prévu (dashboard) | Preuve générée réellement par le CLI |
+| id | Canal (dashboard) | Preuve générée par le CLI |
 |---|---|---|
 | `website` | Appel closer | Démo de site |
 | `audit_qa_trackers` | Email asynchrone (dev à dev) | Rapport traceurs déterministe |

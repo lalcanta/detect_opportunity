@@ -5,6 +5,13 @@ import { loadConfig } from "./config";
 import { scrapeMaps } from "./collector/mapsScraper";
 import { inspectSite, lookupCompanySirene } from "./inspector/siteInspector";
 import { generateFlyerPdf } from "./generator/flyerGenerator";
+import {
+  DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID,
+  DEFAULT_OPPORTUNITY_ID,
+  findOpportunity,
+  getOpportunityOrDefault,
+  opportunityIdOf,
+} from "../../shared/opportunities";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
 import { pushLead } from "./sync/pushLead";
@@ -95,7 +102,7 @@ function parseArgs(): PrepScanOptions {
     city: "Bordeaux",
     limit: 5,
     cdp: false,
-    opportunity_type: "website",
+    opportunity_type: DEFAULT_OPPORTUNITY_ID,
     website_filter: "all",
   };
 
@@ -104,7 +111,7 @@ function parseArgs(): PrepScanOptions {
     if (arg === "--query" || arg === "-q") opts.query = args[++i] || opts.query;
     else if (arg === "--domains" || arg === "--urls" || arg === "-d") {
       opts.query = `domains:${args[++i] || ""}`;
-      if (opts.opportunity_type === "website") opts.opportunity_type = "audit_qa_trackers";
+      if (opts.opportunity_type === DEFAULT_OPPORTUNITY_ID) opts.opportunity_type = DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID;
     } else if (arg === "--city" || arg === "-c") opts.city = args[++i] || opts.city;
     else if (arg === "--limit" || arg === "-l") opts.limit = parseInt(args[++i] || "5", 10);
     else if (arg === "--lat") opts.lat = parseFloat(args[++i] || "0");
@@ -129,18 +136,10 @@ export async function runPrepScan(
   hooks: PrepScanHooks = {},
 ): Promise<PrepScanResult> {
   const cfg = loadConfig();
-  const oppType = opts.opportunity_type || "website";
+  const oppType = opportunityIdOf(opts.opportunity_type);
   const webFilter = opts.website_filter || "all";
-
-  const oppLabels: Record<string, string> = {
-    website: "🌐 Création & Refonte de Site Web",
-    audit_qa_trackers: "🛡️ Audit QA Régression & Traceurs RGPD (Dev-to-Dev 100% Asynchrone)",
-    google_reviews: "⭐ E-Réputation & Avis Google",
-    seo_local: "📍 Visibilité & Référencement Local Maps",
-    ads_acquisition: "⚡ Publicité Locale & Acquisition Chantiers",
-    custom: "🎯 Besoin Sur-Mesure",
-  };
-  const oppLabel = oppLabels[oppType] || oppType;
+  const def = getOpportunityOrDefault(oppType);
+  const oppLabel = findOpportunity(oppType)?.label ?? oppType;
 
   log(
     "prep",
@@ -260,8 +259,10 @@ export async function runPrepScan(
 
       // 2. Génération flyer PDF
       const brandColor = inspection?.dominantColors?.[0] || "#1e40af";
-      const flyerBuffer = await generateFlyerPdf(context, lead, inspection?.logoUrl ?? null, brandColor);
-      await writeFile(`${leadDir}/flyer.pdf`, flyerBuffer);
+      if (def.flyer) {
+        const flyerBuffer = await generateFlyerPdf(context, lead, inspection?.logoUrl ?? null, brandColor);
+        await writeFile(`${leadDir}/flyer.pdf`, flyerBuffer);
+      }
 
       // 3. Récupération des benchmarks sectoriels
       const benchmark = getCompetitorBenchmark(lead.activity);
@@ -338,9 +339,9 @@ export async function runPrepScan(
         log("prep", `⚠️ Sync pending_generation échouée pour ${lead.name} (reprise par sync-queue) : ${(err as Error).message}`);
       }
 
-      // Si opportunité Audit QA Traceurs : rapport HTML déterministe + constats mesurés dans audit_facts.json.
+      // Preuve déterministe (rapport traceurs) : rapport HTML + constats mesurés dans audit_facts.json.
       // battlecard.json (avec le cold email) reste à produire par l'agent : sync-queue attend sa présence.
-      if (oppType === "audit_qa_trackers") {
+      if (def.proof.generator === "tracker_report") {
         const qaReportHtml = generateTrackerReportHtml({
           leadId: id,
           lead,
@@ -366,9 +367,10 @@ export async function runPrepScan(
       }
 
       // 5. Génération du prompt pour Antigravity CLI (demo.html) adapté au type de besoin
-      const isReviewOffer = oppType === "google_reviews";
-      const isSeoOffer = oppType === "seo_local";
-      const isAdsOffer = oppType === "ads_acquisition";
+      const demoFocus = def.proof.kind === "demo_web" ? def.proof.focus : "showcase";
+      const isReviewOffer = demoFocus === "reviews";
+      const isSeoOffer = demoFocus === "seo_local";
+      const isAdsOffer = demoFocus === "ads_acquisition";
       const craft = detectArtisanArchetype(lead.activity || opts.query || "");
 
       const promptDemo = `# Consigne de Génération Démo Tailwind pour Antigravity (Skill artisan-frontend-craft)
@@ -424,7 +426,7 @@ ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rati
       await writeFile(`${leadDir}/prompt_demo.md`, promptDemo);
 
       // 6. Génération du prompt pour Antigravity CLI (battlecard.json) adapté au besoin
-      const isAsyncQaOffer = oppType === "audit_qa_trackers";
+      const isAsyncQaOffer = def.pitch.generator === "tracker_cold_email";
 
       let promptBattlecard = "";
       if (isAsyncQaOffer) {

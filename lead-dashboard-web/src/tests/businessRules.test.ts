@@ -174,7 +174,7 @@ describe("RÈGLES MÉTIER : Dashboard Web & Pipeline Commercial (lead-dashboard-
         assert.ok(opp.pitchFocus.length > 0, `pitchFocus manquant pour ${opp.id}`);
         assert.ok(["vocal_closer", "async_email"].includes(opp.channel), `channel invalide pour ${opp.id}`);
         assert.ok(["one_shot", "recurring", "both"].includes(opp.businessModel), `businessModel invalide pour ${opp.id}`);
-        assert.ok(["demo_web", "audit_report", "audit_score", "none"].includes(opp.proofType), `proofType invalide pour ${opp.id}`);
+        assert.ok(["demo_web", "audit_report"].includes(opp.proofType), `proofType invalide pour ${opp.id}`);
         assert.ok(["phone_battlecard", "cold_email"].includes(opp.pitchType), `pitchType invalide pour ${opp.id}`);
       }
     });

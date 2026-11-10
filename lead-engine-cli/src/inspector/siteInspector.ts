@@ -2,7 +2,6 @@ import type { BrowserContext } from "playwright";
 import type { SiteInspection } from "../types";
 import {
   ALL_SCAN_MODULES,
-  OPPORTUNITY_SCAN_RECIPES,
   SCAN_MODULES_REGISTRY,
   buildObsolescenceSignals,
   classifyTrackerUrl,
@@ -22,7 +21,6 @@ import {
 
 export {
   ALL_SCAN_MODULES,
-  OPPORTUNITY_SCAN_RECIPES,
   SCAN_MODULES_REGISTRY,
   buildObsolescenceSignals,
   classifyTrackerUrl,

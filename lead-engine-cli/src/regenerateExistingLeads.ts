@@ -1,3 +1,4 @@
+import { opportunityIdOf } from "../../shared/opportunities";
 import { execSync } from "node:child_process";
 import { loadConfig } from "./config";
 import { ModelRouter } from "./llm/modelRouter";
@@ -138,7 +139,7 @@ async function main() {
       website_url: l.website_url,
       google_rating: l.google_rating,
       google_reviews_count: l.google_reviews_count,
-      opportunity_type: l.opportunity_type ?? "website",
+      opportunity_type: opportunityIdOf(l.opportunity_type),
       status: (l.status as any) || "demo_ready",
       audit_data: audit as unknown as Record<string, unknown>,
       demo_html: finalDemoHtml,

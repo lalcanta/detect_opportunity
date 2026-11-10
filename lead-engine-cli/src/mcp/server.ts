@@ -1,3 +1,4 @@
+import { getOpportunityOrDefault } from "../../../shared/opportunities";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -229,9 +230,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       );
       const info = JSON.parse(rawInfo)[0]?.results?.[0] as { company_name: string; opportunity_type?: string } | undefined;
       if (!info) throw new Error(`Lead introuvable pour l'id : ${leadId}`);
-      if (info.opportunity_type === "audit_qa_trackers") {
-        // Le rapport QA est généré de façon déterministe et le lead attend un cold email : passer par la file + sync-queue.
-        throw new Error("Lead audit QA : la démo est le rapport généré par prep, ne pas la remplacer (utiliser la file / sync-queue)");
+      if (getOpportunityOrDefault(info.opportunity_type).proof.kind !== "demo_web") {
+        // La preuve est un rapport déterministe et le lead attend un cold email : passer par la file + sync-queue.
+        throw new Error("Lead dont la preuve est un rapport généré par prep (audit QA) : ne pas le remplacer (utiliser la file / sync-queue)");
       }
       const companyName = info.company_name;
 

@@ -1,0 +1,6 @@
+{
+  "name": "@leadengine/shared",
+  "private": true,
+  "type": "module",
+  "description": "Code partagé entre lead-engine-cli et lead-dashboard-web (sans dépendance)"
+}

@@ -9,7 +9,6 @@ import { adsPixelSpyModule, detectPaidAdsFromHtml } from "./adsPixelSpyModule";
 import { freshnessSslModule, extractCopyrightYearFromText, buildObsolescenceSignals } from "./freshnessSslModule";
 import {
   ALL_SCAN_MODULES,
-  OPPORTUNITY_SCAN_RECIPES,
   getModulesForOpportunity,
   type ScanModule,
   type ScanModuleContext,
@@ -34,7 +33,6 @@ export function resolveScanModules(moduleIds: ScanModuleId[]): ScanModule[] {
 
 export {
   ALL_SCAN_MODULES,
-  OPPORTUNITY_SCAN_RECIPES,
   getModulesForOpportunity,
   classifyTrackerUrl,
   detectCmpFromHtml,

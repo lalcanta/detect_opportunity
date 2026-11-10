@@ -1,9 +1,10 @@
 import type { LeadRow, User } from "../types";
-import { OPPORTUNITY_TYPES, parseAllowedOpportunities } from "../types";
+import { DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../../shared/opportunities";
+import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedOpportunities } from "../types";
 import type { AdminStats, ModelSettingRow } from "../routes/admin";
 import type { ScanJob, ScheduledScan } from "../routes/scans";
 import { esc, icon, layout, navbar, type IconName } from "./layout";
-import { formatStatusLabel, renderStatusPill as formatStatusPill } from "./components";
+import { formatStatusLabel, opportunityBadgeMeta, renderStatusPill as formatStatusPill } from "./components";
 import { COMPETITOR_BENCHMARKS } from "../data/benchmarks";
 
 interface AdminProps {
@@ -490,7 +491,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
           <button type="button" data-preset="garage automobile, carrosserie, contrôle technique" class="preset-btn text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-700">Auto & Garages</button>
           <button type="button" data-preset="entreprises, services, agence" class="preset-btn text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-700">PME & Services</button>
           <button type="button" data-preset="agence web, agence digitale, studio créatif, agence communication" class="preset-btn text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-700">Agences Web (Maps)</button>
-          <button type="button" data-preset="domains:digidop.fr" data-opp="audit_qa_trackers" class="preset-btn text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800">🛡️ Liste de Domaines en Direct (sans Maps)</button>
+          <button type="button" data-preset="domains:digidop.fr" data-opp="${DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID}" class="preset-btn text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800">🛡️ Liste de Domaines en Direct (sans Maps)</button>
         </div>
       </div>
 
@@ -517,7 +518,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
         <div>
           <label class="text-xs font-semibold text-zinc-700 block mb-1">Type de besoin ciblé / Opportunité</label>
           <select id="opp_type" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
-            ${OPPORTUNITY_TYPES.map((ot) => `<option value="${ot.id}" ${ot.id === "website" ? "selected" : ""}>${esc(ot.badge)} — ${esc(ot.label)} (${ot.channel === "async_email" ? "100% Asynchrone" : "Closing Vocal"})</option>`).join("")}
+            ${SCANNABLE_OPPORTUNITY_TYPES.map((ot) => `<option value="${ot.id}" ${ot.id === DEFAULT_OPPORTUNITY_ID ? "selected" : ""}>${esc(ot.badge)} — ${esc(ot.label)} (${ot.channel === "async_email" ? "100% Asynchrone" : "Closing Vocal"})</option>`).join("")}
           </select>
           <span class="text-[10px] text-zinc-500 mt-0.5 block">Oriente automatiquement l'argumentaire, la démo et le flyer</span>
         </div>
@@ -658,7 +659,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
           <div>
             <label class="text-xs font-semibold text-zinc-700 block mb-1">Type de besoin ciblé</label>
             <select id="sched_opp" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
-              ${OPPORTUNITY_TYPES.map((ot) => `<option value="${ot.id}">${esc(ot.badge)} — ${esc(ot.label)}</option>`).join("")}
+              ${SCANNABLE_OPPORTUNITY_TYPES.map((ot) => `<option value="${ot.id}">${esc(ot.badge)} — ${esc(ot.label)}</option>`).join("")}
             </select>
           </div>
           <div>
@@ -733,15 +734,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
                           : s.days_of_week === "*"
                             ? "Tous les jours"
                             : `Jour ${s.days_of_week}`;
-                      const oppMeta: Record<string, { label: string; cls: string }> = {
-                        website: { label: "🌐 Site Web", cls: "bg-blue-50 text-blue-700 border-blue-200" },
-                        audit_qa_trackers: { label: "🛡️ Audit QA", cls: "bg-cyan-50 text-cyan-800 border-cyan-200" },
-                        google_reviews: { label: "⭐ Avis Google", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-                        seo_local: { label: "📍 SEO Local", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-                        ads_acquisition: { label: "⚡ Ads", cls: "bg-purple-50 text-purple-700 border-purple-200" },
-                        custom: { label: "🎯 Sur-Mesure", cls: "bg-zinc-100 text-zinc-700 border-zinc-200" },
-                      };
-                      const o = oppMeta[s.opportunity_type || "website"] ?? { label: s.opportunity_type || "website", cls: "bg-zinc-100 text-zinc-700 border-zinc-200" };
+                      const o = opportunityBadgeMeta(s.opportunity_type);
                       const isPrep = s.execution_mode === "prep_only";
                       const modeBadge = isPrep
                         ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">🛠️ CLI 0€</span>`
@@ -817,15 +810,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
           ${
             scans
               .map((s) => {
-                const oppMeta: Record<string, { label: string; cls: string }> = {
-                  website: { label: "🌐 Site Web", cls: "bg-blue-50 text-blue-700 border-blue-200" },
-                  audit_qa_trackers: { label: "🛡️ Audit QA Traceurs", cls: "bg-cyan-50 text-cyan-800 border-cyan-200" },
-                  google_reviews: { label: "⭐ Avis Google", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-                  seo_local: { label: "📍 SEO Local", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-                  ads_acquisition: { label: "⚡ Ads", cls: "bg-purple-50 text-purple-700 border-purple-200" },
-                  custom: { label: "🎯 Sur-Mesure", cls: "bg-zinc-100 text-zinc-700 border-zinc-200" },
-                };
-                const o = oppMeta[s.opportunity_type || "website"] ?? { label: s.opportunity_type || "website", cls: "bg-zinc-100 text-zinc-700 border-zinc-200" };
+                const o = opportunityBadgeMeta(s.opportunity_type);
                 const filterTag = s.website_filter && s.website_filter !== "all" ? ` <span class="text-[9px] opacity-75">(${s.website_filter === "no_website" ? "sans site" : "avec site"})</span>` : "";
                 const isPrep = s.execution_mode === "prep_only";
                 const modeBadge = isPrep
@@ -1661,7 +1646,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               ${u.role === "closer" ? `
                 <div class="flex flex-wrap gap-1 max-w-xs">
                   ${OPPORTUNITY_TYPES.map((ot) => {
-                    const active = userOpps.includes(ot.id);
+                    const active = (userOpps as string[]).includes(ot.id);
                     return `<button type="button" data-user-opp="${esc(u.id)}" data-opp-id="${ot.id}" data-active="${active ? "1" : "0"}" class="btn-toggle-opp text-[11px] px-2 py-0.5 rounded border transition-colors font-medium ${active ? "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100" : "bg-zinc-100 border-zinc-200 text-zinc-400 hover:text-zinc-600 line-through"}">${esc(ot.badge)}</button>`;
                   }).join("")}
                 </div>
@@ -1987,7 +1972,7 @@ function updateScanUI(scans) {
     var oppList = ${JSON.stringify(OPPORTUNITY_TYPES)};
     var rowsHtml = '';
     scans.forEach(function (s) {
-      var oppKey = s.opportunity_type || 'website';
+      var oppKey = s.opportunity_type || ${JSON.stringify(DEFAULT_OPPORTUNITY_ID)};
       var o = oppList.find(function (x) { return x.id === oppKey; }) || { badge: '🎯 ' + oppKey };
       var filterTag = s.website_filter && s.website_filter !== 'all' ? ' <span class="text-[9px] opacity-75">(' + (s.website_filter === 'no_website' ? 'sans site' : 'avec site') + ')</span>' : '';
       var isPrep = s.execution_mode === 'prep_only';
@@ -2151,7 +2136,7 @@ if ($('launch')) {
         lat: $('lat') ? Number($('lat').value) : null,
         lng: $('lng') ? Number($('lng').value) : null,
         radius_km: $('radius_km') ? Number($('radius_km').value) : null,
-        opportunity_type: $('opp_type') ? $('opp_type').value : 'website',
+        opportunity_type: $('opp_type') ? $('opp_type').value : ${JSON.stringify(DEFAULT_OPPORTUNITY_ID)},
         website_filter: $('web_filter') ? $('web_filter').value : 'all',
         execution_mode: execMode
       });

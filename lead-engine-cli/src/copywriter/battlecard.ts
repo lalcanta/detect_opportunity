@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ModelRouter } from "../llm/modelRouter";
 import type { Battlecard, MapsLead, SiteAudit, TokenUsageRecord } from "../types";
 import { extractJson, log } from "../utils/helpers";
+import type { PitchDefinition } from "../../../shared/opportunities";
 
 const battlecardSchema = z.object({
   closerBrief: z.string().optional(),
@@ -22,9 +23,9 @@ export async function generateBattlecard(
   audit: SiteAudit,
   demoUrl: string,
   usageSink: TokenUsageRecord[],
-  opportunityType: string = "website",
+  kind: PitchDefinition["kind"] = "phone_battlecard",
 ): Promise<Battlecard> {
-  const isAsyncEmail = opportunityType === "audit_qa_trackers";
+  const isAsyncEmail = kind === "cold_email";
 
   if (isAsyncEmail) {
     const prompt = `# RÔLE & PERSONA

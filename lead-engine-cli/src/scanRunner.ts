@@ -4,14 +4,12 @@ import type { Config } from "./config";
 import type { ModelRouter } from "./llm/modelRouter";
 import { scrapeMaps } from "./collector/mapsScraper";
 import { inspectSite, lookupCompanySirene } from "./inspector/siteInspector";
-import { auditSite } from "./inspector/siteAuditor";
-import { generateDemoHtml } from "./generator/demoGenerator";
-import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { generateFlyerPdf } from "./generator/flyerGenerator";
-import { generateBattlecard } from "./copywriter/battlecard";
+import { PITCH_GENERATORS, PROOF_GENERATORS, type GenerationContext } from "./opportunities/generators";
+import { getOpportunityOrDefault, opportunityIdOf } from "../../shared/opportunities";
 import { pushLead } from "./sync/pushLead";
 import { leadId, log, parseDirectDomainLeads } from "./utils/helpers";
-import type { Battlecard, MapsLead, SiteAudit, SiteInspection, SyncPayload, TokenUsageRecord } from "./types";
+import type { MapsLead, SyncPayload, TokenUsageRecord } from "./types";
 
 export interface ScanOptions {
   query: string;
@@ -158,57 +156,6 @@ export async function runScan(
   }
 }
 
-function buildDeterministicQaBattlecard(lead: MapsLead, inspection: SiteInspection | null, demoUrl: string): Battlecard {
-  const domain = (lead.website || lead.name).replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/[/?#].*$/, "");
-  const firstPerson = inspection?.keyPeople?.[0]?.split(" ")[0] || "";
-  const greeting = firstPerson ? `Hello ${firstPerson} & l'équipe ${lead.name},` : `Hello l'équipe ${lead.name},`;
-  const stack = inspection?.stack ?? [];
-  const trackers = inspection?.trackersFound ?? [];
-  const stackLine = stack.length
-    ? `Je suis tombé sur votre site et le travail sur votre stack (${stack.join(", ")}) est vraiment propre.`
-    : `Je suis tombé sur votre site en faisant un tour des réalisations d'agences.`;
-  const trackersBullet = (trackers.length ? trackers : ["Scripts tiers déclenchés avant interaction CMP"])
-    .map((t) => `- ${t}`)
-    .join("\n");
-
-  return {
-    callScript: "Opportunité 100% asynchrone par email (aucun appel téléphonique).",
-    objections: [],
-    whatsappText: "",
-    coldEmail: {
-      subject: `[Dev QA] Petite régression réseau repérée sur ${domain} (tags avant CMP)`,
-      body: `${greeting}
-
-${stackLine}
-
-Pour situer : je suis développeur backend depuis 14 ans (architecture, robustesse système) et je conçois des briques de QA réseau et d'automatisation CI/CD pour les équipes techniques.
-
-En inspectant la cascade réseau au premier chargement de ${domain} (session Chromium vierge, sans clic sur le bandeau de consentement), certains scripts s'exécutent immédiatement :
-${trackersBullet}
-
-Dans 9 cas sur 10, c'est simplement un tag marketing mal conditionné dans Google Tag Manager, ou une petite régression passée inaperçue lors d'un déploiement.
-
-Le rapport détaillé est ici, en accès libre pour vos devs :
-👉 ${demoUrl}
-
-J'ai automatisé ce check en CI/CD headless : il surveille l'ensemble des sites d'un portfolio et alerte dès qu'une CMP saute ou qu'un nouveau tag fuit sans consentement.
-
-Si ça vous intéresse d'avoir ce filet de sécurité continu sur vos sites clients, dites-moi simplement par retour de mail et je vous branche ça rapidement (je fonctionne 100% à l'écrit / asynchrone).
-
-Bonne continuation,
-
---
-Loïc Alcantara
-Développeur Web Senior (14 ans d'exp) | Performance & Architecture
-Applications critiques et SaaS (PHP / Symfony, microservices, robustesse système & monitoring).
-loic.alcantara@gmail.com | https://www.linkedin.com/in/loicalcantara/`,
-      reportUrl: demoUrl,
-      trackersFound: trackers,
-      techStack: stack,
-    },
-  };
-}
-
 async function processLead(
   lead: MapsLead,
   router: ModelRouter,
@@ -220,8 +167,7 @@ async function processLead(
   const usage: TokenUsageRecord[] = [];
   const id = leadId(lead.name, lead.phone ?? lead.mapsUrl);
   const demoUrl = `${remoteAppUrl}/demos/${id}`;
-  const isQaTrackers = opportunityType === "audit_qa_trackers";
-  log("lead", `→ ${lead.name} (${id}) [${opportunityType || "website"}]`);
+  log("lead", `→ ${lead.name} (${id}) [${opportunityIdOf(opportunityType)}]`);
 
   if (lead.website) {
     await onSubStep?.(`🔍 Inspection réseau & RGPD à froid (${lead.website.replace(/^https?:\/\//, "").slice(0, 30)})...`);
@@ -233,43 +179,19 @@ async function processLead(
     : null;
   const sireneFallback = !inspection ? await lookupCompanySirene(lead.name, lead.city) : null;
 
-  let audit: SiteAudit;
-  let demoHtml: string;
+  const def = getOpportunityOrDefault(opportunityType);
+  const genCtx: GenerationContext = { router, context, lead, leadId: id, inspection, remoteAppUrl, demoUrl, usage, onSubStep };
+
+  const { audit, demoHtml } = await PROOF_GENERATORS[def.proof.generator](genCtx);
+
   let flyerBase64: string | null = null;
-  let battlecard: Battlecard;
-
-  if (isQaTrackers) {
-    const trackers = inspection?.trackersFound ?? [];
-    const cmp = inspection?.cmpDetected;
-    audit = {
-      score: trackers.length > 0 ? Math.max(20, 75 - trackers.length * 15) : 70,
-      summary:
-        trackers.length > 0
-          ? `${trackers.length} traceur(s) tiers exécuté(s) à froid avant consentement (${trackers.join(", ")})${cmp ? ` malgré la présence de ${cmp}` : ""}.`
-          : `Inspection réseau effectuée en session vierge (${inspection?.loadTimeMs ?? "n/a"} ms).`,
-      weaknesses:
-        trackers.length > 0
-          ? trackers.map((t) => `${t} déclenché avant consentement CMP`)
-          : ["Vérifier l'initialisation par défaut du Google Consent Mode v2"],
-    };
-    await onSubStep?.(`🛡️ Génération du Rapport Interactif QA & Traceurs RGPD...`);
-    demoHtml = generateTrackerReportHtml({ leadId: id, lead, inspection, remoteAppUrl });
-    await onSubStep?.(`✉️ Préparation du brouillon d'email Dev-to-Dev (relecture manuelle)...`);
-    battlecard = buildDeterministicQaBattlecard(lead, inspection, demoUrl);
-  } else {
-    await onSubStep?.(`🤖 Audit critique IA & détection des faiblesses...`);
-    audit = await auditSite(router, lead, inspection, usage);
-
-    await onSubStep?.(`🎨 Génération de la démo Tailwind moderne & branding...`);
-    demoHtml = await generateDemoHtml(router, { leadId: id, lead, inspection, audit, remoteAppUrl }, usage);
-
+  if (def.flyer) {
     await onSubStep?.(`📄 Création du Flyer PDF commercial (QR Code)...`);
     const flyer = await generateFlyerPdf(context, lead, inspection?.logoUrl ?? null, inspection?.dominantColors[0] ?? "#1d4ed8");
     flyerBase64 = flyer.toString("base64");
-
-    await onSubStep?.(`🎯 Synthèse Battlecard IA (objections ou Cold Email dev-to-dev)...`);
-    battlecard = await generateBattlecard(router, lead, audit, demoUrl, usage, opportunityType);
   }
+
+  const battlecard = await PITCH_GENERATORS[def.pitch.generator](genCtx, audit, def.pitch.kind);
 
   return {
     id,
@@ -281,7 +203,7 @@ async function processLead(
     website_url: lead.website,
     google_rating: lead.rating,
     google_reviews_count: lead.reviewsCount,
-    opportunity_type: opportunityType || "website",
+    opportunity_type: opportunityIdOf(opportunityType),
     audit_data: {
       ...audit,
       logoUrl: inspection?.logoUrl ?? null,

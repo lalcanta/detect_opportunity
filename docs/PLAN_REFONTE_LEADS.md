@@ -268,13 +268,25 @@ sans changement  qualification,         activités,             par canal,      
 de comportement  lead_contacts          unqualified            allowed_channels   email
 ```
 
-**Phase 0 — Registre partagé, sans changement de comportement**
+**Phase 0 — Registre partagé, sans changement de comportement** ✅ *fait le 10/11/2026 (branche
+`refacto/opportunity-registry`)*
 - Créer `shared/opportunities/` et valider l'import depuis le CLI et depuis Pages (dev et déploiement).
-- Y décrire les 6 opportunités existantes **telles qu'elles fonctionnent aujourd'hui** (téléphone exigé partout).
+- Y décrire les 6 opportunités existantes **telles qu'elles fonctionnent aujourd'hui**. Les prérequis
+  (`requirements`) ne sont pas encore déclarés : ils arrivent en phase 1 avec `evaluateRequirements`, le téléphone
+  restant exigé par `mapsScraper.ts` d'ici là.
 - Remplacer les branches `isQa` et les listes recopiées (badges, recettes, opportunités par défaut).
 - Écrire le test du registre.
 - Critère de fin : un `grep` sur `"audit_qa_trackers"` hors de `shared/` ne renvoie plus que des tests et des
   migrations ; tous les tests existants passent.
+- Bilan : critère atteint, à une exception près : les modèles d'email (`templates/emailTemplates.ts`) citent encore
+  l'identifiant, désormais typé (`OpportunityId`) et donc vérifié à la compilation. 126 tests unitaires passent ;
+  les 3 tests fonctionnels en échec l'étaient déjà sur `main` (en-tête `Cache-Control` de `/demos/:id`, agenda,
+  filtre `scope`). Trois écarts de comportement assumés :
+  - le mode prep ne génère plus de flyer pour `audit_qa_trackers` (le full_auto n'en générait déjà pas) ;
+  - les consignes Antigravity du mode prep reprennent le libellé du registre (ex. « Création / Refonte de Site Web »)
+    au lieu de leurs propres libellés ;
+  - `npm run scan -- --domains …` sans `--opportunity` prend désormais `audit_qa_trackers`, comme `prepScan` : la
+    valeur par défaut `website` de l'option empêchait ce choix, contrairement à l'intention du code.
 
 **Phase 1 — Formulaires et qualification**
 - Module `contact_form`.
