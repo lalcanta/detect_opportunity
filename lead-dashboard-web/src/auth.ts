@@ -5,10 +5,24 @@ import type { AppEnv, Role, User } from "./types";
 const COOKIE = "lead_session";
 export const SESSION_COOKIE = COOKIE;
 
-const AUTH_SCHEMA_VERSION = 5;
+const AUTH_SCHEMA_VERSION = 6;
 let migrationChecked = 0;
 
 /** Assure que les colonnes Whitelist / Invitation / Password / Expiration démo, execution_mode et la table scheduled_scans existent. */
+/** Contacts d'un lead (docs/PLAN_REFONTE_LEADS.md §3.4). Doit rester identique à schema.sql. */
+export const LEAD_CONTACTS_DDL = `CREATE TABLE IF NOT EXISTS lead_contacts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  lead_id     TEXT NOT NULL REFERENCES leads(id),
+  kind        TEXT NOT NULL,
+  value       TEXT NOT NULL,
+  source      TEXT NOT NULL,
+  confidence  REAL,
+  meta        TEXT,
+  is_primary  INTEGER NOT NULL DEFAULT 0,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (lead_id, kind, value)
+)`;
+
 export async function ensureAuthSchema(db: D1Database): Promise<void> {
   if (migrationChecked >= AUTH_SCHEMA_VERSION) return;
   try {
@@ -19,6 +33,7 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       "ALTER TABLE users ADD COLUMN invited_at DATETIME",
       "ALTER TABLE leads ADD COLUMN demo_revoked INTEGER NOT NULL DEFAULT 0",
       "ALTER TABLE leads ADD COLUMN demo_expires_at DATETIME",
+      "ALTER TABLE leads ADD COLUMN primary_channel TEXT",
       "ALTER TABLE scan_jobs ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'full_auto'",
       "ALTER TABLE scheduled_scans ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'full_auto'",
       "ALTER TABLE available_models ADD COLUMN is_flagship INTEGER NOT NULL DEFAULT 1",
@@ -31,6 +46,8 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       await db.prepare(sql).run().catch(() => undefined);
     }
 
+    await db.prepare(LEAD_CONTACTS_DDL).run().catch(() => undefined);
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_contacts_lead ON lead_contacts(lead_id, kind)").run().catch(() => undefined);
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS scheduled_scans (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,

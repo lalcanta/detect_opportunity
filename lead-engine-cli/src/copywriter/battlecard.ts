@@ -2,9 +2,8 @@ import { z } from "zod";
 import type { ModelRouter } from "../llm/modelRouter";
 import type { Battlecard, MapsLead, SiteAudit, TokenUsageRecord } from "../types";
 import { extractJson, log } from "../utils/helpers";
-import type { PitchDefinition } from "../../../shared/opportunities";
 
-const battlecardSchema = z.object({
+export const battlecardSchema = z.object({
   closerBrief: z.string().optional(),
   ourAdvantages: z.array(z.string()).optional(),
   callScript: z.string().min(10).optional().default("Bonjour, je vous contacte concernant votre audit technique."),
@@ -16,70 +15,14 @@ const battlecardSchema = z.object({
   }).optional(),
 });
 
-/** TASK_FAST : script d'appel vocal ou Cold Email asynchrone selon l'opportunité. */
+/** TASK_FAST : dossier du closer pour un premier contact par téléphone (script, objections, WhatsApp, brouillon d'email). */
 export async function generateBattlecard(
   router: ModelRouter,
   lead: MapsLead,
   audit: SiteAudit,
   demoUrl: string,
   usageSink: TokenUsageRecord[],
-  kind: PitchDefinition["kind"] = "phone_battlecard",
 ): Promise<Battlecard> {
-  const isAsyncEmail = kind === "cold_email";
-
-  if (isAsyncEmail) {
-    const prompt = `# RÔLE & PERSONA
-Tu es un agent d'automatisation chargé de rédiger des emails d'approche personnalisés de confrère à confrère pour Loïc Alcantara.
-- Identité : Loïc Alcantara, développeur web senior avec 14 ans d’expérience (conception de backends critiques, robustesse réseau, performance et CI/CD).
-- Ton : Confraternel, humble, ultra-précis, factuel, décontracté mais professionnel. Aucun ton commercial, marketing ou "growth hacker".
-- Règle d'or de communication : 100% ASYNCHRONE ET ÉCRIT. Loïc n'est PAS disponible par téléphone. 
-  -> INTERDICTION FORMELLE de proposer un appel téléphonique, une visio, un lien Calendly ou un "échange de 15 minutes". Tout se fait par simple retour d'email.
-
-# CIBLE & DONNÉES DU PROSPECT
-- Nom / Entreprise : ${lead.name}
-- Domaine / Site : ${lead.website || "votre site"}
-- Points faibles / traceurs détectés : ${audit.weaknesses.join(", ")}
-- Lien du rapport interactif : ${demoUrl}
-
-# STRUCTURE STRICTE
-1. Objet : [Dev QA] Petite régression réseau repérée sur ${lead.website ? lead.website.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : lead.name} (tags avant CMP)
-2. Salutation : Hello l'équipe ${lead.name},
-3. Accroche confraternelle factuelle & légitimité Loïc (14 ans d'exp backend / QA).
-4. Le constat technique : traceurs ou scripts interceptés à froid au premier chargement sans consentement préalable.
-5. Le lien du rapport interactif en accès libre : 👉 ${demoUrl}
-6. L'offre sous-jacente : automatisation CI/CD headless pour surveiller l'ensemble des sites de l'agence.
-7. CTA 100% ASYNCHRONE : Dites-moi simplement par retour de mail et je vous branche ça rapidement (je fonctionne 100% à l'écrit / asynchrone).
-8. Signature : Loïc Alcantara | Développeur Web Senior (14 ans d'exp) | loic.alcantara@gmail.com
-
-# FORMAT DE SORTIE JSON STRICT
-{
-  "coldEmail": {
-    "subject": "L'objet généré",
-    "body": "Le corps complet du message"
-  },
-  "callScript": "Opportunité 100% asynchrone par email (aucun appel téléphonique)",
-  "whatsappText": "",
-  "objections": []
-}`;
-
-    try {
-      const { text } = await router.generate({ task: "battlecard", prompt, json: true, usageSink });
-      const parsed = extractJson(text);
-      return battlecardSchema.parse(parsed);
-    } catch (err) {
-      log("battlecard", `Erreur génération battlecard async : ${(err as Error).message} → fallback`);
-      return {
-        callScript: "Opportunité 100% asynchrone par email (aucun appel téléphonique)",
-        whatsappText: "",
-        objections: [],
-        coldEmail: {
-          subject: `Audit technique & conformité web : ${lead.name}`,
-          body: `Bonjour l'équipe de ${lead.name},\n\nNous avons préparé un rapport technique interactif accessible ici : ${demoUrl}\n\nRestant à votre disposition,\nLoïc Alcantara`,
-        },
-      };
-    }
-  }
-
   const best = [...lead.recentReviews].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
   const prompt = `Tu prépares le dossier commercial d'un artisan pour la closer (téléprospectrice) ET un brouillon d'email contextuel.
 Entreprise : ${lead.name} (${lead.activity}, ${lead.city}). Note ${lead.rating ?? "n/a"}/5, ${lead.reviewsCount ?? "n/a"} avis.

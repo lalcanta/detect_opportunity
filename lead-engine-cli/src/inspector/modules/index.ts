@@ -6,6 +6,7 @@ import { sireneDirigeantModule, lookupCompanySirene, parseSireneApiResponse } fr
 import { brandingVisualModule } from "./brandingVisualModule";
 import { performanceMobileModule } from "./performanceMobileModule";
 import { adsPixelSpyModule, detectPaidAdsFromHtml } from "./adsPixelSpyModule";
+import { contactFormModule, analyzeContactFormsInHtml, findContactPageLinks } from "./contactFormModule";
 import { freshnessSslModule, extractCopyrightYearFromText, buildObsolescenceSignals } from "./freshnessSslModule";
 import {
   ALL_SCAN_MODULES,
@@ -25,6 +26,7 @@ export const SCAN_MODULES_REGISTRY: Record<ScanModuleId, ScanModule> = {
   dirigeant_sirene: sireneDirigeantModule,
   branding_visual: brandingVisualModule,
   perf_mobile: performanceMobileModule,
+  contact_form: contactFormModule,
 };
 
 export function resolveScanModules(moduleIds: ScanModuleId[]): ScanModule[] {
@@ -45,6 +47,8 @@ export {
   detectPaidAdsFromHtml,
   extractCopyrightYearFromText,
   buildObsolescenceSignals,
+  analyzeContactFormsInHtml,
+  findContactPageLinks,
   type ScanModule,
   type ScanModuleContext,
   type ScanModuleId,

@@ -25,6 +25,19 @@ export interface TrackerRequest {
   url: string;
 }
 
+export interface ContactFormInfo {
+  /** Page où le formulaire a été trouvé */
+  url: string;
+  /** Noms des champs visibles (name, id ou placeholder) */
+  fields: string[];
+  /** Protection anti-bot détectée (reCAPTCHA, hCaptcha, Turnstile…) */
+  captcha: string | null;
+  /** Case de consentement RGPD présente dans le formulaire */
+  hasConsentCheckbox: boolean;
+  /** Formulaire tiers embarqué (Typeform, HubSpot…), sinon null */
+  provider: string | null;
+}
+
 export interface SiteInspection {
   url: string;
   title?: string | null;
@@ -64,6 +77,8 @@ export interface SiteInspection {
   copyrightYear?: number | null;
   /** Signaux concrets d'obsolescence ou de négligence technique (HTTP non sécurisé, copyright ancien, images cassées) */
   obsolescenceSignals?: string[];
+  /** Formulaire de contact exploitable (vérification contact_form) ; null si cherché sans succès */
+  contactForm?: ContactFormInfo | null;
   error?: string;
 }
 
@@ -122,4 +137,19 @@ export interface SyncPayload {
   battlecard_data?: Battlecard | null;
   token_usage?: TokenUsageRecord[];
   status?: string | null;
+  /** Canal principal du lead selon son opportunité (phone | email | contact_form) */
+  primary_channel?: string | null;
+  /** Contacts trouvés, enregistrés dans lead_contacts */
+  contacts?: LeadContact[];
+}
+
+export interface LeadContact {
+  kind: "phone" | "email" | "contact_form";
+  value: string;
+  source: "maps" | "site" | "sirene" | "inbound" | "manual";
+  /** 0..1 */
+  confidence?: number | null;
+  /** Détails (ex. captcha et champs d'un formulaire) */
+  meta?: Record<string, unknown> | null;
+  is_primary?: boolean;
 }

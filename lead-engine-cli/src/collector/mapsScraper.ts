@@ -1,3 +1,4 @@
+import { describeRejection, evaluateRequirements, getOpportunityOrDefault } from "../../../shared/opportunities";
 import type { BrowserContext, Page } from "playwright";
 import type { MapsLead, Review } from "../types";
 import { log } from "../utils/helpers";
@@ -12,7 +13,7 @@ export interface ScrapeOptions {
   context: BrowserContext;
   /** true en mode CDP : un humain peut résoudre un captcha dans la fenêtre visible */
   interactive: boolean;
-  /** Type d'opportunité ciblée : website, google_reviews, seo_local, custom */
+  /** Opportunité ciblée (shared/opportunities) : ses prérequis filtrent les fiches */
   opportunityType?: string;
   /** Filtre sur la présence de site web : all, no_website, has_website */
   websiteFilter?: "all" | "no_website" | "has_website";
@@ -37,7 +38,8 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
     if (subQueries.length === 0) subQueries.push("artisans");
 
     const targetQualified = opts.limit;
-    // On collecte un vivier suffisant de candidats pour garantir d'atteindre l'objectif de qualifiés avec téléphone
+    const def = getOpportunityOrDefault(opts.opportunityType);
+    // On collecte un vivier suffisant de candidats pour garantir d'atteindre l'objectif de prospects qualifiés
     const targetCandidates = Math.max(targetQualified * 3, 60);
 
     const allUrls = new Set<string>();
@@ -84,9 +86,11 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
       try {
         const lead = await scrapePlace(page, url, opts);
         if (lead) {
-          if (!lead.phone) {
+          // Prérequis de l'opportunité connus sur la fiche (téléphone, site) ; email et formulaire seront vérifiés après inspection.
+          const check = evaluateRequirements(def, { phone: Boolean(lead.phone), website: Boolean(lead.website) }, "maps");
+          if (!check.qualified) {
             await opts.onProgress?.(
-              `⚪ Fiche sans téléphone ignorée : "${lead.name}" (${qualifiedLeads.length}/${targetQualified} qualifiés · ${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,
+              `⚪ Fiche écartée (${check.reasons.map(describeRejection).join(" ; ")}) : "${lead.name}" (${qualifiedLeads.length}/${targetQualified} qualifiés · ${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,
               qualifiedLeads.length,
               potentialCount,
             );
@@ -114,7 +118,7 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
 
           qualifiedLeads.push(lead);
           await opts.onProgress?.(
-            `✔ Prospect qualifié validé : "${lead.name}" (📞 ${lead.phone}${lead.website ? " · 🌐 Site existant" : " · 🚫 Sans site"}) → ${qualifiedLeads.length}/${targetQualified} qualifiés (${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,
+            `✔ Prospect retenu : "${lead.name}" (${lead.phone ? `📞 ${lead.phone}` : "📵 sans téléphone"}${lead.website ? " · 🌐 Site existant" : " · 🚫 Sans site"}) → ${qualifiedLeads.length}/${targetQualified} qualifiés (${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,
             qualifiedLeads.length,
             potentialCount,
           );

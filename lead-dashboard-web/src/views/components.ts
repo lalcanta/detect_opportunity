@@ -1,4 +1,4 @@
-import { opportunityIdOf } from "../../../shared/opportunities";
+import { CHANNEL_LABELS, isChannelId, opportunityIdOf } from "../../../shared/opportunities";
 import { OPPORTUNITY_TYPES, type BadgeTone } from "../types";
 import type { LeadRow } from "../types";
 import { esc, icon, type IconName } from "./layout";
@@ -100,6 +100,12 @@ export function opportunityBadgeMeta(opportunityType?: string | null): { label: 
 export function renderOpportunityBadge(opportunityType?: string | null): string {
   const opp = opportunityBadgeMeta(opportunityType);
   return `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold border ${opp.cls}">${esc(opp.label)}</span>`;
+}
+
+/** Badge du canal principal d'un lead ; rien pour un lead antérieur à la phase 1. */
+export function renderChannelBadge(primaryChannel?: string | null): string {
+  if (!isChannelId(primaryChannel)) return "";
+  return `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-white text-zinc-600 border-zinc-200" title="Canal principal">${esc(CHANNEL_LABELS[primaryChannel])}</span>`;
 }
 
 export function renderStatusPill(status: string): string {

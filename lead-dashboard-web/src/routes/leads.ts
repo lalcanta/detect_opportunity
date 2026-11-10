@@ -217,6 +217,40 @@ leadRoutes.post("/api/leads/:id/email-sent", requireUser("closer"), async (c) =>
   return c.json({ ok: true, call_notes: notes });
 });
 
+/**
+ * POST /api/leads/:id/form-submitted — historise un message collé MANUELLEMENT dans le formulaire de contact du prospect.
+ * Rien n'est soumis automatiquement (captchas, CGU des sites) : on trace l'action humaine dans les notes.
+ */
+leadRoutes.post("/api/leads/:id/form-submitted", requireUser("closer"), async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const b = await c.req.json<{ form_url?: string }>().catch(() => ({}) as { form_url?: string });
+  const formUrl = (b.form_url ?? "").trim().slice(0, 500);
+  if (!/^https?:\/\//i.test(formUrl)) {
+    return c.json({ error: "invalid_payload", message: "URL du formulaire requise." }, 400);
+  }
+
+  const current = await c.env.DB.prepare("SELECT * FROM leads WHERE id = ?").bind(id).first<LeadRow>();
+  if (!current) return c.json({ error: "not_found" }, 404);
+  if (user.role === "closer") {
+    if (current.assigned_to && current.assigned_to !== user.id) {
+      return c.json({ error: "forbidden", message: "Ce lead ne vous est pas attribué." }, 403);
+    }
+    const allowed = parseAllowedOpportunities(user.allowed_opportunities);
+    if (!allowed.includes(opportunityIdOf(current.opportunity_type) as OpportunityTypeId)) {
+      return c.json({ error: "forbidden", message: "Ce type d'opportunité n'est pas activé pour vous." }, 403);
+    }
+  }
+
+  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const entry = `[${stamp}] 📝 Message soumis par ${user.name} via le formulaire de contact (${formUrl})`;
+  const notes = (current.call_notes ? `${current.call_notes}\n${entry}` : entry).slice(-4000);
+  await c.env.DB.prepare("UPDATE leads SET call_notes = ?1, assigned_to = COALESCE(assigned_to, ?2) WHERE id = ?3")
+    .bind(notes, user.id, id)
+    .run();
+  return c.json({ ok: true, call_notes: notes });
+});
+
 interface UpdateLeadBody {
   phone?: string;
   email?: string;

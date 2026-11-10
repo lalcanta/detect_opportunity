@@ -43,6 +43,9 @@ Antigravity exécute :
    - Lead `audit_qa_trackers` : `demo.html` (rapport) est déjà généré ; écrire `battlecard.json` avec un
      `coldEmail` (`subject`, `body`) obligatoire, en citant uniquement les traceurs de `audit_facts.json`.
      Sans `coldEmail`, `sync-queue` laisse le lead en attente.
+   - Lead dont `meta.json` indique `primary_channel` = `email` ou `contact_form` : suivre `prompt_battlecard.md`
+     (message écrit) ; `coldEmail` (`subject`, `body`) est obligatoire. Pour `contact_form`, texte brut de
+     900 caractères maximum, collé tel quel dans le formulaire du prospect.
 
 ### 3. Synchronisation Cloud CRM (1 commande)
 Une fois les fichiers `demo.html` et `battlecard.json` écrits :

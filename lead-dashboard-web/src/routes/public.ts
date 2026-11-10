@@ -1,4 +1,4 @@
-import { DEFAULT_OPPORTUNITY_ID, getOpportunityOrDefault, opportunityIdOf } from "../../../shared/opportunities";
+import { DEFAULT_OPPORTUNITY_ID, getOpportunityOrDefault, isChannelId, opportunityIdOf, type ChannelId } from "../../../shared/opportunities";
 import { Hono } from "hono";
 import type { AppEnv, SyncBody } from "../types";
 import { bearerMatches, ensureAuthSchema, generateRandomHex, getSessionUser, requireUser } from "../auth";
@@ -71,6 +71,9 @@ publicRoutes.post("/api/sync", async (c) => {
   if (!body?.id || !/^[a-f0-9]{8,64}$/.test(body.id) || !body.company_name) {
     return c.json({ error: "invalid_payload" }, 400);
   }
+  await ensureAuthSchema(c.env.DB);
+  const primaryChannel = isChannelId(body.primary_channel) ? body.primary_channel : null;
+  const contacts = sanitizeSyncContacts(body.contacts);
 
   const isPending = body.status === "pending_generation" || (!body.demo_html && !body.battlecard_data);
   const targetStatus = isPending ? "pending_generation" : (body.status || "demo_ready");
@@ -83,8 +86,9 @@ publicRoutes.post("/api/sync", async (c) => {
   const stmts: D1PreparedStatement[] = [
     c.env.DB.prepare(
       `INSERT INTO leads (id, company_name, activity, city, phone, email, website_url, google_rating,
-         google_reviews_count, audit_data, demo_html, flyer_pdf_url, flyer_pdf_base64, battlecard_data, created_at, opportunity_type, status)
-       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
+         google_reviews_count, audit_data, demo_html, flyer_pdf_url, flyer_pdf_base64, battlecard_data, created_at, opportunity_type, status,
+         primary_channel)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
        ON CONFLICT(id) DO UPDATE SET
          company_name = excluded.company_name, activity = excluded.activity, city = excluded.city,
          phone = COALESCE(excluded.phone, leads.phone), email = COALESCE(excluded.email, leads.email),
@@ -95,6 +99,7 @@ publicRoutes.post("/api/sync", async (c) => {
          demo_html = COALESCE(excluded.demo_html, leads.demo_html), flyer_pdf_url = COALESCE(excluded.flyer_pdf_url, leads.flyer_pdf_url),
          flyer_pdf_base64 = COALESCE(excluded.flyer_pdf_base64, leads.flyer_pdf_base64), battlecard_data = COALESCE(excluded.battlecard_data, leads.battlecard_data),
          opportunity_type = COALESCE(excluded.opportunity_type, leads.opportunity_type),
+         primary_channel = COALESCE(excluded.primary_channel, leads.primary_channel),
          status = CASE WHEN leads.status = 'pending_generation' THEN excluded.status ELSE leads.status END
        RETURNING status`,
     ).bind(
@@ -115,8 +120,25 @@ publicRoutes.post("/api/sync", async (c) => {
       new Date().toISOString(),
       oppType,
       targetStatus,
+      primaryChannel,
     ),
   ];
+  if (contacts.length > 0) {
+    // Un seul contact principal par lead : celui du dernier envoi.
+    if (contacts.some((ct) => ct.is_primary)) {
+      stmts.push(c.env.DB.prepare("UPDATE lead_contacts SET is_primary = 0 WHERE lead_id = ?").bind(body.id));
+    }
+    for (const ct of contacts) {
+      stmts.push(
+        c.env.DB.prepare(
+          `INSERT INTO lead_contacts (lead_id, kind, value, source, confidence, meta, is_primary) VALUES (?,?,?,?,?,?,?)
+           ON CONFLICT(lead_id, kind, value) DO UPDATE SET
+             source = excluded.source, confidence = excluded.confidence, meta = excluded.meta,
+             is_primary = MAX(excluded.is_primary, lead_contacts.is_primary)`,
+        ).bind(body.id, ct.kind, ct.value, ct.source, ct.confidence, ct.meta, ct.is_primary ? 1 : 0),
+      );
+    }
+  }
   for (const t of body.token_usage ?? []) {
     stmts.push(
       c.env.DB.prepare(
@@ -132,6 +154,40 @@ publicRoutes.post("/api/sync", async (c) => {
   }
   return c.json({ ok: true, id: body.id, status: finalStatus });
 });
+
+const CONTACT_SOURCES = new Set(["maps", "site", "sirene", "inbound", "manual"]);
+
+/** Contacts reçus du CLI : canaux connus, valeurs bornées, au plus 20 par lead. */
+export function sanitizeSyncContacts(raw: unknown): Array<{
+  kind: ChannelId;
+  value: string;
+  source: string;
+  confidence: number | null;
+  meta: string | null;
+  is_primary: boolean;
+}> {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw.slice(0, 20)) {
+    if (!item || typeof item !== "object") continue;
+    const ct = item as Record<string, unknown>;
+    if (!isChannelId(ct.kind) || typeof ct.value !== "string") continue;
+    const value = ct.value.trim().slice(0, 500);
+    if (!value) continue;
+    if (ct.kind === "contact_form" && !/^https?:\/\//i.test(value)) continue;
+    const confidence = typeof ct.confidence === "number" && ct.confidence >= 0 && ct.confidence <= 1 ? ct.confidence : null;
+    const meta = ct.meta && typeof ct.meta === "object" ? JSON.stringify(ct.meta).slice(0, 2000) : null;
+    out.push({
+      kind: ct.kind,
+      value,
+      source: typeof ct.source === "string" && CONTACT_SOURCES.has(ct.source) ? ct.source : "site",
+      confidence,
+      meta,
+      is_primary: ct.is_primary === true,
+    });
+  }
+  return out;
+}
 
 function renderInteractiveDemoFloatingBar(opts: {
   leadId: string;

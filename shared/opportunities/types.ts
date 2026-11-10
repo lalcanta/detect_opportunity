@@ -16,12 +16,42 @@ export const SCAN_MODULE_IDS = [
   "dirigeant_sirene",
   "branding_visual",
   "perf_mobile",
+  "contact_form",
 ] as const;
 export type ScanModuleId = (typeof SCAN_MODULE_IDS)[number];
 
-/** Canaux de contact. `contact_form` arrive en phase 1. */
-export const CHANNEL_IDS = ["phone", "email"] as const;
+/** Canaux de contact d'un prospect. */
+export const CHANNEL_IDS = ["phone", "email", "contact_form"] as const;
 export type ChannelId = (typeof CHANNEL_IDS)[number];
+
+/** Libellés courts des canaux, pour les journaux et l'interface. */
+export const CHANNEL_LABELS: Record<ChannelId, string> = {
+  phone: "📞 Téléphone",
+  email: "✉️ Email",
+  contact_form: "📝 Formulaire",
+};
+
+/**
+ * Contacts exigés pour qu'un lead soit exploitable.
+ * `allOf` : tous obligatoires ; `anyOf` : au moins un. Les deux peuvent être combinés.
+ */
+export interface ContactRequirement {
+  allOf?: readonly ChannelId[];
+  anyOf?: readonly ChannelId[];
+}
+
+export const PHONE_ONLY: ContactRequirement = { allOf: ["phone"] };
+export const EMAIL_OR_FORM: ContactRequirement = { anyOf: ["email", "contact_form"] };
+export const PHONE_OR_EMAIL: ContactRequirement = { anyOf: ["phone", "email"] };
+export const ANY_CONTACT: ContactRequirement = { anyOf: ["phone", "email", "contact_form"] };
+
+/** Présence d'un site exigée : donne aussi le filtre de site par défaut du scan. */
+export type WebsiteRequirement = "required" | "forbidden" | "optional";
+
+export interface OpportunityRequirements {
+  website: WebsiteRequirement;
+  contacts: ContactRequirement;
+}
 
 export type BusinessModel = "one_shot" | "recurring" | "both";
 
@@ -29,8 +59,7 @@ export type BusinessModel = "one_shot" | "recurring" | "both";
 export type BadgeTone = "blue" | "cyan" | "amber" | "emerald" | "purple" | "zinc";
 
 /**
- * Angle de la démo de site, utilisé par les consignes du mode prep (Antigravity).
- * Le mode full_auto ne s'en sert pas encore.
+ * Angle de la démo de site, utilisé par la génération full_auto et par les consignes du mode prep (Antigravity).
  */
 export type DemoFocus = "showcase" | "reviews" | "seo_local" | "ads_acquisition";
 
@@ -55,15 +84,23 @@ export type ProofDefinition =
     };
 
 /** Générateurs de message implémentés dans lead-engine-cli. */
-export const PITCH_GENERATOR_IDS = ["llm_phone_battlecard", "tracker_cold_email"] as const;
+export const PITCH_GENERATOR_IDS = ["llm_phone_battlecard", "llm_cold_email", "tracker_cold_email"] as const;
 export type PitchGeneratorId = (typeof PITCH_GENERATOR_IDS)[number];
 
-export interface PitchDefinition {
-  /** Forme du message : script d'appel + objections, ou email d'approche. */
-  kind: "phone_battlecard" | "cold_email";
-  /** Générateur utilisé en full_auto. En prep, l'agent suit la consigne correspondante. */
-  generator: PitchGeneratorId;
-}
+/** Forme du message : script d'appel + objections, ou email d'approche (aussi collé dans un formulaire). */
+export type PitchKind = "phone_battlecard" | "cold_email";
+
+export const PITCH_KIND_BY_GENERATOR: Record<PitchGeneratorId, PitchKind> = {
+  llm_phone_battlecard: "phone_battlecard",
+  llm_cold_email: "cold_email",
+  tracker_cold_email: "cold_email",
+};
+
+/**
+ * Générateur de message pour chaque canal de l'opportunité. Le message généré est celui du canal principal du lead.
+ * En full_auto, le générateur est exécuté ; en prep, l'agent suit la consigne correspondante.
+ */
+export type PitchByChannel = Partial<Record<ChannelId, PitchGeneratorId>>;
 
 export interface OpportunityDefinition {
   id: string;
@@ -73,12 +110,14 @@ export interface OpportunityDefinition {
   badge: { text: string; tone: BadgeTone };
   /** Nom d'icône (lucide). */
   icon: string;
-  /** Canaux de contact, par ordre de préférence. Le premier donne le mode de l'écran du closer. */
+  /** Contacts et site exigés pour qu'un lead soit qualifié. */
+  requirements: OpportunityRequirements;
+  /** Canaux de contact, par ordre de préférence : le premier disponible devient le canal principal du lead. */
   channels: readonly ChannelId[];
   /** Vérifications lancées pendant l'inspection du site. */
   scanModules: readonly ScanModuleId[];
   proof: ProofDefinition;
-  pitch: PitchDefinition;
+  pitch: PitchByChannel;
   /** Génère le flyer PDF (QR code vers le formulaire d'avis Google). */
   flyer: boolean;
   commercial: {

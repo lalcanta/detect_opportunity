@@ -1,10 +1,10 @@
-import { getOpportunityOrDefault, opportunityIdOf } from "../../shared/opportunities";
+import { PITCH_KIND_BY_GENERATOR, getOpportunityOrDefault, isChannelId, opportunityIdOf, pitchGeneratorFor } from "../../shared/opportunities";
 import { readdir, readFile, rename, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { loadConfig } from "./config";
 import { pushLead } from "./sync/pushLead";
 import { log, stripCodeFences } from "./utils/helpers";
-import type { Battlecard, SyncPayload } from "./types";
+import type { Battlecard, LeadContact, SyncPayload } from "./types";
 
 interface RawBattlecardFile {
   closerBrief?: string;
@@ -35,6 +35,9 @@ interface QueueMeta {
   id: string;
   company_name: string;
   opportunity_type?: string;
+  /** Canal principal calculé par prep (phone | email | contact_form) */
+  primary_channel?: string | null;
+  contacts?: LeadContact[];
 }
 
 export const MANIFEST_PATH = "queue/pending_manifest.json";
@@ -49,21 +52,29 @@ export function buildQueueBattlecard(
   facts: AuditFactsFile | null,
   appUrl: string,
 ): { waiting: string } | { battlecard: Battlecard; summary: string; weaknesses: string[] } {
-  // Un message de type cold email est indispensable : le lead attend tant que l'agent ne l'a pas écrit.
-  const isColdEmail = getOpportunityOrDefault(meta.opportunity_type).pitch.kind === "cold_email";
+  // Canal principal écrit (email ou formulaire) : le message est indispensable, le lead attend tant que l'agent ne l'a pas écrit.
+  const def = getOpportunityOrDefault(meta.opportunity_type);
+  const primaryChannel = isChannelId(meta.primary_channel) ? meta.primary_channel : null;
+  const isColdEmail = PITCH_KIND_BY_GENERATOR[pitchGeneratorFor(def, primaryChannel)] === "cold_email";
+  const isTrackerReport = def.proof.generator === "tracker_report";
   const coldEmail = rawBc.coldEmail || (rawBc.subject && rawBc.body ? { subject: rawBc.subject, body: rawBc.body } : undefined);
-  if (isColdEmail && !coldEmail) return { waiting: "coldEmail absent de battlecard.json (audit QA)" };
+  if (isColdEmail && !coldEmail) return { waiting: "coldEmail absent de battlecard.json (message écrit attendu)" };
 
   const demoUrl = `${appUrl}/demos/${meta.id}`;
   const battlecard: Battlecard = isColdEmail
     ? {
         closerBrief: rawBc.closerBrief || rawBc.executiveSummary || rawBc.auditSummary || facts?.auditSummary,
-        ourAdvantages: rawBc.ourAdvantages || rawBc.closingArguments || [
-          "Rapport technique en accès libre, preuve réseau à l'appui",
-          "Surveillance continue en CI/CD headless de tous les sites du portfolio",
-          "Alerte dès qu'une CMP saute ou qu'un nouveau tag fuit sans consentement",
-        ],
-        callScript: rawBc.callScript || "Opportunité 100% asynchrone par email (aucun appel téléphonique).",
+        ourAdvantages:
+          rawBc.ourAdvantages ||
+          rawBc.closingArguments ||
+          (isTrackerReport
+            ? [
+                "Rapport technique en accès libre, preuve réseau à l'appui",
+                "Surveillance continue en CI/CD headless de tous les sites du portfolio",
+                "Alerte dès qu'une CMP saute ou qu'un nouveau tag fuit sans consentement",
+              ]
+            : []),
+        callScript: rawBc.callScript || (isTrackerReport ? "Opportunité 100% asynchrone par email (aucun appel téléphonique)." : ""),
         objections: (rawBc.objections || []).map((o) => ({ objection: o.objection, reply: o.reply || o.response || "" })),
         whatsappText: rawBc.whatsappText || "",
         coldEmail,
@@ -190,6 +201,8 @@ export async function syncQueue(): Promise<void> {
         google_rating: meta.google_rating,
         google_reviews_count: meta.google_reviews_count,
         opportunity_type: opportunityIdOf(meta.opportunity_type),
+        primary_channel: meta.primary_channel ?? null,
+        contacts: Array.isArray(meta.contacts) ? meta.contacts : undefined,
         audit_data: {
           score: meta.loadTimeMs && meta.loadTimeMs > 4000 ? 35 : 45,
           summary,

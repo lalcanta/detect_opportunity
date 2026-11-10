@@ -288,13 +288,31 @@ de comportement  lead_contacts          unqualified            allowed_channels 
   - `npm run scan -- --domains …` sans `--opportunity` prend désormais `audit_qa_trackers`, comme `prepScan` : la
     valeur par défaut `website` de l'option empêchait ce choix, contrairement à l'intention du code.
 
-**Phase 1 — Formulaires et qualification**
+**Phase 1 — Formulaires et qualification** ✅ *fait le 10/11/2026*
 - Module `contact_form`.
 - `evaluateRequirements` et qualification en deux temps dans `mapsScraper.ts`, `scanRunner.ts` et `prepScan.ts`.
 - Table `lead_contacts`, colonne `primary_channel`, `contacts[]` dans `/api/sync` et dans `meta.json` de la file.
 - Activer les nouveaux prérequis du §2, opportunité par opportunité, en commençant par `audit_qa_trackers`.
 - Version minimale côté closer : badge de canal et bouton « ouvrir le formulaire », pour exploiter les nouveaux leads
   sans attendre la phase 3.
+- Bilan :
+  - Registre : `requirements` (site + contacts `allOf`/`anyOf`), canal `contact_form`, un générateur de message par
+    canal (`pitch`), `flyer: false` partout. Prérequis du §2 activés pour les 6 opportunités.
+  - Qualification : `shared/opportunities/qualification.ts` (`evaluateRequirements`, `resolveWebsiteFilter`,
+    `pitchGeneratorFor`). Vivier élargi à `min(2 × objectif, objectif + 20)` fiches quand l'email ou le formulaire
+    décident ; le scan s'arrête dès que l'objectif de leads qualifiés est atteint. Les rejets sont journalisés.
+  - CLI : vérification `contact_form` (`inspector/modules/contactFormModule.ts`), générateur `llm_cold_email`
+    (`copywriter/coldEmail.ts`) pour les leads joignables par écrit, angle de la démo full_auto selon l'opportunité
+    (`demoFocusInstruction`), consigne Antigravity de message écrit en mode prep.
+  - Dashboard : table `lead_contacts` et colonne `leads.primary_channel` (créées à chaud par `ensureAuthSchema`,
+    `migrations/0003_…` pour une base créée à la main), `contacts[]` dans `/api/sync`, badge de canal sur les cartes,
+    bloc « Formulaire de contact » (ouverture + copie du message, « marquer comme soumis » →
+    `POST /api/leads/:id/form-submitted`), mode email/téléphone du closer selon le canal du lead. `POST /api/admin/scans`
+    refuse une opportunité inconnue ou un filtre de site contraire.
+  - Correction au passage : l'écran du closer passait en mode email pour tout lead dont la battlecard contenait un
+    brouillon d'email, c'est-à-dire presque tous les leads téléphone en full_auto, et masquait leur script d'appel.
+    Les leads de la phase 1 suivent leur canal principal ; les anciens gardent l'ancienne règle.
+  - Pas encore fait : statut `unqualified` (phase 2), les activités « envoyé / soumis » restent dans `call_notes`.
 
 **Phase 2 — Statuts et historique**
 - Migration de reconstruction de `leads` et nouveaux statuts, y compris `unqualified`.

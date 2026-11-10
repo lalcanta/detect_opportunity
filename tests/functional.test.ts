@@ -279,6 +279,47 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.equal(lead.status, "demo_ready");
       assert.equal(JSON.parse(lead.audit_data).summary, "Audit complet");
     });
+
+    it("doit enregistrer le canal principal et les contacts (lead_contacts), et ignorer les contacts invalides", async () => {
+      const contactLeadId = "c0ffee00c0ffee01";
+      const formUrl = "https://agence-contact-test.fr/contact";
+      const sync = (body: Record<string, unknown>) =>
+        fetch(`${BASE_URL}/api/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SYNC_SECRET}` },
+          body: JSON.stringify(body),
+        });
+      const res = await sync({
+        id: contactLeadId,
+        company_name: "Agence Contact Test",
+        opportunity_type: "audit_qa_trackers",
+        primary_channel: "contact_form",
+        demo_html: "<!DOCTYPE html><html><body>Rapport</body></html>",
+        battlecard_data: { coldEmail: { subject: "Objet", body: "Message" } },
+        contacts: [
+          { kind: "contact_form", value: formUrl, source: "site", confidence: 0.9, meta: { captcha: "reCAPTCHA" }, is_primary: true },
+          { kind: "fax", value: "0102030405", source: "site" },
+          { kind: "contact_form", value: "javascript:alert(1)", source: "site" },
+        ],
+      });
+      assert.equal(res.status, 200);
+
+      const leadRes = await fetch(`${BASE_URL}/api/leads/${contactLeadId}`, { headers: { Cookie: ADMIN_COOKIE } });
+      const lead = ((await leadRes.json()) as { lead: { primary_channel: string | null } }).lead;
+      assert.equal(lead.primary_channel, "contact_form");
+
+      // Une resynchronisation sans canal ne l'efface pas
+      await sync({ id: contactLeadId, company_name: "Agence Contact Test", opportunity_type: "audit_qa_trackers", status: "pending_generation" });
+      const again = ((await (await fetch(`${BASE_URL}/api/leads/${contactLeadId}`, { headers: { Cookie: ADMIN_COOKIE } })).json()) as {
+        lead: { primary_channel: string | null };
+      }).lead;
+      assert.equal(again.primary_channel, "contact_form");
+
+      // Le formulaire (et lui seul) est exposé à l'écran du closer
+      const page = await (await fetch(`${BASE_URL}/?view=list&scope=all&opp=audit_qa_trackers`, { headers: { Cookie: ADMIN_COOKIE } })).text();
+      assert.ok(page.includes(formUrl), "URL du formulaire attendue dans la vue");
+      assert.ok(!page.includes("javascript:alert(1)"), "contact invalide ignoré");
+    });
   });
 
   // =========================================================================
@@ -703,6 +744,20 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.equal(json.ok, true);
       assert.ok(typeof json.id === "number");
       createdScanJobId = json.id;
+    });
+
+    it("POST /api/admin/scans doit refuser un filtre de site contraire à l'opportunité et une opportunité inconnue", async () => {
+      const create = (body: Record<string, unknown>) =>
+        fetch(`${BASE_URL}/api/admin/scans`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
+          body: JSON.stringify({ query: "agence web", city: "Lyon", limit: 2, ...body }),
+        });
+      const incompatible = await create({ opportunity_type: "audit_qa_trackers", website_filter: "no_website" });
+      assert.equal(incompatible.status, 400);
+      assert.equal(((await incompatible.json()) as { error: string }).error, "website_filter_incompatible");
+      const unknown = await create({ opportunity_type: "inconnue" });
+      assert.equal(unknown.status, 400);
     });
 
     it("GET /api/admin/scans doit lister le job nouvellement créé avec ses métadonnées", async () => {

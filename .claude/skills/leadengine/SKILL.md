@@ -17,7 +17,7 @@ qu'un index). Pour chacun, détermine ce qui manque :
 
 | Fichier | Rôle |
 |---|---|
-| `meta.json` | Données prospect (lecture seule). Champ `opportunity_type` = type d'offre. |
+| `meta.json` | Données prospect (lecture seule). `opportunity_type` = type d'offre ; `primary_channel` = canal du premier contact (`phone`, `email` ou `contact_form`) ; `contacts` = contacts trouvés. |
 | `prompt_demo.md` | Consigne pour `demo.html` |
 | `prompt_battlecard.md` | Consigne pour `battlecard.json` |
 | `audit_facts.json` | (audit QA) Constats réseau **mesurés** — à reprendre tels quels, ne rien inventer |
@@ -34,6 +34,9 @@ File vide → réponds en une ligne (« file vide ») et arrête-toi : pas de sy
   - Lead `audit_qa_trackers` : `demo.html` (rapport) existe déjà. Le JSON **doit** contenir `coldEmail.subject` et
     `coldEmail.body`, sinon `sync-queue` le laisse en attente. Cite uniquement les traceurs de `audit_facts.json`, mets
     le lien du rapport donné dans le prompt, aucune proposition d'appel ni de visio.
+  - Lead dont `primary_channel` vaut `email` ou `contact_form` (quelle que soit l'opportunité) : le JSON **doit**
+    contenir `coldEmail.subject` et `coldEmail.body`, sinon `sync-queue` le laisse en attente. Pour `contact_form`,
+    le corps est collé tel quel dans le formulaire : texte brut, 900 caractères maximum.
   - Ne présente jamais une faiblesse comme mesurée si elle ne vient pas de `meta.json`, `audit_facts.json` ou de la
     capture.
 - Ne modifie ni `meta.json` ni `audit_facts.json`, et ne touche pas à `queue/completed/`.

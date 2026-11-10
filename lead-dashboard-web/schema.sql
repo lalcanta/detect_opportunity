@@ -47,11 +47,27 @@ CREATE TABLE IF NOT EXISTS leads (
   call_notes           TEXT,
   google_calendar_event_id TEXT,
   opportunity_type     TEXT NOT NULL DEFAULT 'website',
+  primary_channel      TEXT,            -- phone | email | contact_form (canal principal selon l'opportunité)
   created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to, status);
 CREATE INDEX IF NOT EXISTS idx_leads_status   ON leads(status);
+
+-- Contacts d'un lead : un par canal et par valeur (docs/PLAN_REFONTE_LEADS.md §3.4)
+CREATE TABLE IF NOT EXISTS lead_contacts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  lead_id     TEXT NOT NULL REFERENCES leads(id),
+  kind        TEXT NOT NULL,     -- phone | email | contact_form
+  value       TEXT NOT NULL,     -- numéro, adresse, URL du formulaire
+  source      TEXT NOT NULL,     -- maps | site | sirene | inbound | manual
+  confidence  REAL,              -- 0..1
+  meta        TEXT,              -- JSON (captcha, champs du formulaire…)
+  is_primary  INTEGER NOT NULL DEFAULT 0,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (lead_id, kind, value)
+);
+CREATE INDEX IF NOT EXISTS idx_lead_contacts_lead ON lead_contacts(lead_id, kind);
 
 CREATE TABLE IF NOT EXISTS token_usage (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,

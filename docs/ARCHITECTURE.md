@@ -41,7 +41,11 @@ Code : `lead-engine-cli/src/scanRunner.ts`.
 
 1. **Collecte** (`collector/mapsScraper.ts`) : recherche Maps (une par sous-requête séparée par `,`/`;`), vivier de
    `max(limit×3, 60)` fiches, puis extraction fiche par fiche jusqu'à atteindre `limit` prospects **qualifiés**.
-   Qualifié = **a un téléphone** + respecte `website_filter` (`all` / `no_website` / `has_website`).
+   Qualification en deux temps selon les prérequis de l'opportunité (`requirements` dans `shared/opportunities/`,
+   `evaluateRequirements`) : sur la fiche Maps (téléphone, site), puis après l'inspection (email, formulaire de
+   contact). Un lead rejeté après inspection n'est ni généré ni synchronisé. Le filtre de site (`website_filter`) est
+   déduit de l'opportunité ; l'admin peut seulement le restreindre. Le canal principal du lead (`primary_channel`)
+   est le premier canal disponible de l'opportunité ; ses contacts vont dans `lead_contacts`.
    Variante : `--domains "a.fr, b.fr"` (ou requête `domains:...`) court-circuite Maps (`parseDirectDomainLeads`).
 2. **Inspection** (`inspector/siteInspector.ts`) : une seule ouverture de page ; les modules actifs dépendent de
    l'opportunité (`scanModules` dans `shared/opportunities/definitions/`) : traceurs/CMP, pixels pub, stack,
@@ -50,8 +54,8 @@ Code : `lead-engine-cli/src/scanRunner.ts`.
 3. **Audit** (`inspector/siteAuditor.ts`) : LLM (tâche `audit`) sur capture + mesures, fallback déterministe.
 4. **Démo** (`generator/demoGenerator.ts`) : LLM (tâche `demo`) → HTML Tailwind ; réinjection du vrai logo,
    `no-referrer`, **injection du pixel de tracking** `/api/tracker/open`.
-5. **Flyer** (`generator/flyerGenerator.ts`) : PDF A5 avec QR code vers le formulaire d'avis Google du prospect
-   (cadeau d'accroche, identique pour toutes les opportunités).
+5. **Flyer** (`generator/flyerGenerator.ts`) : PDF A5 avec QR code vers le formulaire d'avis Google du prospect.
+   Désactivé pour toutes les opportunités depuis la phase 1 (`flyer: false`), réactivable par opportunité.
 6. **Battlecard** (`copywriter/battlecard.ts`) : LLM (tâche `battlecard`) → brief closer, avantages, script,
    objections, WhatsApp, brouillon d'email.
 7. **Sync** (`sync/pushLead.ts`) : `POST /api/sync` (3 tentatives, pas de retry sur 4xx).
@@ -63,7 +67,7 @@ email déterministe `buildDeterministicQaBattlecard`), pas de flyer.
 Point d'entrée : `npm run prep` ou job `prep_only`. Code : `lead-engine-cli/src/prepScan.ts` puis `syncQueue.ts`.
 
 1. Collecte + inspection comme ci-dessus (sans LLM).
-2. Écrit `queue/pending/<id>/` : `meta.json`, `flyer.pdf`, `screenshot.png`, `prompt_demo.md`,
+2. Écrit `queue/pending/<id>/` : `meta.json` (avec `primary_channel` et `contacts`), `screenshot.png`, `prompt_demo.md`,
    `prompt_battlecard.md` (+ `demo.html` et `battlecard.json` déterministes si `audit_qa_trackers`).
 3. Pousse immédiatement le lead au CRM en `status = pending_generation` (onglet « file de génération » de l'admin,
    masqué du Kanban).

@@ -10,6 +10,7 @@ import {
   renderClientDemoSlotHelperScript,
   renderGoogleRatingBadge,
   renderOpportunityBadge,
+  renderChannelBadge,
 } from "./components";
 
 export { OPP_META };
@@ -52,6 +53,16 @@ function parseAudit(raw: string | null): AuditData | null {
   }
 }
 
+function parseFormMeta(raw?: string | null): { captcha: string } {
+  if (!raw) return { captcha: "" };
+  try {
+    const m = JSON.parse(raw) as { captcha?: unknown };
+    return { captcha: typeof m.captcha === "string" ? m.captcha : "" };
+  } catch {
+    return { captcha: "" };
+  }
+}
+
 function parseAuditRaw(raw: string | null): Record<string, unknown> | null {
   return parseAudit(raw) as unknown as Record<string, unknown> | null;
 }
@@ -81,6 +92,7 @@ function backlogCard(l: LeadRow, user: User, _origin: string): string {
           <span class="flex items-center gap-0.5">${icon("map-pin", "w-3 h-3 text-zinc-400")} ${esc(l.city)}</span>
         </p>
         ${renderOpportunityBadge(l.opportunity_type)}
+        ${renderChannelBadge(l.primary_channel)}
       </div>
     </div>
     <div class="flex items-center gap-1 shrink-0">
@@ -192,6 +204,7 @@ function calendarCard(l: LeadRow, _user: User, _origin: string): string {
           ${colDef.label}
         </span>
         ${renderOpportunityBadge(l.opportunity_type)}
+        ${renderChannelBadge(l.primary_channel)}
       </div>
     </div>
 
@@ -754,6 +767,24 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
         </div>
       </div>
 
+      <!-- 4a-bis. Formulaire de contact du prospect (soumission manuelle) -->
+      <div id="sp_form_block" class="hidden border border-amber-200 rounded-xl p-4 space-y-2 bg-amber-50/40 shadow-sm">
+        <h3 class="font-semibold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+          📝 Formulaire de contact du prospect
+        </h3>
+        <p class="text-[11px] text-zinc-600">Pas d'email trouvé ou formulaire préféré : ouvrez le formulaire, collez le message ci-dessous (copié automatiquement), envoyez-le vous-même puis marquez-le comme soumis.</p>
+        <p id="sp_form_captcha" class="hidden text-[11px] text-amber-800 font-semibold"></p>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button type="button" id="sp_open_form" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-3 rounded-lg text-xs transition-colors shadow-sm">
+            Ouvrir le formulaire (copie le message)
+          </button>
+          <button type="button" id="sp_mark_form_submitted" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-3 rounded-lg text-xs transition-colors shadow-sm">
+            ✓ Marquer comme soumis
+          </button>
+        </div>
+        <span id="sp_form_feedback" class="text-[11px] text-emerald-600 font-bold"></span>
+      </div>
+
       <!-- 4a. Email d'Approche Asynchrone (Dev-to-Dev / Agences) -->
       <div id="sp_async_email_block" class="border border-indigo-200 rounded-xl p-4 space-y-3 bg-indigo-50/40 shadow-sm">
         <div class="flex items-center justify-between">
@@ -871,6 +902,9 @@ var LEADS_MAP = ${JSON.stringify(
       google_reviews_count: l.google_reviews_count || 0,
       status: l.status,
       opportunity_type: opportunityIdOf(l.opportunity_type),
+      primary_channel: l.primary_channel || "",
+      contact_form_url: l.contact_form_url || "",
+      contact_form_captcha: parseFormMeta(l.contact_form_meta).captcha,
       callback_scheduled_at: l.callback_scheduled_at || "",
       call_notes: l.call_notes || "",
       demo_viewed_count: l.demo_viewed_count || 0,
@@ -1199,7 +1233,9 @@ function openSidepanel(id) {
   // Composer d'email (toutes opportunités) + Battlecard vocale uniquement pour le canal téléphonique
   var hasColdEmail = lead.battlecard && (lead.battlecard.coldEmail || lead.battlecard.subject);
   var coldEmailData = hasColdEmail ? (lead.battlecard.coldEmail || { subject: lead.battlecard.subject, body: lead.battlecard.body }) : null;
-  var isAsyncMode = oppDef.channel === 'async_email' || hasColdEmail;
+  // Canal principal du lead (phase 1) ; pour un lead plus ancien, ancienne règle (opportunité ou brouillon d'email présent).
+  var isAsyncMode = lead.primary_channel ? lead.primary_channel !== 'phone' : (oppDef.channel === 'async_email' || hasColdEmail);
+  setupContactForm(lead);
 
   var vocalBlock = $('sp_vocal_battlecard_block');
   setupEmailComposer(lead, oppDef, coldEmailData);
@@ -1928,6 +1964,49 @@ function applyTemplate(tplId) {
   }
   refreshMailto();
 }
+
+function setupContactForm(lead) {
+  var block = $('sp_form_block');
+  if (!block) return;
+  if (!lead.contact_form_url) { block.classList.add('hidden'); return; }
+  block.classList.remove('hidden');
+  var cap = $('sp_form_captcha');
+  if (lead.contact_form_captcha) {
+    cap.textContent = '⚠️ Protégé par ' + lead.contact_form_captcha + ' : validation manuelle obligatoire.';
+    cap.classList.remove('hidden');
+  } else cap.classList.add('hidden');
+  $('sp_form_feedback').textContent = '';
+}
+
+$('sp_open_form').onclick = function () {
+  var lead = LEADS_MAP[activeLeadId];
+  if (!lead || !lead.contact_form_url) return;
+  var body = $('sp_email_body') ? $('sp_email_body').value : '';
+  if (body && navigator.clipboard) navigator.clipboard.writeText(body).catch(function () {});
+  window.open(lead.contact_form_url, '_blank', 'noopener');
+  $('sp_form_feedback').textContent = body ? '✔ Message copié : collez-le dans le formulaire.' : 'Formulaire ouvert (aucun message à copier).';
+};
+
+$('sp_mark_form_submitted').onclick = async function () {
+  var lead = LEADS_MAP[activeLeadId];
+  if (!lead || !lead.contact_form_url) return;
+  if (!confirm('Confirmez-vous avoir soumis le message via le formulaire de ' + lead.company_name + ' ?')) return;
+  var btn = this; btn.disabled = true;
+  try {
+    var r = await fetch('/api/leads/' + activeLeadId + '/form-submitted', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ form_url: lead.contact_form_url })
+    });
+    var j = await r.json();
+    if (r.ok) {
+      $('sp_form_feedback').textContent = '✔ Soumission historisée dans les notes';
+      lead.call_notes = j.call_notes;
+      if ($('sp_call_notes')) $('sp_call_notes').value = j.call_notes;
+    } else alert(j.message || 'Erreur');
+  } catch (err) { alert('Erreur réseau'); }
+  btn.disabled = false;
+};
 
 function setupEmailComposer(lead, oppDef, aiEmail) {
   composerLead = lead;

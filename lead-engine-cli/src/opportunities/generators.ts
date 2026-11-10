@@ -3,8 +3,9 @@
  * `Record<…Id, …>` garantit à la compilation que chaque générateur déclaré dans le registre existe ici.
  */
 import type { BrowserContext } from "playwright";
-import type { PitchDefinition, PitchGeneratorId, ProofGeneratorId } from "../../../shared/opportunities";
+import type { ChannelId, OpportunityDefinition, PitchGeneratorId, ProofGeneratorId } from "../../../shared/opportunities";
 import { generateBattlecard } from "../copywriter/battlecard";
+import { generateColdEmailPitch } from "../copywriter/coldEmail";
 import { generateDemoHtml } from "../generator/demoGenerator";
 import { generateTrackerReportHtml } from "../generator/trackerReportGenerator";
 import { auditSite } from "../inspector/siteAuditor";
@@ -21,6 +22,9 @@ export interface GenerationContext {
   demoUrl: string;
   usage: TokenUsageRecord[];
   onSubStep?: (subStep: string) => Promise<boolean | void>;
+  def: OpportunityDefinition;
+  /** Canal principal du lead, calculé à la qualification. */
+  primaryChannel: ChannelId;
 }
 
 export interface ProofResult {
@@ -29,7 +33,7 @@ export interface ProofResult {
 }
 
 export type ProofGenerator = (ctx: GenerationContext) => Promise<ProofResult>;
-export type PitchGenerator = (ctx: GenerationContext, audit: SiteAudit, kind: PitchDefinition["kind"]) => Promise<Battlecard>;
+export type PitchGenerator = (ctx: GenerationContext, audit: SiteAudit) => Promise<Battlecard>;
 
 /** Constats mesurés par l'inspection réseau, sans LLM. */
 export function buildTrackerAudit(inspection: SiteInspection | null): SiteAudit {
@@ -55,7 +59,14 @@ export const PROOF_GENERATORS: Record<ProofGeneratorId, ProofGenerator> = {
     await ctx.onSubStep?.(`🎨 Génération de la démo Tailwind moderne & branding...`);
     const demoHtml = await generateDemoHtml(
       ctx.router,
-      { leadId: ctx.leadId, lead: ctx.lead, inspection: ctx.inspection, audit, remoteAppUrl: ctx.remoteAppUrl },
+      {
+        leadId: ctx.leadId,
+        lead: ctx.lead,
+        inspection: ctx.inspection,
+        audit,
+        remoteAppUrl: ctx.remoteAppUrl,
+        focus: ctx.def.proof.kind === "demo_web" ? ctx.def.proof.focus : undefined,
+      },
       ctx.usage,
     );
     return { audit, demoHtml };
@@ -69,9 +80,13 @@ export const PROOF_GENERATORS: Record<ProofGeneratorId, ProofGenerator> = {
 };
 
 export const PITCH_GENERATORS: Record<PitchGeneratorId, PitchGenerator> = {
-  llm_phone_battlecard: async (ctx, audit, kind) => {
-    await ctx.onSubStep?.(`🎯 Synthèse Battlecard IA (objections ou Cold Email dev-to-dev)...`);
-    return generateBattlecard(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage, kind);
+  llm_phone_battlecard: async (ctx, audit) => {
+    await ctx.onSubStep?.(`🎯 Synthèse Battlecard IA (script d'appel & objections)...`);
+    return generateBattlecard(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage);
+  },
+  llm_cold_email: async (ctx, audit) => {
+    await ctx.onSubStep?.(`✉️ Rédaction IA du message écrit (${ctx.primaryChannel === "contact_form" ? "formulaire de contact" : "email"})...`);
+    return generateColdEmailPitch(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage, ctx.def, ctx.primaryChannel);
   },
   tracker_cold_email: async (ctx) => {
     await ctx.onSubStep?.(`✉️ Préparation du brouillon d'email Dev-to-Dev (relecture manuelle)...`);

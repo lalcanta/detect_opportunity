@@ -1,4 +1,4 @@
-import { opportunityIdOf } from "../../../shared/opportunities";
+import { findOpportunity, opportunityIdOf, resolveWebsiteFilter } from "../../../shared/opportunities";
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { bearerMatches, requireUser } from "../auth";
@@ -74,7 +74,11 @@ scanRoutes.post("/api/admin/scans", requireUser("admin"), async (c) => {
   const lng = typeof b.lng === "number" ? b.lng : null;
   const radius_km = typeof b.radius_km === "number" ? b.radius_km : null;
   const oppType = opportunityIdOf(b.opportunity_type?.trim());
-  const webFilter = b.website_filter?.trim() || "all";
+  const def = findOpportunity(oppType);
+  if (!def) return c.json({ error: "unknown_opportunity", message: `Opportunité inconnue : ${oppType}` }, 400);
+  const websiteFilter = resolveWebsiteFilter(def, b.website_filter?.trim());
+  if (websiteFilter.error) return c.json({ error: "website_filter_incompatible", message: websiteFilter.error }, 400);
+  const webFilter = websiteFilter.filter;
   const execMode = b.execution_mode === "prep_only" ? "prep_only" : "full_auto";
 
   const res = await c.env.DB.prepare(
@@ -141,7 +145,11 @@ scanRoutes.post("/api/admin/scheduled-scans", requireUser("admin"), async (c) =>
   const lng = typeof b.lng === "number" ? b.lng : null;
   const radius_km = typeof b.radius_km === "number" ? b.radius_km : null;
   const oppType = opportunityIdOf(b.opportunity_type?.trim());
-  const webFilter = b.website_filter?.trim() || "all";
+  const def = findOpportunity(oppType);
+  if (!def) return c.json({ error: "unknown_opportunity", message: `Opportunité inconnue : ${oppType}` }, 400);
+  const websiteFilter = resolveWebsiteFilter(def, b.website_filter?.trim());
+  if (websiteFilter.error) return c.json({ error: "website_filter_incompatible", message: websiteFilter.error }, 400);
+  const webFilter = websiteFilter.filter;
   const execMode = b.execution_mode === "prep_only" ? "prep_only" : "full_auto";
 
   // Construction d'une expression cron standard

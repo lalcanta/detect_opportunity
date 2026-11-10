@@ -13,6 +13,7 @@ import {
   DEFAULT_OPPORTUNITY_ID,
   OPPORTUNITIES,
   PITCH_GENERATOR_IDS,
+  PITCH_KIND_BY_GENERATOR,
   PROOF_GENERATOR_IDS,
   SCAN_MODULE_IDS,
   findOpportunity,
@@ -21,18 +22,6 @@ import {
 
 /** Générateur de preuve attendu pour chaque type de preuve. */
 const PROOF_GENERATOR_BY_KIND = { demo_web: "llm_demo", audit_report: "tracker_report" } as const;
-
-/** Forme de message attendue pour chaque générateur de message. */
-const PITCH_KIND_BY_GENERATOR = { llm_phone_battlecard: "phone_battlecard", tracker_cold_email: "cold_email" } as const;
-
-/** Forme de message attendue selon le canal principal. */
-const PITCH_KIND_BY_PRIMARY_CHANNEL = { phone: "phone_battlecard", email: "cold_email" } as const;
-
-/**
- * Incohérences connues de la phase 0, décrites telles qu'elles existent dans le code.
- * À vider en phase 1 ; ne pas en ajouter.
- */
-const KNOWN_PHASE0_CHANNEL_PITCH_MISMATCHES = new Set(["custom"]);
 
 describe("Registre des opportunités", () => {
   it("a des identifiants uniques en snake_case", () => {
@@ -67,23 +56,40 @@ describe("Registre des opportunités", () => {
         for (const c of def.channels) assert.ok((CHANNEL_IDS as readonly string[]).includes(c), c);
       });
 
-      it("a des générateurs existants et compatibles avec la preuve et le message", () => {
+      it("a un générateur de preuve existant et compatible", () => {
         assert.ok((PROOF_GENERATOR_IDS as readonly string[]).includes(def.proof.generator));
-        assert.ok((PITCH_GENERATOR_IDS as readonly string[]).includes(def.pitch.generator));
         assert.equal(def.proof.generator, PROOF_GENERATOR_BY_KIND[def.proof.kind]);
-        assert.equal(def.pitch.kind, PITCH_KIND_BY_GENERATOR[def.pitch.generator]);
         assert.ok(def.proof.interestCta.trim());
-        // L'email déterministe cite le rapport traceurs : il n'a de sens qu'avec cette preuve.
-        if (def.pitch.generator === "tracker_cold_email") assert.equal(def.proof.generator, "tracker_report");
       });
 
-      it("a un message adapté à son canal principal", () => {
-        const expected = PITCH_KIND_BY_PRIMARY_CHANNEL[def.channels[0]!];
-        if (KNOWN_PHASE0_CHANNEL_PITCH_MISMATCHES.has(def.id)) {
-          assert.notEqual(def.pitch.kind, expected, `${def.id} est cohérent : le retirer des exceptions`);
-          return;
+      it("a un générateur de message pour chacun de ses canaux, et seulement pour eux", () => {
+        assert.deepEqual(Object.keys(def.pitch).sort(), [...def.channels].sort());
+        for (const [channel, generator] of Object.entries(def.pitch)) {
+          assert.ok((PITCH_GENERATOR_IDS as readonly string[]).includes(generator!), generator);
+          // Le téléphone appelle un script d'appel ; l'email et le formulaire, un message écrit.
+          const expected = channel === "phone" ? "phone_battlecard" : "cold_email";
+          assert.equal(PITCH_KIND_BY_GENERATOR[generator!], expected, `${channel} → ${generator}`);
+          // L'email déterministe cite le rapport traceurs : il n'a de sens qu'avec cette preuve.
+          if (generator === "tracker_cold_email") assert.equal(def.proof.generator, "tracker_report");
         }
-        assert.equal(def.pitch.kind, expected);
+      });
+
+      it("exige au moins un contact, choisi parmi ses canaux", () => {
+        const { allOf = [], anyOf = [] } = def.requirements.contacts;
+        assert.ok(allOf.length + anyOf.length > 0, "aucun contact exigé");
+        for (const c of [...allOf, ...anyOf]) assert.ok(def.channels.includes(c), `${c} exigé mais absent des canaux`);
+      });
+
+      it("lance les vérifications de site qui trouvent ses canaux écrits", () => {
+        if (def.channels.includes("email")) assert.ok(def.scanModules.includes("contacts_legal"));
+        if (def.channels.includes("contact_form")) assert.ok(def.scanModules.includes("contact_form"));
+      });
+
+      it("n'exige pas de contact écrit sans site", () => {
+        if (def.requirements.website !== "forbidden") return;
+        const { allOf = [], anyOf = [] } = def.requirements.contacts;
+        assert.ok(allOf.every((c) => c === "phone"));
+        assert.ok(anyOf.length === 0 || anyOf.includes("phone"));
       });
     });
   }

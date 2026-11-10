@@ -1,5 +1,6 @@
 import { getCompetitorBenchmark } from "../benchmarks/competitorBenchmarks";
 import type { ModelRouter } from "../llm/modelRouter";
+import type { DemoFocus } from "../../../shared/opportunities";
 import type { MapsLead, SiteAudit, SiteInspection, TokenUsageRecord } from "../types";
 import { stripCodeFences } from "../utils/helpers";
 
@@ -11,6 +12,22 @@ export interface DemoInput {
   inspection: SiteInspection | null;
   audit: SiteAudit;
   remoteAppUrl: string;
+  /** Angle de la démo, déclaré par l'opportunité (shared/opportunities). */
+  focus?: DemoFocus;
+}
+
+/** Consigne ajoutée au prompt selon l'angle de l'opportunité (même intention que les consignes du mode prep). */
+export function demoFocusInstruction(focus: DemoFocus | undefined, city: string): string {
+  switch (focus) {
+    case "reviews":
+      return `ANGLE DE L'OFFRE : E-RÉPUTATION & AVIS GOOGLE. La page doit mettre au premier plan la collecte d'avis 5 étoiles (QR code de comptoir / véhicule, parcours d'avis simplifié) et un démonstrateur de croissance du nombre d'avis face aux concurrents de ${city || "la zone"}.`;
+    case "seo_local":
+      return `ANGLE DE L'OFFRE : RÉFÉRENCEMENT LOCAL & GOOGLE MAPS. Intègre un démonstrateur de positionnement sur les recherches clés à ${city || "proximité"} (simulation du Pack Local 3 places).`;
+    case "ads_acquisition":
+      return "ANGLE DE L'OFFRE : ACQUISITION PUBLICITAIRE. Conçois une landing page de conversion directe, pensée pour transformer le trafic payant en demandes de devis.";
+    default:
+      return "";
+  }
 }
 
 /**
@@ -145,9 +162,10 @@ F. MOBILE-FIRST & BARRE FLOTTANTE D'APPEL DIRECT :
 - N'ajoute AUCUN script de tracking supplémentaire (il est injecté automatiquement après).
 - Réponds UNIQUEMENT avec le code HTML complet (<!DOCTYPE html> ... </html>), sans aucun bloc markdown (\`\`\`) ni commentaire avant/après.`;
 
+  const focusInstruction = demoFocusInstruction(input.focus, lead.city);
   const { text } = await router.generate({
     task: "demo",
-    prompt,
+    prompt: focusInstruction ? `${prompt}\n\n${focusInstruction}` : prompt,
     system:
       "Tu es un directeur artistique et lead developer web spécialisé dans la refonte de sites d'artisans d'élite. Tu respectes scrupuleusement le logo réel du client sans jamais en inventer un faux, tu modernises l'ergonomie autour de son identité, et tu appliques rigoureusement les benchmarks des sites concurrents qui ont le plus de trafic et de conversions en France.",
     images: inspection?.screenshot ? [{ mimeType: "image/jpeg", data: inspection.screenshot }] : undefined,

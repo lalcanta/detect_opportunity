@@ -3,6 +3,9 @@ import {
   OPPORTUNITIES,
   isOpportunityId,
   opportunityIdOf,
+  pitchGeneratorFor,
+  PITCH_KIND_BY_GENERATOR,
+  type ChannelId,
   type BadgeTone,
   type BusinessModel,
   type OpportunityDefinition as SharedOpportunityDefinition,
@@ -78,8 +81,13 @@ export interface OpportunityDefinition {
   badge: string;
   tone: BadgeTone;
   icon: string;
-  /** Mode de l'écran du closer, déduit du premier canal de l'opportunité. */
+  /** Mode par défaut de l'écran du closer, déduit du premier canal de l'opportunité. */
   channel: OpportunityChannel;
+  /** Canaux par ordre de préférence ; celui d'un lead est dans `leads.primary_channel`. */
+  channels: ChannelId[];
+  websiteRequirement: "required" | "forbidden" | "optional";
+  /** Prérequis de contact en clair (ex. « email ou formulaire de contact »). */
+  contactRequirement: string;
   businessModel: BusinessModel;
   proofType: "demo_web" | "audit_report";
   pitchType: "phone_battlecard" | "cold_email";
@@ -97,9 +105,22 @@ export function toOpportunityView(def: SharedOpportunityDefinition): Opportunity
     channel: def.channels[0] === "phone" ? "vocal_closer" : "async_email",
     businessModel: def.commercial.businessModel,
     proofType: def.proof.kind,
-    pitchType: def.pitch.kind,
+    pitchType: PITCH_KIND_BY_GENERATOR[pitchGeneratorFor(def)],
+    channels: [...def.channels],
+    websiteRequirement: def.requirements.website,
+    contactRequirement: describeContactRequirement(def),
     pitchFocus: def.commercial.pitchFocus,
   };
+}
+
+const CONTACT_NAMES: Record<ChannelId, string> = { phone: "téléphone", email: "email", contact_form: "formulaire de contact" };
+
+export function describeContactRequirement(def: Pick<SharedOpportunityDefinition, "requirements">): string {
+  const { allOf = [], anyOf = [] } = def.requirements.contacts;
+  const parts: string[] = [];
+  if (allOf.length) parts.push(allOf.map((c) => CONTACT_NAMES[c]).join(" et "));
+  if (anyOf.length) parts.push(anyOf.map((c) => CONTACT_NAMES[c]).join(" ou "));
+  return parts.join(", et ");
 }
 
 export const OPPORTUNITY_TYPES: readonly OpportunityDefinition[] = OPPORTUNITIES.map(toOpportunityView);
@@ -120,6 +141,9 @@ export function getOpportunity(id?: string | null): OpportunityDefinition {
     tone: "zinc",
     icon: "target",
     channel: "async_email",
+    channels: ["email"],
+    websiteRequirement: "optional",
+    contactRequirement: "au moins un contact",
     businessModel: "both",
     proofType: "audit_report",
     pitchType: "cold_email",
@@ -169,6 +193,12 @@ export interface LeadRow {
   call_notes: string | null;
   google_calendar_event_id?: string | null;
   opportunity_type?: string | null;
+  /** Canal principal (phone | email | contact_form), null pour les leads antérieurs à la phase 1 */
+  primary_channel?: string | null;
+  /** URL du formulaire de contact (lead_contacts), si trouvé */
+  contact_form_url?: string | null;
+  /** JSON : captcha, champs, fournisseur du formulaire */
+  contact_form_meta?: string | null;
   created_at: string;
   assignee_name?: string | null;
   locker_name?: string | null;
@@ -205,6 +235,10 @@ export interface SyncBody {
   flyer_pdf_base64?: string | null;
   battlecard_data?: Battlecard | null;
   status?: LeadStatus | null;
+  /** Canal principal du lead (phone | email | contact_form) */
+  primary_channel?: string | null;
+  /** Contacts trouvés par le CLI, enregistrés dans lead_contacts */
+  contacts?: unknown[];
   token_usage?: {
     task: string;
     model: string;

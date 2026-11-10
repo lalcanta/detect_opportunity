@@ -11,6 +11,7 @@ import { website } from "./definitions/website";
 import { SCAN_MODULE_IDS, type OpportunityDefinition } from "./types";
 
 export * from "./types";
+export * from "./qualification";
 
 /** Ordre d'affichage dans le dashboard. */
 export const OPPORTUNITIES = [website, auditQaTrackers, googleReviews, seoLocal, adsAcquisition, custom] as const;

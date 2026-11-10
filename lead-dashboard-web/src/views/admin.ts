@@ -509,7 +509,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
         <div>
           <label class="text-xs font-semibold text-zinc-700 block mb-1">Objectif de leads qualifiés</label>
           <input id="n" type="number" value="10" min="1" max="100" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
-          <span class="text-[10px] text-zinc-500 mt-0.5 block">Nombre de prospects avec tél à trouver</span>
+          <span class="text-[10px] text-zinc-500 mt-0.5 block">Prospects remplissant les prérequis de l'opportunité</span>
         </div>
       </div>
 
@@ -518,7 +518,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
         <div>
           <label class="text-xs font-semibold text-zinc-700 block mb-1">Type de besoin ciblé / Opportunité</label>
           <select id="opp_type" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
-            ${SCANNABLE_OPPORTUNITY_TYPES.map((ot) => `<option value="${ot.id}" ${ot.id === DEFAULT_OPPORTUNITY_ID ? "selected" : ""}>${esc(ot.badge)} — ${esc(ot.label)} (${ot.channel === "async_email" ? "100% Asynchrone" : "Closing Vocal"})</option>`).join("")}
+            ${SCANNABLE_OPPORTUNITY_TYPES.map((ot) => `<option value="${ot.id}" ${ot.id === DEFAULT_OPPORTUNITY_ID ? "selected" : ""}>${esc(ot.badge)} — ${esc(ot.label)} (exige : ${esc(ot.contactRequirement)}${ot.websiteRequirement === "required" ? ", un site" : ""})</option>`).join("")}
           </select>
           <span class="text-[10px] text-zinc-500 mt-0.5 block">Oriente automatiquement l'argumentaire, la démo et le flyer</span>
         </div>
@@ -2151,7 +2151,8 @@ if ($('launch')) {
           card.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       } else {
-        msg.textContent = 'Erreur lors du lancement du scan';
+        var errBody = await r.json().catch(function () { return {}; });
+        msg.textContent = errBody.message || 'Erreur lors du lancement du scan';
         msg.className = 'text-xs text-rose-600 font-semibold';
         btn.disabled = false;
         btn.className = 'text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-2 font-semibold shadow-sm transition-colors inline-flex items-center gap-1.5';

@@ -152,6 +152,9 @@ pageRoutes.get("/logout", (c) => {
 const LEAD_COLUMNS = `l.id, l.company_name, l.activity, l.city, l.phone, l.email, l.website_url, l.google_rating,
   l.google_reviews_count, l.audit_data, l.flyer_pdf_url, l.battlecard_data, l.assigned_to, l.assigned_at,
   l.locked_by, l.locked_until, l.demo_viewed_count, l.last_demo_viewed_at, l.demo_revoked, l.demo_expires_at, l.status, l.callback_scheduled_at, l.call_notes, l.opportunity_type, l.created_at,
+  l.primary_channel,
+  (SELECT lc.value FROM lead_contacts lc WHERE lc.lead_id = l.id AND lc.kind = 'contact_form' ORDER BY lc.is_primary DESC, lc.id LIMIT 1) AS contact_form_url,
+  (SELECT lc.meta FROM lead_contacts lc WHERE lc.lead_id = l.id AND lc.kind = 'contact_form' ORDER BY lc.is_primary DESC, lc.id LIMIT 1) AS contact_form_meta,
   a.name AS assignee_name, k.name AS locker_name`;
 const LEAD_JOINS = "FROM leads l LEFT JOIN users a ON a.id = l.assigned_to LEFT JOIN users k ON k.id = l.locked_by";
 

@@ -1,4 +1,4 @@
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { chromium, type Browser, type BrowserContext } from "playwright";
 import { loadConfig } from "./config";
@@ -8,10 +8,16 @@ import { generateFlyerPdf } from "./generator/flyerGenerator";
 import {
   DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID,
   DEFAULT_OPPORTUNITY_ID,
+  describeRejection,
   findOpportunity,
   getOpportunityOrDefault,
+  needsInspectionToQualify,
   opportunityIdOf,
+  pitchGeneratorFor,
+  resolveWebsiteFilter,
+  type ChannelId,
 } from "../../shared/opportunities";
+import { buildLeadContacts, qualifyAfterInspection } from "./opportunities/qualify";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
 import { pushLead } from "./sync/pushLead";
@@ -137,8 +143,12 @@ export async function runPrepScan(
 ): Promise<PrepScanResult> {
   const cfg = loadConfig();
   const oppType = opportunityIdOf(opts.opportunity_type);
-  const webFilter = opts.website_filter || "all";
   const def = getOpportunityOrDefault(oppType);
+  const websiteFilter = resolveWebsiteFilter(def, opts.website_filter);
+  if (websiteFilter.error) log("prep", `⚠️ ${websiteFilter.error} Filtre appliqué : ${websiteFilter.filter}`);
+  const webFilter = websiteFilter.filter;
+  // Quand l'email ou le formulaire décident de la qualification, il faut inspecter plus de sites que l'objectif.
+  const candidateLimit = needsInspectionToQualify(def) ? Math.min(opts.limit * 2, opts.limit + 20) : opts.limit;
   const oppLabel = findOpportunity(oppType)?.label ?? oppType;
 
   log(
@@ -178,13 +188,13 @@ export async function runPrepScan(
     const directLeads = parseDirectDomainLeads(opts.query, opts.city);
     let qualifiedLeads: MapsLead[];
     if (directLeads) {
-      qualifiedLeads = directLeads.slice(0, opts.limit);
+      qualifiedLeads = directLeads.slice(0, candidateLimit);
       log("prep", `Mode Direct Domaines B2B : ${qualifiedLeads.length} domaine(s) chargé(s) sans Google Maps.`);
     } else {
       const res = await scrapeMaps({
         query: opts.query,
         city: opts.city,
-        limit: opts.limit,
+        limit: candidateLimit,
         lat: opts.lat ?? null,
         lng: opts.lng ?? null,
         radius_km: opts.radius_km ?? null,
@@ -201,7 +211,7 @@ export async function runPrepScan(
         },
       });
       qualifiedLeads = res.qualifiedLeads;
-      log("maps", `${qualifiedLeads.length} prospects qualifiés trouvés.`);
+      log("maps", `${qualifiedLeads.length} prospects retenus sur Maps (prérequis finaux vérifiés après inspection).`);
     }
 
     if (cancelled) {
@@ -216,15 +226,16 @@ export async function runPrepScan(
     if (hooks.onProgress) {
       const cont = await hooks.onProgress(
         0,
-        qualifiedLeads.length,
-        `${qualifiedLeads.length} prospect(s) qualifié(s) trouvé(s). Préparation des dossiers locaux...`,
+        opts.limit,
+        `${qualifiedLeads.length} prospect(s) retenu(s) sur Maps. Inspection et préparation des dossiers locaux...`,
       );
       if (cont === false) {
         return { processed: 0, total: qualifiedLeads.length, cancelled: true, preparedLeads: [] };
       }
     }
 
-    for (let i = 0; i < qualifiedLeads.length; i++) {
+    let rejected = 0;
+    for (let i = 0; i < qualifiedLeads.length && preparedLeads.length < opts.limit; i++) {
       const lead = qualifiedLeads[i];
       if (!lead) continue;
       const id = leadId(lead.name, lead.phone ?? lead.mapsUrl);
@@ -255,6 +266,19 @@ export async function runPrepScan(
           log("inspect", `Impossible d'inspecter ${lead.website} : ${(err as Error).message}`);
         }
       }
+      // Vérification finale des prérequis (email, formulaire) : un lead non qualifié n'est ni préparé ni synchronisé.
+      const qualification = qualifyAfterInspection(def, lead, inspection);
+      if (!qualification.qualified || !qualification.primaryChannel) {
+        rejected++;
+        log("prep", `[${i + 1}/${qualifiedLeads.length}] ⚪ ${lead.name} écarté : ${qualification.reasons.map(describeRejection).join(" ; ")}`);
+        await rm(leadDir, { recursive: true, force: true });
+        await hooks.onProgress?.(preparedLeads.length, opts.limit, `⚪ ${lead.name} écarté après inspection (${rejected} écarté(s))`);
+        continue;
+      }
+      const primaryChannel = qualification.primaryChannel;
+      const contacts = buildLeadContacts(lead, inspection, primaryChannel);
+      const pitchGenerator = pitchGeneratorFor(def, primaryChannel);
+
       const sireneFallback = !inspection ? await lookupCompanySirene(lead.name, lead.city) : null;
 
       // 2. Génération flyer PDF
@@ -278,6 +302,9 @@ export async function runPrepScan(
         google_rating: lead.rating,
         google_reviews_count: lead.reviewsCount,
         opportunity_type: oppType,
+        primary_channel: primaryChannel,
+        contacts,
+        contact_form: inspection?.contactForm ?? null,
         pitch_focus: opts.pitch_focus || null,
         recentReviews: lead.recentReviews,
         mapsUrl: lead.mapsUrl,
@@ -323,6 +350,8 @@ export async function runPrepScan(
           google_rating: lead.rating,
           google_reviews_count: lead.reviewsCount,
           opportunity_type: oppType,
+          primary_channel: primaryChannel,
+          contacts,
           audit_data: {
             loadTimeMs: inspection?.loadTimeMs ?? null,
             isResponsive: inspection?.isResponsive ?? null,
@@ -426,10 +455,20 @@ ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rati
       await writeFile(`${leadDir}/prompt_demo.md`, promptDemo);
 
       // 6. Génération du prompt pour Antigravity CLI (battlecard.json) adapté au besoin
-      const isAsyncQaOffer = def.pitch.generator === "tracker_cold_email";
+      const isAsyncQaOffer = pitchGenerator === "tracker_cold_email";
 
       let promptBattlecard = "";
-      if (isAsyncQaOffer) {
+      if (pitchGenerator === "llm_cold_email") {
+        promptBattlecard = buildWrittenPitchPrompt({
+          lead,
+          leadDir,
+          oppLabel,
+          pitchFocus: opts.pitch_focus || def.commercial.pitchFocus,
+          channel: primaryChannel,
+          demoUrl: `${cfg.REMOTE_APP_URL}/demos/${id}`,
+          contactFormUrl: inspection?.contactForm?.url ?? null,
+        });
+      } else if (isAsyncQaOffer) {
         promptBattlecard = `# RÔLE & PERSONA
 Tu es un agent d'automatisation chargé de rédiger des emails d'approche personnalisés de confrère à confrère pour Loïc Alcantara.
 - Identité : Loïc Alcantara, développeur web senior avec 14 ans d’expérience (conception de backends critiques, robustesse réseau, performance et CI/CD).
@@ -550,8 +589,8 @@ ${
       if (hooks.onProgress) {
         const cont = await hooks.onProgress(
           preparedLeads.length,
-          qualifiedLeads.length,
-          `Prospect ${preparedLeads.length}/${qualifiedLeads.length} préparé (${lead.name})`,
+          opts.limit,
+          `Prospect ${preparedLeads.length}/${opts.limit} préparé (${lead.name})`,
         );
         if (cont === false) {
           cancelled = true;
@@ -576,15 +615,65 @@ ${
     }
     await writeFile("queue/pending_manifest.json", JSON.stringify(manifestList, null, 2));
 
+    if (rejected > 0) log("prep", `${rejected} prospect(s) écarté(s) après inspection (prérequis de l'opportunité non remplis).`);
     return {
       processed: preparedLeads.length,
-      total: qualifiedLeads.length,
+      total: opts.limit,
       cancelled,
       preparedLeads,
     };
   } finally {
     await browser.close().catch(() => undefined);
   }
+}
+
+/** Consigne Antigravity pour un premier message écrit (email ou formulaire de contact), hors audit QA. */
+function buildWrittenPitchPrompt(p: {
+  lead: MapsLead;
+  leadDir: string;
+  oppLabel: string;
+  pitchFocus: string;
+  channel: ChannelId;
+  demoUrl: string;
+  contactFormUrl: string | null;
+}): string {
+  const viaForm = p.channel === "contact_form";
+  return `# Consigne de Génération du Message Écrit pour Antigravity
+
+Tu dois générer le fichier \`battlecard.json\` : le premier message de prospection écrit pour ce prospect.
+Enregistre le JSON valide directement dans :
+\`${p.leadDir}/battlecard.json\`
+
+## Canal
+${viaForm ? `Formulaire de contact du site (${p.contactFormUrl ?? "URL dans meta.json"}) : texte brut, 900 caractères maximum, l'objet sert seulement de titre interne.` : "Email : objet court et personnalisé."}
+
+## Offre
+- Type d'offre : ${p.oppLabel}
+- Angle : ${p.pitchFocus}
+- Lien de la démo préparée pour lui : ${p.demoUrl}
+
+## Prospect
+- Nom : ${p.lead.name}
+- Métier : ${p.lead.activity || ""}
+- Ville : ${p.lead.city || ""}
+- Note Google : ${p.lead.rating ?? "n/a"}/5 (${p.lead.reviewsCount ?? 0} avis)
+- Données d'inspection : voir \`meta.json\` dans le même dossier.
+
+## Règles
+- Vouvoiement, ton chaleureux et professionnel, un seul constat précis, le lien de la démo.
+- Terminer par une question simple qui appelle une réponse écrite.
+- Pas de promesse chiffrée, pas de jargon.
+- Dernière ligne : « Pour ne plus recevoir de message de notre part, répondez simplement STOP. »
+
+## Schéma JSON Requis
+\`\`\`json
+{
+  "closerBrief": "2 phrases : contexte du prospect et angle retenu.",
+  "ourAdvantages": ["Avantage 1", "Avantage 2", "Avantage 3"],
+  "coldEmail": { "subject": "Objet", "body": "Message complet" }
+}
+\`\`\`
+`;
 }
 
 export async function prepScan(): Promise<void> {
