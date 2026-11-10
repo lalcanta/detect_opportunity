@@ -162,6 +162,11 @@ F. MOBILE-FIRST & BARRE FLOTTANTE D'APPEL DIRECT :
   <script src="https://unpkg.com/lucide@latest"></script>
 - À la fin du <body> : <script>lucide.createIcons();</script>
 - Faiblesses constatées sur son ancien site (à dépasser totalement) : ${audit.weaknesses.join(" ; ")}
+- IMAGES : ${
+    inspection?.siteImages?.length
+      ? `utilise EN PRIORITÉ ces vraies photos du prospect (son site), en lien direct, avec un alt descriptif :\n${inspection.siteImages.map((u) => `    * ${u}`).join("\n")}\n  Ne les remplace pas par des photos de banque d'images.`
+      : "aucune photo du prospect n'est disponible : préfère des aplats, dégradés et motifs CSS. Si tu utilises une photo générique, ajoute une petite mention « Photo d'exemple » dessus."
+  }
 - N'ajoute AUCUN script de tracking supplémentaire (il est injecté automatiquement après).
 - Réponds UNIQUEMENT avec le code HTML complet (<!DOCTYPE html> ... </html>), sans aucun bloc markdown (\`\`\`) ni commentaire avant/après.`;
 

@@ -298,6 +298,48 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.ok(!internalView.includes(`/api/tracker/open?leadId=${prepDemoId}`), "pas de pixel en aperçu interne");
     });
 
+    it("doit garder un lead non qualifié hors Kanban, sans rétrograder un lead déjà qualifié", async () => {
+      const sync = (body: Record<string, unknown>) =>
+        fetch(`${BASE_URL}/api/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SYNC_SECRET}` },
+          body: JSON.stringify(body),
+        });
+      const unqId = "dead00c0ffee0003";
+      const r1 = await sync({ id: unqId, company_name: "Agence Sans Contact Écrit", opportunity_type: "audit_qa_trackers", status: "unqualified", audit_data: { unqualified_reasons: ["aucun contact parmi : email, formulaire de contact"] } });
+      assert.equal(((await r1.json()) as { status: string }).status, "unqualified");
+      const kanban = await (await fetch(`${BASE_URL}/?view=list&scope=all`, { headers: { Cookie: ADMIN_COOKIE } })).text();
+      assert.ok(!kanban.includes("Agence Sans Contact Écrit"), "absent du Kanban");
+      const admin = await (await fetch(`${BASE_URL}/admin?tab=pending`, { headers: { Cookie: ADMIN_COOKIE } })).text();
+      assert.ok(admin.includes("Agence Sans Contact Écrit") && admin.includes("aucun contact parmi"), "listé avec sa raison dans l'admin");
+
+      // Requalifié plus tard pour une autre opportunité : il avance
+      const r2 = await sync({ id: unqId, company_name: "Agence Sans Contact Écrit", opportunity_type: "website", demo_html: "<html><body>ok</body></html>", battlecard_data: { callScript: "Bonjour" } });
+      assert.equal(((await r2.json()) as { status: string }).status, "demo_ready");
+      // Un nouvel essai non qualifié ne le rétrograde pas et ne change pas son opportunité
+      await sync({ id: unqId, company_name: "Agence Sans Contact Écrit", opportunity_type: "audit_qa_trackers", status: "unqualified" });
+      const lead = ((await (await fetch(`${BASE_URL}/api/leads/${unqId}`, { headers: { Cookie: ADMIN_COOKIE } })).json()) as { lead: { status: string; opportunity_type: string } }).lead;
+      assert.equal(lead.status, "demo_ready");
+      assert.equal(lead.opportunity_type, "website");
+    });
+
+    it("doit signaler un doublon de même SIREN dans l'historique et dans la vue", async () => {
+      const sync = (body: Record<string, unknown>) =>
+        fetch(`${BASE_URL}/api/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SYNC_SECRET}` },
+          body: JSON.stringify(body),
+        });
+      const base = { demo_html: "<html><body>d</body></html>", battlecard_data: { callScript: "Bonjour" } };
+      await sync({ id: "5afe00c0ffee0004", company_name: "Boulangerie Doublon A", audit_data: { siren: "408 531 234" }, ...base });
+      const r = await sync({ id: "5afe00c0ffee0005", company_name: "Boulangerie Doublon B", audit_data: { siren: "408531234" }, ...base });
+      assert.deepEqual(((await r.json()) as { duplicates: string[] }).duplicates, ["5afe00c0ffee0004"]);
+      const acts = ((await (await fetch(`${BASE_URL}/api/leads/5afe00c0ffee0005/activities`, { headers: { Cookie: ADMIN_COOKIE } })).json()) as { activities: Array<{ summary: string }> }).activities;
+      assert.ok(acts.some((a) => a.summary.includes("Boulangerie Doublon A")), "note de doublon dans l'historique");
+      const page = await (await fetch(`${BASE_URL}/?view=list&scope=all`, { headers: { Cookie: ADMIN_COOKIE } })).text();
+      assert.ok(page.includes("Doublon ?"), "badge doublon sur la carte");
+    });
+
     it("doit enregistrer le canal principal et les contacts (lead_contacts), et ignorer les contacts invalides", async () => {
       const contactLeadId = "c0ffee00c0ffee01";
       const formUrl = "https://agence-contact-test.fr/contact";
@@ -441,7 +483,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       const html = await res.text();
       assert.ok(html.includes("Leads Chauds"));
       assert.ok(html.includes("À contacter"));
-      assert.ok(html.includes("En cours / Appelé"));
+      assert.ok(html.includes("Contactés"));
       assert.ok(html.includes("Relance ultérieure"));
       assert.ok(html.includes("Gagnés"));
       assert.ok(html.includes("Perdus"));
@@ -1207,6 +1249,26 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.equal(activities[0]!.summary, "Issue : Messagerie");
       assert.equal(activities[0]!.content?.note, "rappeler le CTO");
       assert.equal(activities[0]!.content?.to, "callback_scheduled");
+    });
+
+    it("L'admin règle les canaux traités par un closer (au moins un, canaux connus seulement)", async () => {
+      const set = (channels: unknown[]) =>
+        fetch(`${BASE_URL}/api/admin/users/u_closer1/channels`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
+          body: JSON.stringify({ channels }),
+        });
+      assert.equal((await set([])).status, 400);
+      const r = await set(["phone", "fax", "phone"]);
+      assert.equal(r.status, 200);
+      assert.deepEqual(((await r.json()) as { allowed_channels: string[] }).allowed_channels, ["phone"]);
+      const denied = await fetch(`${BASE_URL}/api/admin/users/u_closer1/channels`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: CLOSER_COOKIE },
+        body: JSON.stringify({ channels: ["email"] }),
+      });
+      assert.equal(denied.status, 403);
+      assert.equal((await set(["phone", "email", "contact_form"])).status, 200);
     });
 
     it("Un closer ne peut pas historiser un envoi sur un lead d'une opportunité désactivée -> HTTP 403", async () => {

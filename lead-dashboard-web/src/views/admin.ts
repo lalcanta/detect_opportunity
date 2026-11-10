@@ -1,6 +1,6 @@
 import type { LeadRow, User } from "../types";
-import { DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../../shared/opportunities";
-import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedOpportunities } from "../types";
+import { CHANNEL_IDS, CHANNEL_LABELS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../../shared/opportunities";
+import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedChannels, parseAllowedOpportunities } from "../types";
 import { tokenRowForDisplay, type AdminStats, type ModelSettingRow } from "../routes/admin";
 import type { ScanJob, ScheduledScan } from "../routes/scans";
 import { esc, icon, layout, navbar, type IconName } from "./layout";
@@ -311,6 +311,15 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
 
   const pendingLeads = leads.filter((l) => l.status === "pending_generation");
   const pendingCount = pendingLeads.length;
+  const unqualifiedLeads = leads.filter((l) => l.status === "unqualified");
+  const unqualifiedReasons = (raw: string | null): string[] => {
+    try {
+      const a = JSON.parse(raw || "{}") as { unqualified_reasons?: unknown };
+      return Array.isArray(a.unqualified_reasons) ? a.unqualified_reasons.filter((r): r is string => typeof r === "string") : [];
+    } catch {
+      return [];
+    }
+  };
 
   const adminTabs: [string, IconName, string][] = [
     ["overview", "chart", "Vue d'ensemble & KPIs"],
@@ -955,6 +964,44 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
                   )
                   .join("") ||
                 `<tr><td colspan="7" class="text-zinc-400 py-10 text-center">Aucun prospect en attente de génération dans la file.<br><span class="text-xs text-zinc-400">Lancez un scan en mode 'Préparation CLI 0€' depuis l'onglet Scanner.</span></td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Leads non qualifiés : prérequis de l'opportunité non remplis après inspection -->
+      <div class="${card}">
+        <div class="flex items-center justify-between pb-4 border-b border-zinc-100">
+          <div class="flex items-center gap-2">
+            <h3 class="font-semibold text-sm text-zinc-900">Non qualifiés après inspection</h3>
+            <span class="text-xs bg-zinc-100 text-zinc-700 font-semibold px-2 py-0.5 rounded">${unqualifiedLeads.length}</span>
+          </div>
+          <span class="text-[11px] text-zinc-500">Hors Kanban · réutilisables pour une autre opportunité</span>
+        </div>
+        <div class="overflow-x-auto mt-4">
+          <table class="w-full text-xs text-left">
+            <thead>
+              <tr class="text-zinc-500 border-b border-zinc-100">
+                <th class="py-2.5 font-semibold">Entreprise</th>
+                <th class="py-2.5 font-semibold">Opportunité visée</th>
+                <th class="py-2.5 font-semibold">Raison</th>
+                <th class="py-2.5 font-semibold">Site</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-100">
+              ${
+                unqualifiedLeads
+                  .map(
+                    (l) => `
+                <tr>
+                  <td class="py-2.5"><span class="font-semibold text-zinc-900 block">${esc(l.company_name)}</span><span class="text-[11px] text-zinc-500">${esc(l.activity || "")} · ${esc(l.city || "")}</span></td>
+                  <td class="py-2.5">${esc(opportunityBadgeMeta(l.opportunity_type).label)}</td>
+                  <td class="py-2.5 text-zinc-700">${esc(unqualifiedReasons(l.audit_data).join(" ; ") || "—")}</td>
+                  <td class="py-2.5">${l.website_url ? `<a href="${esc(l.website_url)}" target="_blank" rel="noopener" class="text-indigo-600 hover:underline">Visiter</a>` : '<span class="text-zinc-400">—</span>'}</td>
+                </tr>`,
+                  )
+                  .join("") || `<tr><td colspan="4" class="text-zinc-400 py-6 text-center">Aucun lead écarté pour l'instant.</td></tr>`
               }
             </tbody>
           </table>
@@ -1652,6 +1699,12 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
                   ${OPPORTUNITY_TYPES.map((ot) => {
                     const active = (userOpps as string[]).includes(ot.id);
                     return `<button type="button" data-user-opp="${esc(u.id)}" data-opp-id="${ot.id}" data-active="${active ? "1" : "0"}" class="btn-toggle-opp text-[11px] px-2 py-0.5 rounded border transition-colors font-medium ${active ? "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100" : "bg-zinc-100 border-zinc-200 text-zinc-400 hover:text-zinc-600 line-through"}">${esc(ot.badge)}</button>`;
+                  }).join("")}
+                </div>
+                <div class="flex flex-wrap gap-1 max-w-xs mt-1.5" title="Canaux traités (attribution automatique)">
+                  ${CHANNEL_IDS.map((ch) => {
+                    const active = (parseAllowedChannels(u.allowed_channels) as string[]).includes(ch);
+                    return `<button type="button" data-user-ch="${esc(u.id)}" data-ch-id="${ch}" data-active="${active ? "1" : "0"}" class="btn-toggle-ch text-[11px] px-2 py-0.5 rounded border transition-colors font-medium ${active ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100" : "bg-zinc-100 border-zinc-200 text-zinc-400 hover:text-zinc-600 line-through"}">${esc(CHANNEL_LABELS[ch])}</button>`;
                   }).join("")}
                 </div>
               ` : `<span class="text-xs text-zinc-400 font-medium">Tous les besoins (Admin)</span>`}
@@ -2556,6 +2609,34 @@ document.querySelectorAll('.btn-copy-invite').forEach(function (b) {
     var prev = b.textContent;
     b.textContent = '✔ Copié !';
     setTimeout(function () { b.textContent = prev; }, 1500);
+  };
+});
+
+// Toggle des canaux traités par un closer (au moins un)
+document.querySelectorAll('.btn-toggle-ch').forEach(function (b) {
+  b.onclick = async function () {
+    var userId = b.dataset.userCh;
+    var next = [];
+    document.querySelectorAll('.btn-toggle-ch[data-user-ch="' + userId + '"]').forEach(function (btn) {
+      var on = btn === b ? btn.dataset.active !== '1' : btn.dataset.active === '1';
+      if (on) next.push(btn.dataset.chId);
+    });
+    if (next.length === 0) { alert('Un closer doit traiter au moins un canal.'); return; }
+    b.disabled = true;
+    try {
+      var res = await post('/api/admin/users/' + userId + '/channels', { channels: next });
+      if (res.ok) {
+        var nowActive = b.dataset.active !== '1';
+        b.dataset.active = nowActive ? '1' : '0';
+        b.className = 'btn-toggle-ch text-[11px] px-2 py-0.5 rounded border transition-colors font-medium ' +
+          (nowActive ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100' : 'bg-zinc-100 border-zinc-200 text-zinc-400 hover:text-zinc-600 line-through');
+      } else {
+        alert('Erreur lors de la mise à jour des canaux');
+      }
+    } catch (e) {
+      alert('Erreur réseau');
+    }
+    b.disabled = false;
   };
 });
 

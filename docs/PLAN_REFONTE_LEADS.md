@@ -314,7 +314,16 @@ de comportement  lead_contacts          unqualified            allowed_channels 
     Les leads de la phase 1 suivent leur canal principal ; les anciens gardent l'ancienne règle.
   - Pas encore fait : statut `unqualified` (phase 2), les activités « envoyé / soumis » restent dans `call_notes`.
 
-**Phase 2 — Statuts et historique**
+**Phase 2 — Statuts et historique** ✅ *terminée le 10/11/2026*
+- Statut `unqualified` (`migrations/0006`, appliquée en production) : les leads rejetés après inspection sont
+  synchronisés avec leurs raisons (`audit_data.unqualified_reasons`), hors Kanban et hors attribution, listés dans
+  l'admin (onglet File CLI). Un lead non qualifié qui se qualifie plus tard avance normalement ; un nouvel essai non
+  qualifié ne rétrograde jamais un lead qualifié.
+- Statuts communs : **choix d'implémentation** — les identifiants internes (`demo_ready`, `called`…) sont conservés et
+  seuls les libellés deviennent indépendants du canal (« Contactés » au lieu de « En cours / Appelé »). Renommer les
+  identifiants aurait touché tout le code, les tests et les données sans changement visible pour le closer.
+- Doublons : colonne `leads.siren`, alerte « Même entreprise (SIREN) » dans l'historique, badge « Doublon ? » sur la
+  carte et bandeau dans le panneau du closer.
 - ✅ *Fait le 10/11/2026, avant le reste de la phase* : table `lead_activities` (`services/activities.ts`, créée à chaud
   par `ensureAuthSchema`, `migrations/0005`). Sont historisés avec leur contenu complet : email marqué envoyé (objet,
   corps, destinataire), message soumis via formulaire, issue d'appel (note, étape avant/après), changement d'étape,
@@ -324,11 +333,15 @@ de comportement  lead_contacts          unqualified            allowed_channels 
 - Table `lead_activities` et reprise de `call_notes`.
 - Mise à jour de tout le code qui compare des statuts, et des tests fonctionnels.
 
-**Phase 3 — Écran du closer et attribution par canal**
+**Phase 3 — Écran du closer et attribution par canal** ✅ *terminée le 10/11/2026*
+- Panneau du closer par onglets (maquette `docs/maquettes/panneau-closer.html`), issues d'appel en un clic.
+- `users.allowed_channels` (réglable dans Admin › Équipe) ; l'attribution automatique exige l'opportunité ET le canal
+  principal du lead.
 - Panneau d'action par canal, activités créées à chaque action.
 - `allowed_channels` et attribution automatique selon l'opportunité et le canal.
 
-**Phase 4 — Envoi des emails avec Resend et listes de diffusion** (plus tard)
+**Phase 4 — Envoi des emails avec Resend et listes de diffusion** (plus tard, nécessite un compte Resend et un domaine
+d'envoi configurés)
 
 Jusqu'à cette phase, l'email part en copier-coller / `mailto:` et le closer clique sur « marquer envoyé ». Les
 réponses arrivent dans sa boîte ; il marque « réponse reçue » à la main.
@@ -362,6 +375,11 @@ Prises le 10 novembre 2026 :
 4. **Statuts** : migration vers les statuts communs du §3.4, en phase 2.
 
 ## 7. À faire plus tard
+
+Fait le 10/11/2026 hors plan initial : photos réelles du site du prospect dans les démos (`siteImages`, module
+`branding_visual`) ; avis Google via l'API Places (New) si `GOOGLE_PLACES_API_KEY` est défini dans le `.env` du CLI
+(optionnel, payant ; sinon mode `--cdp` avec un Chrome connecté à Google). Les photos de la fiche Maps ne sont pas
+visibles sans compte connecté.
 
 - [ ] Générateur de **score SEO local** pour `seo_local` (fiche Google Business, cohérence NAP, avis, position Maps
       sur la requête métier + ville), en remplacement de la démo de site.

@@ -1,4 +1,4 @@
-import { ALL_OPPORTUNITY_IDS } from "../../../shared/opportunities";
+import { ALL_OPPORTUNITY_IDS, isChannelId } from "../../../shared/opportunities";
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { requireUser, bearerMatches } from "../auth";
@@ -102,6 +102,17 @@ adminRoutes.post("/api/admin/users/:id/opportunities", requireUser("admin"), asy
     .bind(oppsJson, c.req.param("id"))
     .run();
   return c.json({ ok: true, id: c.req.param("id"), allowed_opportunities: body.opportunities });
+});
+
+/** POST /api/admin/users/:id/channels — canaux traités par un closer (attribution automatique). */
+adminRoutes.post("/api/admin/users/:id/channels", requireUser("admin"), async (c) => {
+  const body = await c.req.json<{ channels?: unknown[] }>().catch(() => ({}) as { channels?: unknown[] });
+  const channels = Array.isArray(body.channels) ? [...new Set(body.channels.filter(isChannelId))] : [];
+  if (channels.length === 0) return c.json({ error: "at_least_one_channel_required" }, 400);
+  await c.env.DB.prepare("UPDATE users SET allowed_channels = ? WHERE id = ? AND role = 'closer'")
+    .bind(JSON.stringify(channels), c.req.param("id"))
+    .run();
+  return c.json({ ok: true, id: c.req.param("id"), allowed_channels: channels });
 });
 
 /** POST /api/admin/users/:id/toggle — active / désactive un utilisateur. */

@@ -14,7 +14,7 @@ import {
   pitchGeneratorFor,
   resolveWebsiteFilter,
 } from "../../shared/opportunities";
-import { buildLeadContacts, qualifyAfterInspection, UnqualifiedLeadError } from "./opportunities/qualify";
+import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection, UnqualifiedLeadError } from "./opportunities/qualify";
 import { pushLead } from "./sync/pushLead";
 import { leadId, log, parseDirectDomainLeads } from "./utils/helpers";
 import type { MapsLead, SyncPayload, TokenUsageRecord } from "./types";
@@ -160,6 +160,12 @@ export async function runScan(
         if (err instanceof UnqualifiedLeadError) {
           rejected++;
           log("main", `⚪ ${lead.name} écarté : ${err.message}`);
+          // Gardé dans le CRM en `unqualified` (hors Kanban) : pas réinspecté, réutilisable pour une autre opportunité.
+          if (err.payload && !opts.dryRun) {
+            await pushLead(cfg.REMOTE_APP_URL, cfg.SYNC_SECRET_TOKEN, err.payload).catch((e: Error) =>
+              log("main", `⚠️ Sync du lead non qualifié échouée : ${e.message}`),
+            );
+          }
           await hooks.onProgress?.(ok, target, `⚪ ${prefix} écarté après inspection : ${err.message} (${counters()})`);
           continue;
         }
@@ -202,7 +208,19 @@ async function processLead(
   const def = getOpportunityOrDefault(opportunityType);
   // Vérification finale des prérequis (email, formulaire) avant toute génération coûteuse.
   const qualification = qualifyAfterInspection(def, lead, inspection);
-  if (!qualification.qualified || !qualification.primaryChannel) throw new UnqualifiedLeadError(qualification);
+  if (!qualification.qualified || !qualification.primaryChannel) {
+    throw new UnqualifiedLeadError(
+      qualification,
+      buildUnqualifiedPayload({
+        id,
+        lead,
+        inspection,
+        opportunityType: opportunityIdOf(opportunityType),
+        result: qualification,
+        siren: sireneFallback?.siren ?? null,
+      }),
+    );
+  }
   const primaryChannel = qualification.primaryChannel;
   await onSubStep?.(`✅ Prérequis remplis : canal principal ${CHANNEL_LABELS[primaryChannel]}`);
 
@@ -237,6 +255,7 @@ async function processLead(
     audit_data: {
       ...audit,
       logoUrl: inspection?.logoUrl ?? null,
+      site_images: inspection?.siteImages ?? [],
       loadTimeMs: inspection?.loadTimeMs ?? null,
       isResponsive: inspection?.isResponsive ?? null,
       dominantColors: inspection?.dominantColors ?? [],

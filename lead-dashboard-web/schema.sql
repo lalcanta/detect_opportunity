@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS users (
   google_calendar_id   TEXT DEFAULT 'primary',
   google_email         TEXT,
   -- Doit lister tous les identifiants de shared/opportunities (ALL_OPPORTUNITY_IDS) ; vérifié par un test.
-  allowed_opportunities TEXT NOT NULL DEFAULT '["website","audit_qa_trackers","google_reviews","seo_local","ads_acquisition","custom"]'
+  allowed_opportunities TEXT NOT NULL DEFAULT '["website","audit_qa_trackers","google_reviews","seo_local","ads_acquisition","custom"]',
+  -- Canaux que le closer traite ; l'attribution automatique en tient compte (phase 3)
+  allowed_channels      TEXT NOT NULL DEFAULT '["phone","email","contact_form"]'
 );
 
 CREATE TABLE IF NOT EXISTS leads (
@@ -42,17 +44,19 @@ CREATE TABLE IF NOT EXISTS leads (
   demo_revoked         INTEGER NOT NULL DEFAULT 0,
   demo_expires_at      DATETIME,
   status               TEXT NOT NULL DEFAULT 'demo_ready'
-                       CHECK (status IN ('pending_generation','demo_ready','hot_lead','called','won','lost','callback_scheduled')),
+                       CHECK (status IN ('pending_generation','unqualified','demo_ready','hot_lead','called','won','lost','callback_scheduled')),
   callback_scheduled_at DATETIME,
   call_notes           TEXT,
   google_calendar_event_id TEXT,
   opportunity_type     TEXT NOT NULL DEFAULT 'website',
   primary_channel      TEXT,            -- phone | email | contact_form (canal principal selon l'opportunité)
+  siren                TEXT,            -- 9 chiffres, relevé à l'inspection (détection des doublons)
   created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to, status);
 CREATE INDEX IF NOT EXISTS idx_leads_status   ON leads(status);
+CREATE INDEX IF NOT EXISTS idx_leads_siren    ON leads(siren);
 
 -- Contacts d'un lead : un par canal et par valeur (docs/PLAN_REFONTE_LEADS.md §3.4)
 CREATE TABLE IF NOT EXISTS lead_contacts (

@@ -37,8 +37,8 @@ export const LEAD_COLUMNS: ColumnDef[] = [
   },
   {
     key: "called",
-    label: "En cours / Appelé",
-    pillLabel: "📞 En cours / Appelé",
+    label: "Contactés",
+    pillLabel: "💬 Contacté",
     icon: "phone",
     headerBg: "bg-amber-50/70 text-amber-950 border-amber-200/80",
     badgeBg: "bg-amber-100 text-amber-800",

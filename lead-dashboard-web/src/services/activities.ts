@@ -105,6 +105,7 @@ export function parseUserActivity(
 
 const STATUS_LABELS: Record<string, string> = {
   pending_generation: "En génération",
+  unqualified: "Non qualifié",
   demo_ready: "À contacter",
   hot_lead: "Lead chaud",
   called: "Appelé",

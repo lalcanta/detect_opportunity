@@ -77,6 +77,8 @@ export interface SiteInspection {
   copyrightYear?: number | null;
   /** Signaux concrets d'obsolescence ou de négligence technique (HTTP non sécurisé, copyright ancien, images cassées) */
   obsolescenceSignals?: string[];
+  /** Vraies photos trouvées sur le site (réalisations, boutique, produits), les plus grandes d'abord */
+  siteImages?: string[];
   /** Formulaire de contact exploitable (vérification contact_form) ; null si cherché sans succès */
   contactForm?: ContactFormInfo | null;
   error?: string;

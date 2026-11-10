@@ -17,7 +17,7 @@ qu'un index). Pour chacun, détermine ce qui manque :
 
 | Fichier | Rôle |
 |---|---|
-| `meta.json` | Données prospect (lecture seule). `opportunity_type` = type d'offre ; `primary_channel` = canal du premier contact (`phone`, `email` ou `contact_form`) ; `contacts` = contacts trouvés. |
+| `meta.json` | Données prospect (lecture seule). `opportunity_type` = type d'offre ; `primary_channel` = canal du premier contact (`phone`, `email` ou `contact_form`) ; `contacts` = contacts trouvés ; `site_images` = vraies photos de son site, à utiliser en priorité dans la démo. |
 | `prompt_demo.md` | Consigne pour `demo.html` |
 | `prompt_battlecard.md` | Consigne pour `battlecard.json` |
 | `audit_facts.json` | (audit QA) Constats réseau **mesurés** — à reprendre tels quels, ne rien inventer |

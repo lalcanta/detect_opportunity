@@ -220,6 +220,7 @@ export async function syncQueue(): Promise<void> {
           emails: meta.emails || [],
           key_people: meta.key_people || [],
           stack: meta.stack || [],
+          site_images: Array.isArray(meta.site_images) ? meta.site_images : [],
           trackers_found: meta.trackers_found || [],
           tracker_requests: meta.tracker_requests || [],
           cmp_detected: meta.cmp_detected || null,

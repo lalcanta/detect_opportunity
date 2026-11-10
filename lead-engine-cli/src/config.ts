@@ -18,6 +18,8 @@ const schema = z.object({
   REMOTE_APP_URL: z.string().url(),
   SYNC_SECRET_TOKEN: z.string().min(8),
   CDP_URL: z.string().url().default("http://localhost:9222"),
+  /** Optionnel et payant : avis Google via l'API Places (New), sinon seuls note et nombre d'avis sont connus. */
+  GOOGLE_PLACES_API_KEY: z.string().optional(),
 });
 
 export type Config = z.infer<typeof schema>;

@@ -1,3 +1,4 @@
+import { fetchPlacesReviews, placesReviewsEnabled } from "./placesReviews";
 import { describeRejection, evaluateRequirements, getOpportunityOrDefault } from "../../../shared/opportunities";
 import type { BrowserContext, Page } from "playwright";
 import type { MapsLead, Review } from "../types";
@@ -116,6 +117,10 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
             continue;
           }
 
+          // Maps ne montre pas les avis sans compte connecté : complément par l'API Places si une clé est configurée.
+          if (lead.recentReviews.length === 0 && placesReviewsEnabled()) {
+            lead.recentReviews = await fetchPlacesReviews(lead.name, lead.city);
+          }
           qualifiedLeads.push(lead);
           await opts.onProgress?.(
             `✔ Prospect retenu : "${lead.name}" (${lead.phone ? `📞 ${lead.phone}` : "📵 sans téléphone"}${lead.website ? " · 🌐 Site existant" : " · 🚫 Sans site"}) → ${qualifiedLeads.length}/${targetQualified} qualifiés (${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,

@@ -1,3 +1,4 @@
+import { logActivity } from "../services/activities";
 import { DEFAULT_OPPORTUNITY_ID, getOpportunityOrDefault, isChannelId, opportunityIdOf, type ChannelId } from "../../../shared/opportunities";
 import { Hono } from "hono";
 import type { AppEnv, SyncBody } from "../types";
@@ -75,8 +76,12 @@ publicRoutes.post("/api/sync", async (c) => {
   const primaryChannel = isChannelId(body.primary_channel) ? body.primary_channel : null;
   const contacts = sanitizeSyncContacts(body.contacts);
 
-  const isPending = body.status === "pending_generation" || (!body.demo_html && !body.battlecard_data);
-  const targetStatus = isPending ? "pending_generation" : (body.status || "demo_ready");
+  // Statuts acceptés du CLI : non qualifié, en attente de génération, ou démo prête (le reste du cycle est commercial).
+  const isUnqualified = body.status === "unqualified";
+  const isPending = !isUnqualified && (body.status === "pending_generation" || (!body.demo_html && !body.battlecard_data));
+  const targetStatus = isUnqualified ? "unqualified" : isPending ? "pending_generation" : "demo_ready";
+  const siren = extractSiren(body.audit_data);
+  const existed = await c.env.DB.prepare("SELECT 1 AS x FROM leads WHERE id = ?").bind(body.id).first();
 
   const flyerUrl = body.flyer_pdf_base64 ? `/api/leads/${body.id}/flyer` : null;
   const oppType = opportunityIdOf(body.opportunity_type);
@@ -87,20 +92,27 @@ publicRoutes.post("/api/sync", async (c) => {
     c.env.DB.prepare(
       `INSERT INTO leads (id, company_name, activity, city, phone, email, website_url, google_rating,
          google_reviews_count, audit_data, demo_html, flyer_pdf_url, flyer_pdf_base64, battlecard_data, created_at, opportunity_type, status,
-         primary_channel)
-       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
+         primary_channel, siren)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
        ON CONFLICT(id) DO UPDATE SET
          company_name = excluded.company_name, activity = excluded.activity, city = excluded.city,
          phone = COALESCE(excluded.phone, leads.phone), email = COALESCE(excluded.email, leads.email),
          website_url = excluded.website_url, google_rating = excluded.google_rating,
          google_reviews_count = excluded.google_reviews_count,
-         audit_data = CASE WHEN excluded.status = 'pending_generation' AND leads.status != 'pending_generation'
+         audit_data = CASE WHEN excluded.status IN ('pending_generation','unqualified')
+                                AND leads.status NOT IN ('pending_generation','unqualified')
                            THEN leads.audit_data ELSE excluded.audit_data END,
          demo_html = COALESCE(excluded.demo_html, leads.demo_html), flyer_pdf_url = COALESCE(excluded.flyer_pdf_url, leads.flyer_pdf_url),
          flyer_pdf_base64 = COALESCE(excluded.flyer_pdf_base64, leads.flyer_pdf_base64), battlecard_data = COALESCE(excluded.battlecard_data, leads.battlecard_data),
-         opportunity_type = COALESCE(excluded.opportunity_type, leads.opportunity_type),
-         primary_channel = COALESCE(excluded.primary_channel, leads.primary_channel),
-         status = CASE WHEN leads.status = 'pending_generation' THEN excluded.status ELSE leads.status END
+         opportunity_type = CASE WHEN excluded.status = 'unqualified' AND leads.status != 'unqualified'
+                                 THEN leads.opportunity_type ELSE COALESCE(excluded.opportunity_type, leads.opportunity_type) END,
+         primary_channel = CASE WHEN excluded.status = 'unqualified' AND leads.status != 'unqualified'
+                                THEN leads.primary_channel ELSE COALESCE(excluded.primary_channel, leads.primary_channel) END,
+         siren = COALESCE(excluded.siren, leads.siren),
+         status = CASE
+           WHEN leads.status = 'pending_generation' THEN excluded.status
+           WHEN leads.status = 'unqualified' AND excluded.status != 'unqualified' THEN excluded.status
+           ELSE leads.status END
        RETURNING status`,
     ).bind(
       body.id,
@@ -121,6 +133,7 @@ publicRoutes.post("/api/sync", async (c) => {
       oppType,
       targetStatus,
       primaryChannel,
+      siren,
     ),
   ];
   if (contacts.length > 0) {
@@ -149,11 +162,39 @@ publicRoutes.post("/api/sync", async (c) => {
   const results = await c.env.DB.batch(stmts);
   const finalStatus = (results[0]?.results?.[0] as { status?: string } | undefined)?.status ?? targetStatus;
 
-  if (finalStatus !== "pending_generation" && c.env.AUTO_ASSIGN === "true") {
+  // Doublon probable : même SIREN qu'un autre lead (ex. deux fiches Maps d'une même entreprise). Signalé au closer.
+  let duplicates: { id: string; company_name: string }[] = [];
+  if (siren) {
+    duplicates = (
+      await c.env.DB.prepare("SELECT id, company_name FROM leads WHERE siren = ? AND id != ? AND status != 'unqualified' LIMIT 5")
+        .bind(siren, body.id)
+        .all<{ id: string; company_name: string }>()
+    ).results;
+    if (!existed && duplicates.length > 0 && finalStatus !== "unqualified") {
+      await logActivity(c.env.DB, {
+        leadId: body.id,
+        userId: null,
+        kind: "note",
+        summary: `Même entreprise (SIREN ${siren}) que : ${duplicates.map((d) => d.company_name).join(", ")}`,
+        content: { text: "Doublon probable : coordonner les appels avec le ou les leads cités.", duplicates },
+      });
+    }
+  }
+
+  if (!["pending_generation", "unqualified"].includes(finalStatus) && c.env.AUTO_ASSIGN === "true") {
     await assignRoundRobin(c.env.DB);
   }
-  return c.json({ ok: true, id: body.id, status: finalStatus });
+  return c.json({ ok: true, id: body.id, status: finalStatus, duplicates: duplicates.map((d) => d.id) });
 });
+
+/** SIREN relevé à l'inspection (audit_data.siren), normalisé sur 9 chiffres. */
+export function extractSiren(audit: unknown): string | null {
+  if (!audit || typeof audit !== "object") return null;
+  const raw = (audit as Record<string, unknown>).siren;
+  if (typeof raw !== "string" && typeof raw !== "number") return null;
+  const digits = String(raw).replace(/\D/g, "");
+  return digits.length === 9 ? digits : null;
+}
 
 const CONTACT_SOURCES = new Set(["maps", "site", "sirene", "inbound", "manual"]);
 

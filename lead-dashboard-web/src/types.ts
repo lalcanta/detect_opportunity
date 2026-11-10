@@ -15,7 +15,8 @@ import {
 export type Role = "admin" | "closer";
 
 export const LEAD_STATUSES = ["demo_ready", "hot_lead", "called", "won", "lost", "callback_scheduled"] as const;
-export type LeadStatus = (typeof LEAD_STATUSES)[number] | "pending_generation";
+/** `pending_generation` : en attente de démo ; `unqualified` : prérequis de l'opportunité non remplis (hors Kanban). */
+export type LeadStatus = (typeof LEAD_STATUSES)[number] | "pending_generation" | "unqualified";
 
 export interface Bindings {
   DB: D1Database;
@@ -67,6 +68,24 @@ export interface User {
   google_email?: string | null;
   google_calendar_id?: string | null;
   allowed_opportunities?: string | null;
+  /** JSON des canaux que le closer traite (phone, email, contact_form) ; absent = tous */
+  allowed_channels?: string | null;
+}
+
+/** Canaux autorisés d'un closer : liste JSON valide, sinon tous les canaux. */
+export function parseAllowedChannels(raw?: string | null): ChannelId[] {
+  const all: ChannelId[] = ["phone", "email", "contact_form"];
+  if (!raw) return all;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      const valid = parsed.filter((c): c is ChannelId => all.includes(c));
+      if (valid.length > 0) return valid;
+    }
+  } catch {
+    // valeur illisible : tous les canaux
+  }
+  return all;
 }
 
 // Les opportunités sont définies dans shared/opportunities (source unique pour le CLI et le dashboard).
@@ -193,6 +212,10 @@ export interface LeadRow {
   call_notes: string | null;
   google_calendar_event_id?: string | null;
   opportunity_type?: string | null;
+  /** SIREN (9 chiffres) relevé à l'inspection, pour repérer les doublons */
+  siren?: string | null;
+  /** « Nom · Ville » d'un autre lead de même SIREN, s'il existe */
+  duplicate_of?: string | null;
   /** Canal principal (phone | email | contact_form), null pour les leads antérieurs à la phase 1 */
   primary_channel?: string | null;
   /** URL du formulaire de contact (lead_contacts), si trouvé */

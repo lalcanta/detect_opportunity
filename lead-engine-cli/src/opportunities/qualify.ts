@@ -8,7 +8,7 @@ import {
   type OpportunityDefinition,
   type QualificationResult,
 } from "../../../shared/opportunities";
-import type { LeadContact, MapsLead, SiteInspection } from "../types";
+import type { LeadContact, MapsLead, SiteInspection, SyncPayload } from "../types";
 
 /** Un email générique (contact@, info@…) est plus fiable qu'une adresse nominative trouvée au hasard d'une page. */
 const GENERIC_EMAIL_RE = /^(contact|hello|bonjour|info|studio|agence|commercial|direction|accueil|devis)@/i;
@@ -58,8 +58,46 @@ export function buildLeadContacts(
 
 /** Lead rejeté après inspection : il n'est ni généré ni synchronisé (statut `unqualified` en phase 2). */
 export class UnqualifiedLeadError extends Error {
-  constructor(readonly result: QualificationResult) {
+  /** `payload` : lead à synchroniser en statut `unqualified` (réutilisable pour une autre opportunité). */
+  constructor(
+    readonly result: QualificationResult,
+    readonly payload?: SyncPayload,
+  ) {
     super(`prérequis non remplis : ${result.reasons.map(describeRejection).join(" ; ")}`);
     this.name = "UnqualifiedLeadError";
   }
+}
+
+/** Lead écarté après inspection : ce qui a été mesuré, sans démo ni battlecard, avec les raisons du rejet. */
+export function buildUnqualifiedPayload(p: {
+  id: string;
+  lead: MapsLead;
+  inspection: SiteInspection | null;
+  opportunityType: string;
+  result: QualificationResult;
+  siren?: string | null;
+}): SyncPayload {
+  const { lead, inspection } = p;
+  return {
+    id: p.id,
+    company_name: lead.name,
+    activity: lead.activity,
+    city: lead.city,
+    phone: lead.phone,
+    email: inspection?.emails?.[0] ?? null,
+    website_url: lead.website,
+    google_rating: lead.rating,
+    google_reviews_count: lead.reviewsCount,
+    opportunity_type: p.opportunityType,
+    status: "unqualified",
+    contacts: buildLeadContacts(lead, inspection, null),
+    audit_data: {
+      unqualified_reasons: p.result.reasons.map(describeRejection),
+      mapsUrl: lead.mapsUrl,
+      emails: inspection?.emails ?? [],
+      contact_form: inspection?.contactForm ?? null,
+      siren: p.siren ?? inspection?.siren ?? null,
+      loadTimeMs: inspection?.loadTimeMs ?? null,
+    },
+  };
 }

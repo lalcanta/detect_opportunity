@@ -93,6 +93,7 @@ function backlogCard(l: LeadRow, user: User, _origin: string): string {
         </p>
         ${renderOpportunityBadge(l.opportunity_type)}
         ${renderChannelBadge(l.primary_channel)}
+        ${l.duplicate_of ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-amber-50 text-amber-800 border-amber-200" title="Même SIREN que ${esc(l.duplicate_of)}">Doublon ?</span>` : ""}
       </div>
     </div>
     <div class="flex items-center gap-1 shrink-0">
@@ -205,6 +206,7 @@ function calendarCard(l: LeadRow, _user: User, _origin: string): string {
         </span>
         ${renderOpportunityBadge(l.opportunity_type)}
         ${renderChannelBadge(l.primary_channel)}
+        ${l.duplicate_of ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-amber-50 text-amber-800 border-amber-200" title="Même SIREN que ${esc(l.duplicate_of)}">Doublon ?</span>` : ""}
       </div>
     </div>
 
@@ -607,6 +609,7 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
         </a>
       </div>
       <p id="sp_head_demo_info" class="text-[11px] text-zinc-400"></p>
+      <p id="sp_duplicate" class="hidden text-xs font-semibold text-amber-200 bg-amber-900/40 border border-amber-700/60 rounded-lg px-3 py-2"></p>
     </header>
 
     <!-- Onglets : un par moment de l'appel -->
@@ -952,6 +955,7 @@ var LEADS_MAP = ${JSON.stringify(
       status: l.status,
       opportunity_type: opportunityIdOf(l.opportunity_type),
       primary_channel: l.primary_channel || "",
+      duplicate_of: l.duplicate_of || "",
       contact_form_url: l.contact_form_url || "",
       contact_form_captcha: parseFormMeta(l.contact_form_meta).captcha,
       callback_scheduled_at: l.callback_scheduled_at || "",
@@ -1144,6 +1148,13 @@ document.querySelectorAll('.sp-tab').forEach(function (t) {
 
 // En-tête fixe : bouton principal selon le canal (appel ou email), badge du canal.
 function renderPanelHeader(lead, isAsyncMode) {
+  var dup = $('sp_duplicate');
+  if (lead.duplicate_of) {
+    dup.textContent = '⚠️ Même entreprise (SIREN) que : ' + lead.duplicate_of + ' — coordonnez-vous avant d\\'appeler.';
+    dup.classList.remove('hidden');
+  } else {
+    dup.classList.add('hidden');
+  }
   var ch = $('sp_channel_badge');
   if (lead.primary_channel && CHANNEL_BADGES[lead.primary_channel]) {
     ch.textContent = CHANNEL_BADGES[lead.primary_channel];

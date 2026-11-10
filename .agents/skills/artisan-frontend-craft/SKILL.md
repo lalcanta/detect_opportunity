@@ -17,6 +17,9 @@ La démo est montrée au prospect comme **son** futur site : tout ce qui y est a
 - **N'affirme aucun fait absent des données** : certification (RGE, Qualibat, Qualifelec), garantie décennale,
   assurance, délai d'intervention, disponibilité 7j/7, prix, années d'expérience, nombre de chantiers, horaires,
   producteurs partenaires, « fait maison ».
+- **Images : les vraies photos du prospect d'abord.** `meta.json` → `site_images` liste les photos de son site
+  (réalisations, boutique, produits) : utilise-les en lien direct. Sans photo, préfère aplats, dégradés et motifs CSS ;
+  une photo de banque d'images porte la mention « Photo d'exemple ».
 - Les composants signatures ci-dessous qui reposent sur ces faits (sceau décennale, bandeau d'astreinte, compteur
   d'interventions, grille de tarifs, origine des matières) se présentent comme **emplacements à compléter** ou
   **exemples clairement signalés** (« Exemple », « à confirmer »).

@@ -153,6 +153,8 @@ const LEAD_COLUMNS = `l.id, l.company_name, l.activity, l.city, l.phone, l.email
   l.google_reviews_count, l.audit_data, l.flyer_pdf_url, l.battlecard_data, l.assigned_to, l.assigned_at,
   l.locked_by, l.locked_until, l.demo_viewed_count, l.last_demo_viewed_at, l.demo_revoked, l.demo_expires_at, l.status, l.callback_scheduled_at, l.call_notes, l.opportunity_type, l.created_at,
   l.primary_channel,
+  l.siren,
+  (SELECT d.company_name || ' · ' || COALESCE(d.city, '') FROM leads d WHERE l.siren IS NOT NULL AND d.siren = l.siren AND d.id != l.id AND d.status != 'unqualified' LIMIT 1) AS duplicate_of,
   (SELECT lc.value FROM lead_contacts lc WHERE lc.lead_id = l.id AND lc.kind = 'contact_form' ORDER BY lc.is_primary DESC, lc.id LIMIT 1) AS contact_form_url,
   (SELECT lc.meta FROM lead_contacts lc WHERE lc.lead_id = l.id AND lc.kind = 'contact_form' ORDER BY lc.is_primary DESC, lc.id LIMIT 1) AS contact_form_meta,
   a.name AS assignee_name, k.name AS locker_name`;
@@ -183,32 +185,32 @@ pageRoutes.get("/", requireUser(undefined, "page"), async (c) => {
   if (isAdmin) {
     if (scope === "mine") {
       if (effectiveOpp !== "all") {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to = ?1 AND l.opportunity_type = ?2
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status NOT IN ('pending_generation','unqualified') AND l.assigned_to = ?1 AND l.opportunity_type = ?2
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [user.id, effectiveOpp];
       } else {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to = ?1
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status NOT IN ('pending_generation','unqualified') AND l.assigned_to = ?1
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [user.id];
       }
     } else if (scope === "unassigned") {
       if (effectiveOpp !== "all") {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to IS NULL AND l.opportunity_type = ?1
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status NOT IN ('pending_generation','unqualified') AND l.assigned_to IS NULL AND l.opportunity_type = ?1
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [effectiveOpp];
       } else {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to IS NULL
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status NOT IN ('pending_generation','unqualified') AND l.assigned_to IS NULL
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [];
       }
     } else {
       // scope === "all"
       if (effectiveOpp !== "all") {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.opportunity_type = ?1
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status NOT IN ('pending_generation','unqualified') AND l.opportunity_type = ?1
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [effectiveOpp];
       } else {
-        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation'
+        querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status NOT IN ('pending_generation','unqualified')
                     ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
         bindings = [];
       }
@@ -216,12 +218,12 @@ pageRoutes.get("/", requireUser(undefined, "page"), async (c) => {
   } else {
     // Closer : Uniquement ses leads ET uniquement dans les types d'opportunités qui lui sont activés
     if (effectiveOpp !== "all") {
-      querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to = ?1 AND l.opportunity_type = ?2
+      querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status NOT IN ('pending_generation','unqualified') AND l.assigned_to = ?1 AND l.opportunity_type = ?2
                   ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
       bindings = [user.id, effectiveOpp];
     } else if (allowedOpps.length > 0) {
       const placeholders = allowedOpps.map((_, i) => `?${i + 2}`).join(", ");
-      querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status != 'pending_generation' AND l.assigned_to = ?1 AND l.opportunity_type IN (${placeholders})
+      querySql = `SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} WHERE l.status NOT IN ('pending_generation','unqualified') AND l.assigned_to = ?1 AND l.opportunity_type IN (${placeholders})
                   ORDER BY (l.status = 'hot_lead') DESC, l.last_demo_viewed_at DESC, l.created_at DESC LIMIT 250`;
       bindings = [user.id, ...allowedOpps];
     } else {
@@ -243,7 +245,7 @@ pageRoutes.get("/admin", requireUser("admin", "page"), async (c) => {
     : "overview";
   const leads = await c.env.DB.prepare(`SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} ORDER BY l.created_at DESC LIMIT 200`).all<LeadRow>();
   const users = await c.env.DB.prepare(
-    `SELECT id, name, email, password_hash, invite_code, invited_at, role, is_active, phone_quota_weekly, allowed_opportunities FROM users ORDER BY role, name`,
+    `SELECT id, name, email, password_hash, invite_code, invited_at, role, is_active, phone_quota_weekly, allowed_opportunities, allowed_channels FROM users ORDER BY role, name`,
   ).all<User>();
   const stats = await loadStats(c.env.DB);
   const scans = await listScans(c.env.DB);

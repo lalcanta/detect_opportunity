@@ -17,7 +17,7 @@ import {
   resolveWebsiteFilter,
   type ChannelId,
 } from "../../shared/opportunities";
-import { buildLeadContacts, qualifyAfterInspection } from "./opportunities/qualify";
+import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection } from "./opportunities/qualify";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
 import { pushLead } from "./sync/pushLead";
@@ -272,6 +272,12 @@ export async function runPrepScan(
         rejected++;
         log("prep", `[${i + 1}/${qualifiedLeads.length}] ⚪ ${lead.name} écarté : ${qualification.reasons.map(describeRejection).join(" ; ")}`);
         await rm(leadDir, { recursive: true, force: true });
+        // Gardé dans le CRM en `unqualified` (hors Kanban), avec les raisons du rejet.
+        await pushLead(
+          cfg.REMOTE_APP_URL,
+          cfg.SYNC_SECRET_TOKEN,
+          buildUnqualifiedPayload({ id, lead, inspection, opportunityType: oppType, result: qualification }),
+        ).catch((e: Error) => log("prep", `⚠️ Sync du lead non qualifié échouée : ${e.message}`));
         await hooks.onProgress?.(preparedLeads.length, opts.limit, `⚪ ${lead.name} écarté après inspection (${rejected} écarté(s))`);
         continue;
       }
@@ -312,6 +318,7 @@ export async function runPrepScan(
         isResponsive: inspection?.isResponsive ?? null,
         dominantColors: inspection?.dominantColors ?? [brandColor],
         logoUrl: inspection?.logoUrl ?? null,
+        site_images: inspection?.siteImages ?? [],
         email: inspection?.emails?.[0] ?? null,
         emails: inspection?.emails ?? [],
         key_people: inspection?.keyPeople?.length ? inspection.keyPeople : (sireneFallback?.keyPeople ?? []),
@@ -452,6 +459,11 @@ ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rati
 > **Honnêteté (impératif)** : n'affirme aucun fait absent des données (certification RGE/Qualibat, garantie décennale, assurance, délai d'intervention, prix, années d'expérience, nombre de chantiers, horaires). Présente-les comme des emplacements « à compléter » ou des exemples clairement signalés.
 7. **Formulaire de devis express** (Nom, Téléphone, Type de projet, Envoi immédiat).
 8. Ne pas utiliser de markdown dans le fichier \`demo.html\`, uniquement du code HTML brut commençant par \`<!DOCTYPE html>\`.
+9. **Images** : ${
+  inspection?.siteImages?.length
+    ? `utiliser EN PRIORITÉ ces vraies photos du prospect (son site), en lien direct :\n${inspection.siteImages.map((u) => `   - ${u}`).join("\n")}\n   Ne pas les remplacer par des photos de banque d'images.`
+    : "aucune photo du prospect disponible : préférer aplats, dégradés et motifs CSS ; toute photo générique porte la mention « Photo d'exemple »."
+}
 `;
       await writeFile(`${leadDir}/prompt_demo.md`, promptDemo);
 

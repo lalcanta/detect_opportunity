@@ -508,3 +508,13 @@ describe("Pixel d'ouverture des démos (audit 1.4)", () => {
     assert.equal(injectOpenTracker(html, "x"), html);
   });
 });
+
+describe("Canaux traités par un closer (phase 3)", () => {
+  it("lit la liste JSON et retombe sur tous les canaux si vide ou illisible", async () => {
+    const { parseAllowedChannels } = await import("../types");
+    assert.deepEqual(parseAllowedChannels('["email","fax"]'), ["email"]);
+    assert.deepEqual(parseAllowedChannels(null), ["phone", "email", "contact_form"]);
+    assert.deepEqual(parseAllowedChannels("[]"), ["phone", "email", "contact_form"]);
+    assert.deepEqual(parseAllowedChannels("pas du json"), ["phone", "email", "contact_form"]);
+  });
+});

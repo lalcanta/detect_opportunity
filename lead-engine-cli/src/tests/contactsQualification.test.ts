@@ -2,8 +2,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getOpportunityOrDefault } from "../../../shared/opportunities";
 import { analyzeContactFormsInHtml, detectCaptcha, findContactPageLinks } from "../inspector/modules/contactFormModule";
-import { buildLeadContacts, qualifyAfterInspection } from "../opportunities/qualify";
+import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection } from "../opportunities/qualify";
 import { demoFocusInstruction } from "../generator/demoGenerator";
+import { pickSiteImages } from "../inspector/modules/brandingVisualModule";
+import { fetchPlacesReviews, mapPlacesReviews } from "../collector/placesReviews";
 import { buildQueueBattlecard } from "../syncQueue";
 
 const PAGE = "https://agence.test/contact";
@@ -113,5 +115,73 @@ describe("syncQueue — message selon le canal principal", () => {
     const meta = { id: "s2", company_name: "Garage Test", opportunity_type: "seo_local", primary_channel: "phone" };
     const res = buildQueueBattlecard(meta, { callScript: "Bonjour" }, null, "https://app.test");
     assert.ok(!("waiting" in res));
+  });
+});
+
+describe("lead non qualifié", () => {
+  it("garde les mesures et les raisons lisibles, sans démo ni battlecard", () => {
+    const qa = getOpportunityOrDefault("audit_qa_trackers");
+    const lead = { name: "Agence X", activity: "Agence web", city: "Foix", phone: "0102030405", website: "https://x.fr", rating: 4.5, reviewsCount: 3, recentReviews: [], mapsUrl: "https://maps/x", placeId: null };
+    const inspection = { url: "https://x.fr", loadTimeMs: 500, isResponsive: true, dominantColors: [], logoUrl: null, screenshot: null, emails: [], contactForm: null, siren: "123456789" };
+    const result = qualifyAfterInspection(qa, lead, inspection);
+    const p = buildUnqualifiedPayload({ id: "abc", lead, inspection, opportunityType: "audit_qa_trackers", result });
+    assert.equal(p.status, "unqualified");
+    assert.equal(p.demo_html, undefined);
+    assert.deepEqual(p.audit_data.unqualified_reasons, ["aucun contact parmi : email, formulaire de contact"]);
+    assert.equal(p.audit_data.siren, "123456789");
+    assert.equal(p.contacts?.[0]?.kind, "phone");
+  });
+});
+
+describe("photos du site pour la démo", () => {
+  it("garde les vraies photos, les plus grandes d'abord, sans logo, icône ni doublon", () => {
+    const out = pickSiteImages(
+      [
+        { url: "https://x.fr/logo.png", w: 400, h: 200 },
+        { url: "https://x.fr/uploads/chantier.jpg", w: 800, h: 500 },
+        { url: "https://x.fr/uploads/atelier.jpg", w: 1200, h: 700 },
+        { url: "https://x.fr/uploads/atelier.jpg#zoom", w: 1200, h: 700 },
+        { url: "https://x.fr/icons/phone.png", w: 600, h: 600 },
+        { url: "https://x.fr/uploads/mini.jpg", w: 120, h: 80 },
+        { url: "https://x.fr/uploads/bandeau.jpg", w: 1900, h: 120 },
+        { url: "https://x.fr/uploads/equipe.jpg", w: 500, h: 400, alt: "Logo partenaire" },
+        { url: "data:image/png;base64,AAA", w: 800, h: 600 },
+      ],
+      "https://x.fr/logo.png",
+    );
+    assert.deepEqual(out, ["https://x.fr/uploads/atelier.jpg", "https://x.fr/uploads/chantier.jpg"]);
+  });
+});
+
+describe("avis via l'API Places", () => {
+  const sample = {
+    places: [{ reviews: [
+      { rating: 4, text: { text: "Bon accueil" }, relativePublishTimeDescription: "il y a 2 mois", authorAttribution: { displayName: "Marie" } },
+      { rating: 5, originalText: { text: "Excellent saucisson" }, text: { text: "Excellent saucisson (traduit)" }, authorAttribution: { displayName: "Paul" } },
+      { rating: 5, text: { text: "" } },
+    ] }],
+  };
+  it("garde les avis avec texte, texte original prioritaire, les mieux notés d'abord", () => {
+    assert.deepEqual(mapPlacesReviews(sample), [
+      { author: "Paul", rating: 5, text: "Excellent saucisson", relativeDate: "" },
+      { author: "Marie", rating: 4, text: "Bon accueil", relativeDate: "il y a 2 mois" },
+    ]);
+  });
+  it("ne fait aucun appel sans clé, et renvoie une liste vide en cas d'erreur", async () => {
+    const saved = process.env.GOOGLE_PLACES_API_KEY;
+    delete process.env.GOOGLE_PLACES_API_KEY;
+    let calls = 0;
+    const fake = (async () => { calls++; return new Response("{}"); }) as typeof fetch;
+    assert.deepEqual(await fetchPlacesReviews("X", "Foix", fake), []);
+    assert.equal(calls, 0);
+    process.env.GOOGLE_PLACES_API_KEY = "test";
+    const failing = (async () => new Response("quota", { status: 429 })) as typeof fetch;
+    assert.deepEqual(await fetchPlacesReviews("X", "Foix", failing), []);
+    const ok = (async (_u: unknown, init?: RequestInit) => {
+      assert.equal((init?.headers as Record<string, string>)["X-Goog-Api-Key"], "test");
+      return new Response(JSON.stringify(sample));
+    }) as typeof fetch;
+    assert.equal((await fetchPlacesReviews("X", "Foix", ok)).length, 2);
+    if (saved === undefined) delete process.env.GOOGLE_PLACES_API_KEY; else process.env.GOOGLE_PLACES_API_KEY = saved;
   });
 });
