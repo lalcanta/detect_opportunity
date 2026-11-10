@@ -230,7 +230,7 @@ export function sanitizeSyncContacts(raw: unknown): Array<{
   return out;
 }
 
-function renderInteractiveDemoFloatingBar(opts: {
+export function renderInteractiveDemoFloatingBar(opts: {
   leadId: string;
   companyName: string;
   demoExpiresAt?: string | null;
@@ -255,6 +255,13 @@ function renderInteractiveDemoFloatingBar(opts: {
 
   return `
 <!-- LeadEngine Interactive Prospect Bar -->
+<style>
+  /* Mobile : en haut de l'écran, pour ne jamais recouvrir la barre d'appel fixée en bas de la démo. */
+  @media (max-width: 640px) {
+    #le-floating-bar { top: 8px !important; bottom: auto !important; left: 8px !important; right: 8px !important; max-width: none !important; }
+    #le-floating-bar > div { padding: 8px 10px !important; font-size: 12px !important; }
+  }
+</style>
 <div id="le-floating-bar" style="position:fixed;bottom:16px;right:16px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:calc(100vw - 32px);">
   <div style="background:rgba(9,9,11,0.94);backdrop-filter:blur(10px);color:#fff;border:1px solid rgba(255,255,255,0.14);border-radius:16px;padding:10px 14px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.4);display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:12px;">
     <div style="display:flex;align-items:center;gap:8px;">

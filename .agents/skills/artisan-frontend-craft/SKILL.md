@@ -148,5 +148,8 @@ Avant de livrer `demo.html`, vérifiez :
 2. ✅ **Rien n'est inventé ?** Vrais avis Google seulement (sinon note réelle + emplacement), aucune certification,
    garantie, délai ou prix affirmé sans source (voir §0).
 3. ✅ **Le numéro de téléphone réel et le WhatsApp fonctionnent-ils ?**
-4. ✅ **Le responsive mobile est-il parfait ?** La barre d'urgence reste toujours accessible.
+4. ✅ **Le responsive mobile est-il parfait (390 px de large) ?** Aucun défilement horizontal, aucun élément positionné
+   (`absolute`, pastille, sticker) qui chevauche un titre ou un bouton : sur mobile, le repasser en flux normal
+   (`relative` puis `sm:absolute`). La barre d'appel reste toujours accessible. Le CRM ajoute en haut de l'écran mobile
+   un bandeau « Ce design me plaît » : ne rien placer d'indispensable dans les 100 premiers pixels fixes.
 5. ✅ **Y a-t-il au moins un composant interactif dynamique ?** (Avant/Après, calculateur, ou indicateur live).
