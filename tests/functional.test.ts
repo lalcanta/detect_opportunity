@@ -280,6 +280,24 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.equal(JSON.parse(lead.audit_data).summary, "Audit complet");
     });
 
+    it("doit ajouter le pixel d'ouverture aux démos préparées sans pixel, sauf en aperçu interne", async () => {
+      const prepDemoId = "beef00c0ffee0002";
+      await fetch(`${BASE_URL}/api/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SYNC_SECRET}` },
+        body: JSON.stringify({
+          id: prepDemoId,
+          company_name: "Démo Prep Sans Pixel",
+          demo_html: "<!DOCTYPE html><html><head></head><body><h1>Démo prep</h1></body></html>",
+          battlecard_data: { callScript: "Bonjour" },
+        }),
+      });
+      const publicView = await (await fetch(`${BASE_URL}/demos/${prepDemoId}`)).text();
+      assert.ok(publicView.includes(`/api/tracker/open?leadId=${prepDemoId}`), "pixel injecté pour le prospect");
+      const internalView = await (await fetch(`${BASE_URL}/demos/${prepDemoId}`, { headers: { Cookie: ADMIN_COOKIE } })).text();
+      assert.ok(!internalView.includes(`/api/tracker/open?leadId=${prepDemoId}`), "pas de pixel en aperçu interne");
+    });
+
     it("doit enregistrer le canal principal et les contacts (lead_contacts), et ignorer les contacts invalides", async () => {
       const contactLeadId = "c0ffee00c0ffee01";
       const formUrl = "https://agence-contact-test.fr/contact";

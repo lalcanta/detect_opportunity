@@ -110,8 +110,10 @@ A. EN-TÊTE & HERO HAUTE CONVERSION :
 - Double Call-To-Action immédiat :
   * CTA 1 (Appel immédiat avec numéro très visible) : <a href="tel:${cleanPhone}" class="inline-flex items-center justify-center gap-2 bg-brand text-white font-bold px-6 py-3.5 rounded-xl shadow-lg hover:opacity-95 transition-all text-base"><i data-lucide="phone" class="w-5 h-5"></i> <span>Appeler le ${formattedPhone}</span></a>
   * CTA 2 (Devis gratuit) : <a href="#devis" class="inline-flex items-center justify-center gap-2 bg-white text-zinc-900 border border-zinc-200 font-semibold px-6 py-3.5 rounded-xl hover:bg-zinc-50 transition-all text-base"><i data-lucide="file-text" class="w-5 h-5 text-zinc-500"></i> <span>Demander un devis gratuit</span></a>
-- 4 Badges de réassurance clés indispensables sous le Hero :
-${benchmark.conversionBlueprint.hero.trustBadges.map((b) => `  * ${b}`).join("\n")}
+- Badges de réassurance sous le Hero : UNIQUEMENT des engagements sans affirmation factuelle (« Devis gratuit », « Artisan local à ${lead.city} »${lead.rating != null ? `, « ${lead.rating}/5 sur Google »` : ""}).
+  INTERDIT d'affirmer une certification, un label ou une garantie (RGE, Qualibat, garantie décennale, assurance, agrément), un délai d'intervention ou une disponibilité 7j/7 : aucun n'est vérifié pour ce prospect.
+  Pour ces éléments, prévois un encadré discret « Vos certifications et garanties (à compléter) ».
+  Exemples de badges utilisés par les sites du secteur, à NE PAS reprendre comme des faits : ${benchmark.conversionBlueprint.hero.trustBadges.join(", ")}
 
 B. GRILLE DES PRESTATIONS STARS DU SECTEUR :
 Titre de section : "${benchmark.conversionBlueprint.servicesGrid.sectionTitle}"
@@ -121,16 +123,17 @@ Chaque carte de prestation doit être claire, avec une icône Lucide adaptée, 2
 
 C. SECTION "POURQUOI NOUS CHOISIR ?" (ARGUMENTS DIFFÉRENCIATEURS DES LEADERS) :
 Titre de section : "${benchmark.conversionBlueprint.competitiveAdvantages.sectionTitle.replace("{VILLE}", lead.city)}"
-Points à développer :
+Points à développer, reformulés comme des engagements génériques : n'affirme ni délai, ni marque partenaire, ni chiffre, ni label (rien n'est vérifié) :
 ${benchmark.conversionBlueprint.competitiveAdvantages.points.map((p) => `  - ${p.title} : ${p.desc}`).join("\n")}
 
 D. PREUVE SOCIALE & AVIS GOOGLE RÉELS DE L'ARTISAN :
-Note globale : ${lead.rating ?? 4.8}/5 sur ${lead.reviewsCount ?? 15} avis clients.
-Mets en scène ces VRAIS avis clients Google de façon très valorisante :
+${lead.rating != null ? `Note globale réelle : ${lead.rating}/5 sur ${lead.reviewsCount ?? "?"} avis Google.` : "Note Google non disponible : n'affiche aucune note."}
 ${
-  lead.recentReviews.map((r, i) => `  ${i + 1}. ${r.author} (${r.rating ?? 5}★, ${r.relativeDate}) : "${r.text}"`).join("\n") ||
-  `  1. Client vérifié (5★) : "Travail très soigné, artisan ponctuel et réactif à ${lead.city}. Je recommande les yeux fermés."
-  2. Client vérifié (5★) : "Devis clair, respect des délais et chantier impeccable. Enfin un vrai professionnel de confiance !"`
+  lead.recentReviews.length
+    ? `Mets en scène ces VRAIS avis clients Google de façon valorisante, sans en modifier le texte :\n${lead.recentReviews
+        .map((r, i) => `  ${i + 1}. ${r.author} (${r.rating ?? "?"}★, ${r.relativeDate}) : "${r.text}"`)
+        .join("\n")}`
+    : `Aucun texte d'avis disponible : N'INVENTE AUCUN AVIS NI AUCUN NOM DE CLIENT. Affiche la note réelle et un emplacement « Vos avis Google s'afficheront ici ».`
 }
 
 E. FORMULAIRE DE DEVIS EXPRESS & ANCRAGE LOCAL :

@@ -47,7 +47,7 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
   {
     id: "plomberie_chauffage_clim",
     categoryName: "Plomberie, Chauffage & Climatisation",
-    targetKeywords: ["chauffagiste", "plombier", "climatisation", "clim", "chaudiere", "pompe a chaleur", "pac", "sanitaire", "fuite", "debouchage", "chauffe-eau", "depannage"],
+    targetKeywords: ["chauffagiste", "plombier", "climatisation", "clim", "chaudiere", "pompe a chaleur", "pac", "sanitaire", "fuite", "debouchage", "chauffe-eau", "plomberie", "chauffage"],
     trafficLeaders: [
       {
         name: "MesDépanneurs / IZI by EDF / Chauffagiste-Express",
@@ -109,7 +109,7 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
   {
     id: "electricite_domotique",
     categoryName: "Électricité Générale & Domotique",
-    targetKeywords: ["electricien", "electricite", "domotique", "tableau", "borne", "irve", "panne", "norme", "eclairage", "courant", "renovation electrique"],
+    targetKeywords: ["electricien", "electricite", "domotique", "borne de recharge", "irve", "eclairage", "renovation electrique"],
     trafficLeaders: [
       {
         name: "MonÉlectricien.fr / Qualifelec Leaders",
@@ -353,7 +353,7 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
   {
     id: "automobile_garage_depannage",
     categoryName: "Automobile, Garage & Dépannage Mécanique",
-    targetKeywords: ["garage", "mecanique", "carrosserie", "auto", "voiture", "pneu", "vidange", "freinage", "controle technique", "depannage auto"],
+    targetKeywords: ["garage", "mecanique", "carrosserie", "auto", "voiture", "pneu", "vidange", "freinage", "controle technique", "depannage auto", "automobile", "garagiste", "mecanicien"],
     trafficLeaders: [
       {
         name: "Réseaux Référence Auto / Garages Indépendants Qualifiés",
@@ -473,24 +473,45 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
   },
 ];
 
-/**
- * Trouve le benchmark le plus pertinent pour un métier donné.
- */
-export function getCompetitorBenchmark(activity: string): CompetitorBenchmark {
-  const norm = (activity || "")
+function normalizeTrade(text: string): string {
+  return (text || "")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Un mot-clé correspond s'il apparaît comme mot (ou suite de mots) entier dans le métier.
+ * Un mot-clé d'au moins 5 lettres accepte aussi un mot qui commence par lui (boulanger → boulangerie).
+ */
+function keywordMatches(words: string[], phrase: string, keyword: string): boolean {
+  const kw = normalizeTrade(keyword);
+  if (!kw) return false;
+  if (kw.includes(" ")) return ` ${phrase} `.includes(` ${kw} `);
+  return words.some((w) => w === kw || (kw.length >= 5 && w.startsWith(kw)));
+}
+
+/**
+ * Trouve le benchmark le plus pertinent pour un métier donné :
+ * le profil qui reconnaît le plus de mots-clés ; à égalité, celui dont le mot-clé reconnu est le plus long.
+ */
+export function getCompetitorBenchmark(activity: string): CompetitorBenchmark {
+  const phrase = normalizeTrade(activity);
+  const words = phrase ? phrase.split(" ") : [];
+  let best: { b: CompetitorBenchmark; score: number; longest: number } | null = null;
 
   for (const b of COMPETITOR_BENCHMARKS) {
     if (b.id === "general_local_winner") continue;
-    for (const kw of b.targetKeywords) {
-      if (norm.includes(kw)) {
-        return b;
-      }
+    const matched = b.targetKeywords.filter((kw) => keywordMatches(words, phrase, kw));
+    if (matched.length === 0) continue;
+    const longest = Math.max(...matched.map((kw) => normalizeTrade(kw).length));
+    if (!best || matched.length > best.score || (matched.length === best.score && longest > best.longest)) {
+      best = { b, score: matched.length, longest };
     }
   }
 
   // Fallback universel
-  return COMPETITOR_BENCHMARKS.find((b) => b.id === "general_local_winner")!;
+  return best?.b ?? COMPETITOR_BENCHMARKS.find((b) => b.id === "general_local_winner")!;
 }

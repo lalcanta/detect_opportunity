@@ -282,6 +282,10 @@ publicRoutes.get("/demos/:id", async (c) => {
       : `${muteTracker}\n${finalDemoHtml}`;
   }
 
+  // Pixel d'ouverture : toutes les démos doivent en avoir un, y compris celles écrites en mode prep (Antigravity)
+  // ou via MCP, qui ne passent pas par le générateur full_auto (audit 1.4). Jamais pour un aperçu interne.
+  if (!internalPreview) finalDemoHtml = injectOpenTracker(finalDemoHtml, id);
+
   const barHtml = renderInteractiveDemoFloatingBar({
     leadId: id,
     companyName: row.company_name,
@@ -336,6 +340,18 @@ publicRoutes.post("/api/tracker/interest", async (c) => {
 
   return c.json({ ok: true });
 });
+
+/**
+ * Ajoute le pixel d'ouverture (même origine) si la démo n'en contient pas déjà un.
+ * Une seule notification par session de navigation, comme le pixel du générateur (clé `seen_<id>`).
+ */
+export function injectOpenTracker(html: string, leadId: string): string {
+  if (html.includes("/api/tracker/open")) return html;
+  const key = JSON.stringify(`seen_${leadId}`);
+  const url = JSON.stringify(`/api/tracker/open?leadId=${encodeURIComponent(leadId)}`);
+  const tracker = `<script>(function(){try{var k=${key};if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,"1");fetch(${url},{method:"GET",keepalive:true,cache:"no-store"}).catch(function(){});}catch(e){}})();</script>`;
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${tracker}\n</body>`) : `${html}\n${tracker}`;
+}
 
 /** GET /api/tracker/open?leadId=… — ping de la démo : lead chaud + armement expiration auto +5 jours + alerte. */
 publicRoutes.get("/api/tracker/open", async (c) => {

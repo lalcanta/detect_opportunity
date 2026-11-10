@@ -429,7 +429,7 @@ ${opts.pitch_focus ? `- Angle spécifique demandé : ${opts.pitch_focus}` : ""}
 - Métier : ${lead.activity || "Artisan"}
 - Ville : ${lead.city || ""}
 - Téléphone : ${lead.phone || ""}
-- Note Google : ${lead.rating || "5.0"}/5 (${lead.reviewsCount || "0"} avis)
+- Note Google : ${lead.rating != null ? `${lead.rating}/5 (${lead.reviewsCount ?? 0} avis)` : "non disponible"}
 - Couleurs de marque détectées : ${meta.dominantColors.join(", ")}
 ${meta.logoUrl ? `- Logo client existant : ${meta.logoUrl}` : "- Pas de logo existant : créer un monogramme épuré"}
 
@@ -448,7 +448,8 @@ ${
 4. **Composant interactif signature intégré** : Implémenter le composant interactif (${craft.signatureComponent}) en JavaScript pur léger et autonome sans dépendance externe.
 5. **Grille de prestations & tarifs indicatifs clairs** adaptée au métier de ${lead.activity || "cet artisan"}.
 6. **Preuve sociale & Vrais Avis Google** intégrés :
-${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rating}★)`).join("\n") || "   - Extraits de clients satisfaits locaux."}
+${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rating}★)`).join("\n") || "   - Aucun texte d'avis disponible : N'INVENTE AUCUN AVIS. Affiche la note réelle et un emplacement « Vos avis Google s'afficheront ici »."}
+> **Honnêteté (impératif)** : n'affirme aucun fait absent des données (certification RGE/Qualibat, garantie décennale, assurance, délai d'intervention, prix, années d'expérience, nombre de chantiers, horaires). Présente-les comme des emplacements « à compléter » ou des exemples clairement signalés.
 7. **Formulaire de devis express** (Nom, Téléphone, Type de projet, Envoi immédiat).
 8. Ne pas utiliser de markdown dans le fichier \`demo.html\`, uniquement du code HTML brut commençant par \`<!DOCTYPE html>\`.
 `;

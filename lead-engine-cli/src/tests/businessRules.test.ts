@@ -66,6 +66,14 @@ describe("RÈGLES MÉTIER : Moteur Local & CLI (lead-engine-cli)", () => {
       assert.equal(b.id, "electricite_domotique");
     });
 
+    it("ne confond pas un mot qui contient un mot-clé court ou générique", () => {
+      assert.equal(getCompetitorBenchmark("Espace coiffure").id, "general_local_winner", "« pac » dans « espace »");
+      assert.equal(getCompetitorBenchmark("Dépannage automobile").id, "automobile_garage_depannage");
+      assert.equal(getCompetitorBenchmark("Dépannage informatique").id, "general_local_winner");
+      assert.equal(getCompetitorBenchmark("Boulangerie Pâtisserie").id, "metiers_de_bouche_commerce");
+      assert.equal(getCompetitorBenchmark("Installation PAC").id, "plomberie_chauffage_clim");
+    });
+
     it("doit renvoyer le fallback universel de haute conversion si métier atypique", () => {
       const b = getCompetitorBenchmark("Dresseur d'aigles royaux");
       assert.equal(b.id, "general_local_winner");

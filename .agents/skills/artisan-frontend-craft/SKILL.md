@@ -9,6 +9,20 @@ Ce skill est activé dès la création ou la refonte de la démo interactive (`d
 
 ---
 
+## 0. Règle d'honnêteté (prioritaire sur tout le reste)
+
+La démo est montrée au prospect comme **son** futur site : tout ce qui y est affirmé doit être vrai pour lui.
+- **N'invente aucun avis, aucun nom de client, aucune citation.** Sans texte d'avis dans `meta.json`, affiche la note et
+  le nombre d'avis réels, avec un emplacement « Vos avis Google s'afficheront ici ».
+- **N'affirme aucun fait absent des données** : certification (RGE, Qualibat, Qualifelec), garantie décennale,
+  assurance, délai d'intervention, disponibilité 7j/7, prix, années d'expérience, nombre de chantiers, horaires,
+  producteurs partenaires, « fait maison ».
+- Les composants signatures ci-dessous qui reposent sur ces faits (sceau décennale, bandeau d'astreinte, compteur
+  d'interventions, grille de tarifs, origine des matières) se présentent comme **emplacements à compléter** ou
+  **exemples clairement signalés** (« Exemple », « à confirmer »).
+
+---
+
 ## 1. Matrice des 4 Archétypes de Design par Métier
 
 Avant d'écrire une seule ligne de HTML, identifiez l'archétype du prospect :
@@ -128,7 +142,8 @@ Toujours intégrée en bas pour les smartphones :
 
 Avant de livrer `demo.html`, vérifiez :
 1. ✅ **La démo a-t-elle son propre style visuel ?** Si elle ressemble à la démo précédente, changez immédiatement la palette, la typographie et la disposition de la Hero section.
-2. ✅ **Les vrais avis Google du prospect sont-ils intégrés ?** Pas de faux texte "Lorem ipsum".
+2. ✅ **Rien n'est inventé ?** Vrais avis Google seulement (sinon note réelle + emplacement), aucune certification,
+   garantie, délai ou prix affirmé sans source (voir §0).
 3. ✅ **Le numéro de téléphone réel et le WhatsApp fonctionnent-ils ?**
 4. ✅ **Le responsive mobile est-il parfait ?** La barre d'urgence reste toujours accessible.
 5. ✅ **Y a-t-il au moins un composant interactif dynamique ?** (Avant/Après, calculateur, ou indicateur live).

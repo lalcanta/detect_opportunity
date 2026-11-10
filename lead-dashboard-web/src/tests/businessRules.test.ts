@@ -492,3 +492,19 @@ describe("RÈGLES MÉTIER : Dashboard Web & Pipeline Commercial (lead-dashboard-
     });
   });
 });
+
+describe("Pixel d'ouverture des démos (audit 1.4)", () => {
+  it("ajoute le pixel aux démos qui n'en ont pas, une seule fois, avant </body>", async () => {
+    const { injectOpenTracker } = await import("../routes/public");
+    const out = injectOpenTracker("<html><body><p>Démo</p></body></html>", "abc123");
+    assert.ok(out.includes('"/api/tracker/open?leadId=abc123"'));
+    assert.ok(out.indexOf("/api/tracker/open") < out.indexOf("</body>"));
+    assert.equal(injectOpenTracker(out, "abc123"), out, "pas de second pixel");
+  });
+
+  it("ne touche pas une démo qui a déjà le pixel du générateur", async () => {
+    const { injectOpenTracker } = await import("../routes/public");
+    const html = '<body><script>fetch("https://app/api/tracker/open?leadId=x")</script></body>';
+    assert.equal(injectOpenTracker(html, "x"), html);
+  });
+});
