@@ -437,6 +437,19 @@ describe("RÈGLES MÉTIER : Dashboard Web & Pipeline Commercial (lead-dashboard-
       assert.equal(tokens[1].quotaCategory, "cli_0euro");
     });
 
+    it("le détail n'affiche que la journée pour Cloudflare (appels, tokens, coût) et le cumul pour les autres", async () => {
+      const { computeTokenMetrics, tokenRowForDisplay } = await import("../routes/admin");
+      const { tokens } = computeTokenMetrics([
+        { model: "@cf/meta/llama-3.1-8b-instruct", input: 50000, output: 20000, thinking: 0, total_calls: 30, input_today: 10000, output_today: 4000, calls_today: 10 },
+        { model: "gemini-3-flash-preview", input: 9000, output: 3000, thinking: 0, total_calls: 12, input_today: 900, output_today: 300, calls_today: 2 },
+      ]);
+      const cf = tokenRowForDisplay(tokens[0]!);
+      assert.deepEqual({ todayOnly: cf.todayOnly, calls: cf.calls, input: cf.input, output: cf.output }, { todayOnly: true, calls: "10", input: 10000, output: 4000 });
+      assert.equal(cf.costEur, tokens[0]!.estimatedCostEur);
+      const gem = tokenRowForDisplay(tokens[1]!);
+      assert.deepEqual({ todayOnly: gem.todayOnly, calls: gem.calls, input: gem.input }, { todayOnly: false, calls: "2 / 12", input: 9000 });
+    });
+
     it("doit basculer en 'warning' dès que le quota Cloudflare dépasse 70% des 10 000 neurones", async () => {
       const { computeTokenMetrics } = await import("../routes/admin");
       const raw = [

@@ -465,6 +465,18 @@ export function computeTokenMetrics(rawList: Array<{
   };
 }
 
+/**
+ * Valeurs affichées dans le détail des consommations.
+ * Cloudflare Workers AI : quota gratuit quotidien, donc uniquement la journée en cours (appels, tokens, coût).
+ * Autres modèles : appels du jour / total et tokens cumulés.
+ */
+export function tokenRowForDisplay(t: TokenUsageRow): { todayOnly: boolean; calls: string; input: number; output: number; costEur: number } {
+  if (t.quotaCategory === "cloudflare_free") {
+    return { todayOnly: true, calls: String(t.callsToday), input: t.inputToday, output: t.outputToday, costEur: t.estimatedCostEur };
+  }
+  return { todayOnly: false, calls: `${t.callsToday} / ${t.totalCalls}`, input: t.input, output: t.output, costEur: t.estimatedCostEur };
+}
+
 export async function loadStats(db: D1Database): Promise<AdminStats> {
   const byStatus = await db.prepare("SELECT status, COUNT(*) AS n FROM leads GROUP BY status").all<{ status: string; n: number }>();
   const rawTokens = await db

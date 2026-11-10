@@ -1,7 +1,7 @@
 import type { LeadRow, User } from "../types";
 import { DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../../shared/opportunities";
 import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedOpportunities } from "../types";
-import type { AdminStats, ModelSettingRow } from "../routes/admin";
+import { tokenRowForDisplay, type AdminStats, type ModelSettingRow } from "../routes/admin";
 import type { ScanJob, ScheduledScan } from "../routes/scans";
 import { esc, icon, layout, navbar, type IconName } from "./layout";
 import { formatStatusLabel, opportunityBadgeMeta, renderStatusPill as formatStatusPill } from "./components";
@@ -1388,7 +1388,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
         <div class="flex items-center justify-between">
           <div>
             <h3 class="font-bold text-sm text-zinc-900">Détail des Consommations & Tarification par Modèle</h3>
-            <p class="text-xs text-zinc-500 mt-0.5">Historique précis des tokens échangés et estimation financière associée.</p>
+            <p class="text-xs text-zinc-500 mt-0.5">Tokens échangés et estimation financière. Les modèles Cloudflare n'affichent que la journée en cours (quota gratuit quotidien).</p>
           </div>
         </div>
 
@@ -1408,8 +1408,9 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               ${
                 stats.tokens.length > 0
                   ? stats.tokens
-                      .map(
-                        (t) => `
+                      .map((t) => {
+                        const d = tokenRowForDisplay(t);
+                        return `
                     <tr class="hover:bg-zinc-50 transition-colors">
                       <td class="py-2.5 font-mono font-medium text-zinc-800">${esc(t.model)}</td>
                       <td class="py-2.5">
@@ -1423,13 +1424,13 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
                                 : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200">Pay-As-You-Go</span>'
                         }
                       </td>
-                      <td class="py-2.5 text-center font-mono text-zinc-600">${t.callsToday} / ${t.totalCalls}</td>
-                      <td class="py-2.5 text-right font-mono text-zinc-600">${t.input.toLocaleString()}</td>
-                      <td class="py-2.5 text-right font-mono text-zinc-600">${t.output.toLocaleString()}</td>
-                      <td class="py-2.5 text-right font-mono font-bold ${t.estimatedCostEur > 0 ? "text-rose-600" : "text-emerald-600"}">${t.estimatedCostEur.toFixed(4)} €</td>
+                      <td class="py-2.5 text-center font-mono text-zinc-600">${d.calls}${d.todayOnly ? ' <span class="text-[10px] font-sans text-indigo-600">aujourd\'hui</span>' : ""}</td>
+                      <td class="py-2.5 text-right font-mono text-zinc-600">${d.input.toLocaleString()}</td>
+                      <td class="py-2.5 text-right font-mono text-zinc-600">${d.output.toLocaleString()}</td>
+                      <td class="py-2.5 text-right font-mono font-bold ${d.costEur > 0 ? "text-rose-600" : "text-emerald-600"}">${d.costEur.toFixed(4)} €${d.todayOnly ? ' <span class="text-[10px] font-sans font-normal text-indigo-600">/ jour</span>' : ""}</td>
                     </tr>
-                  `,
-                      )
+                  `;
+                      })
                       .join("")
                   : `<tr><td colspan="6" class="text-zinc-400 py-6 text-center">Aucune consommation enregistrée pour le moment. Vos appels tournent en 0€ de frais.</td></tr>`
               }
