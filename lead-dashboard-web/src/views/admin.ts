@@ -410,7 +410,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
     <section class="${card} space-y-3">
       <div class="flex items-center justify-between">
         <h2 class="font-semibold text-sm text-zinc-900 flex items-center gap-2">${icon("cpu", "w-4 h-4 text-zinc-600")} Consommation des Tokens IA</h2>
-        <span class="text-xs text-zinc-400">Suivi par modèle utilisé</span>
+        <span class="text-xs text-zinc-400">Suivi par modèle · Cloudflare : journée en cours uniquement</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-xs sm:text-sm">
@@ -421,12 +421,15 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
           ${
             stats.tokens
               .map(
-                (t) => `<tr class="border-b border-zinc-100 hover:bg-zinc-50">
-              <td class="py-2.5 font-mono font-medium text-zinc-800">${esc(t.model)}</td>
-              <td class="py-2.5 text-zinc-600">${t.input.toLocaleString()}</td>
-              <td class="py-2.5 text-zinc-600">${t.output.toLocaleString()}</td>
-              <td class="py-2.5 text-zinc-600">${t.thinking.toLocaleString()}</td>
-            </tr>`,
+                (t) => {
+                  const d = tokenRowForDisplay(t);
+                  return `<tr class="border-b border-zinc-100 hover:bg-zinc-50">
+              <td class="py-2.5 font-mono font-medium text-zinc-800">${esc(t.model)}${d.todayOnly ? ' <span class="text-[10px] font-sans text-indigo-600">aujourd\'hui</span>' : ""}</td>
+              <td class="py-2.5 text-zinc-600">${d.input.toLocaleString()}</td>
+              <td class="py-2.5 text-zinc-600">${d.output.toLocaleString()}</td>
+              <td class="py-2.5 text-zinc-600">${d.thinking.toLocaleString()}</td>
+            </tr>`;
+                },
               )
               .join("") || `<tr><td colspan="4" class="text-zinc-400 py-4 text-center">Aucune consommation enregistrée</td></tr>`
           }

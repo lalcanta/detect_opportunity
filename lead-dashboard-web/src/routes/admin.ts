@@ -347,6 +347,7 @@ export interface TokenUsageRow {
   totalCalls: number;
   inputToday: number;
   outputToday: number;
+  thinkingToday: number;
   callsToday: number;
   estimatedCostEur: number;
   estimatedNeuronsToday: number;
@@ -379,6 +380,7 @@ export function computeTokenMetrics(rawList: Array<{
   total_calls: number;
   input_today: number;
   output_today: number;
+  thinking_today?: number;
   calls_today: number;
 }>): { tokens: TokenUsageRow[]; quotas: QuotaCockpit } {
   let totalCostEstimateEur = 0;
@@ -428,6 +430,7 @@ export function computeTokenMetrics(rawList: Array<{
       totalCalls: r.total_calls,
       inputToday: r.input_today,
       outputToday: r.output_today,
+      thinkingToday: r.thinking_today ?? 0,
       callsToday: r.calls_today,
       estimatedCostEur: Number(cost.toFixed(4)),
       estimatedNeuronsToday: neuronsToday,
@@ -470,11 +473,32 @@ export function computeTokenMetrics(rawList: Array<{
  * Cloudflare Workers AI : quota gratuit quotidien, donc uniquement la journée en cours (appels, tokens, coût).
  * Autres modèles : appels du jour / total et tokens cumulés.
  */
-export function tokenRowForDisplay(t: TokenUsageRow): { todayOnly: boolean; calls: string; input: number; output: number; costEur: number } {
+export function tokenRowForDisplay(t: TokenUsageRow): {
+  todayOnly: boolean;
+  calls: string;
+  input: number;
+  output: number;
+  thinking: number;
+  costEur: number;
+} {
   if (t.quotaCategory === "cloudflare_free") {
-    return { todayOnly: true, calls: String(t.callsToday), input: t.inputToday, output: t.outputToday, costEur: t.estimatedCostEur };
+    return {
+      todayOnly: true,
+      calls: String(t.callsToday),
+      input: t.inputToday,
+      output: t.outputToday,
+      thinking: t.thinkingToday,
+      costEur: t.estimatedCostEur,
+    };
   }
-  return { todayOnly: false, calls: `${t.callsToday} / ${t.totalCalls}`, input: t.input, output: t.output, costEur: t.estimatedCostEur };
+  return {
+    todayOnly: false,
+    calls: `${t.callsToday} / ${t.totalCalls}`,
+    input: t.input,
+    output: t.output,
+    thinking: t.thinking,
+    costEur: t.estimatedCostEur,
+  };
 }
 
 export async function loadStats(db: D1Database): Promise<AdminStats> {
@@ -488,6 +512,7 @@ export async function loadStats(db: D1Database): Promise<AdminStats> {
               COUNT(*) AS total_calls,
               SUM(CASE WHEN created_at >= date('now', 'start of day') THEN input_tokens ELSE 0 END) AS input_today,
               SUM(CASE WHEN created_at >= date('now', 'start of day') THEN output_tokens ELSE 0 END) AS output_today,
+              SUM(CASE WHEN created_at >= date('now', 'start of day') THEN thinking_tokens ELSE 0 END) AS thinking_today,
               SUM(CASE WHEN created_at >= date('now', 'start of day') THEN 1 ELSE 0 END) AS calls_today
        FROM token_usage
        GROUP BY model`,
@@ -500,6 +525,7 @@ export async function loadStats(db: D1Database): Promise<AdminStats> {
       total_calls: number;
       input_today: number;
       output_today: number;
+      thinking_today: number;
       calls_today: number;
     }>();
 
