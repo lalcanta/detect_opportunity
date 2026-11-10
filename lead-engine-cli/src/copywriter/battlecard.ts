@@ -49,7 +49,8 @@ Réponds en JSON strict :
    "body": "Email court, chaleureux et adapté au contexte exact de ${lead.name} (${lead.activity} à ${lead.city}), expliquant les avantages de la maquette préparée pour lui (${demoUrl}) par rapport à sa situation actuelle."
  }
 }
-Français, ton chaleureux et professionnel, sans promesse mensongère.`;
+Français, ton chaleureux et professionnel, sans promesse mensongère.
+FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; ourAdvantages 3 puces de 12 mots maximum ; currentSiteCritique 3 constats courts et vérifiables ; accroche (callScript) 60 mots maximum ; 3 objections, réponses de 2 phrases maximum ; coldEmail.body 120 mots maximum. N'invente ni avis, ni certification, ni chiffre absent des données.`;
 
   try {
     const { text } = await router.generate({ task: "battlecard", prompt, json: true, usageSink });

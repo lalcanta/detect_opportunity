@@ -536,6 +536,9 @@ ${
       : `Le prospect a besoin d'un site web moderne et rapide convertissant le trafic smartphone en appels téléphoniques.`
 }
 
+## Format
+FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; ourAdvantages 3 puces de 12 mots maximum ; currentSiteCritique 3 constats courts et vérifiables ; accroche (callScript / openingPitch) 60 mots maximum ; 3 objections, réponses de 2 phrases maximum ; coldEmail.body 120 mots maximum. N'invente ni avis, ni certification, ni chiffre absent des données.
+
 ## Schéma JSON Requis :
 \`\`\`json
 {

@@ -577,196 +577,87 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
   <div id="sp_backdrop" class="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-300"></div>
 
   <aside id="sidepanel" class="fixed inset-y-0 right-0 w-full sm:w-[500px] lg:w-[560px] bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-in-out border-l border-zinc-200 flex flex-col font-sans">
-    <!-- En-tête du Panneau -->
-    <div class="px-5 py-4 border-b border-zinc-200 bg-zinc-50/80 flex items-start justify-between gap-3 shrink-0">
-      <div class="min-w-0 space-y-1">
-        <div class="flex items-center gap-2 flex-wrap">
-          <h2 id="sp_company_name" class="font-bold text-lg text-zinc-900 truncate tracking-tight">Nom du prospect</h2>
-          <span id="sp_status_badge" class="px-2 py-0.5 rounded-md text-xs font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">Statut</span>
-          <span id="sp_opp_badge" class="px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">🌐 Site Web</span>
-          <span id="sp_views_badge" class="hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-            ${icon("flame", "w-3 h-3 text-rose-500")}
-            <span id="sp_views_badge_text">0 vue(s)</span>
-          </span>
+    <!-- En-tête fixe : identité, canal, numéro, démo -->
+    <header class="bg-zinc-950 text-zinc-50 px-5 pt-4 pb-3.5 space-y-3 shrink-0">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 id="sp_company_name" class="font-extrabold text-lg tracking-tight truncate">Nom du prospect</h2>
+          <p id="sp_activity_city" class="text-[13px] text-zinc-400 truncate">Activité · Ville</p>
         </div>
-        <p id="sp_activity_city" class="text-xs text-zinc-500 truncate">Activité · Ville</p>
-        <div id="sp_rating" class="text-xs text-amber-700 font-medium inline-flex items-center gap-1">
-          ${icon("star", "w-3.5 h-3.5 text-amber-500 fill-amber-400")}
-          <span id="sp_rating_text">4.5 (12 avis)</span>
-        </div>
+        <button type="button" id="sp_close" class="w-9 h-9 shrink-0 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 flex items-center justify-center" aria-label="Fermer le panneau" title="Fermer (Échap)">
+          ${icon("x", "w-4 h-4")}
+        </button>
       </div>
-      <button type="button" id="sp_close" class="text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/60 p-2 rounded-lg transition-all shrink-0" title="Fermer (Échap)">
-        ${icon("x", "w-4 h-4")}
-      </button>
-    </div>
-
-    <!-- Contenu Déroulant -->
-    <div class="flex-1 overflow-y-auto p-5 space-y-5">
-      <!-- 0. Action Étape Suivante (Process Commercial Guidé Closer & Admin) -->
-      <div id="sp_step_box" class="bg-zinc-900 text-white rounded-xl p-4 space-y-3 shadow-sm">
-        <div class="flex items-center justify-between">
-          <span class="text-[11px] uppercase tracking-wider text-zinc-400 font-bold flex items-center gap-1.5">
-            ${icon("zap", "w-3.5 h-3.5 text-amber-400")} Process Commercial Guidé
-          </span>
-          <span id="sp_current_step_label" class="text-xs font-semibold text-zinc-300"></span>
-        </div>
-        <div id="sp_step_actions" class="space-y-2"></div>
+      <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+        <span id="sp_opp_badge" class="px-2 py-0.5 rounded-md">🌐 Site Web</span>
+        <span id="sp_channel_badge" class="hidden px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200"></span>
+        <span id="sp_rating" class="px-2 py-0.5 rounded-md bg-zinc-800 text-amber-200">★ <span id="sp_rating_text">–</span></span>
+        <span id="sp_status_badge" class="px-2 py-0.5 rounded-md">Statut</span>
+        <span id="sp_views_badge" class="hidden items-center gap-1 px-2 py-0.5 rounded-md bg-rose-600 text-white">
+          ${icon("flame", "w-3 h-3")}
+          <span id="sp_views_badge_text">0 vue(s)</span>
+        </span>
       </div>
+      <div class="flex gap-2">
+        <a id="sp_head_call" href="#" class="flex-1 min-w-0 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 transition-colors">
+          ${icon("phone", "w-4 h-4")} <span id="sp_head_call_text" class="font-mono truncate">Appeler</span>
+        </a>
+        <a id="sp_head_demo" href="#" target="_blank" rel="noopener" class="h-11 px-4 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-zinc-50 font-semibold text-sm flex items-center gap-1.5">
+          ${icon("eye", "w-4 h-4")} Démo ↗
+        </a>
+      </div>
+      <p id="sp_head_demo_info" class="text-[11px] text-zinc-400"></p>
+    </header>
 
-      <!-- 1. Coordonnées éditables & Envoi Direct -->
-      <div class="bg-zinc-50/70 border border-zinc-200 rounded-xl p-4 space-y-3">
-        <div class="flex items-center justify-between">
-          <h3 class="font-semibold text-xs uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
-            ${icon("phone", "w-3.5 h-3.5 text-zinc-500")} Coordonnées & Contact
-          </h3>
-          <span class="text-[11px] text-zinc-400 font-mono">Édition instantanée</span>
-        </div>
+    <!-- Onglets : un par moment de l'appel -->
+    <nav id="sp_tabs" class="flex border-b border-zinc-200 bg-zinc-50 px-2 shrink-0" aria-label="Sections du lead">
+      <button type="button" data-sp-tab="appel" class="sp-tab flex-1 h-11 text-sm">Appel</button>
+      <button type="button" data-sp-tab="ecrit" class="sp-tab flex-1 h-11 text-sm">Écrit</button>
+      <button type="button" data-sp-tab="prospect" class="sp-tab flex-1 h-11 text-sm">Prospect</button>
+      <button type="button" data-sp-tab="suivi" class="sp-tab flex-1 h-11 text-sm">Suivi</button>
+      <button type="button" data-sp-tab="closing" class="sp-tab flex-1 h-11 text-sm">Closing</button>
+    </nav>
 
-        <div class="grid sm:grid-cols-2 gap-2.5">
-          <div>
-            <label class="text-[11px] font-semibold text-zinc-600 block mb-1">Téléphone :</label>
-            <input id="sp_phone" placeholder="06..." class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium bg-white focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
+    <div class="flex-1 overflow-y-auto p-5">
+
+      <!-- ONGLET APPEL : tient sur un écran -->
+      <div data-sp-pane="appel" class="space-y-4">
+        <section class="space-y-1">
+          <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">En deux mots</p>
+          <p id="sp_audit_summary" class="text-sm leading-relaxed text-zinc-800"></p>
+          <p id="sp_key_people_badge" class="hidden text-[13px] text-zinc-700"></p>
+        </section>
+        <section class="rounded-xl bg-indigo-50 border border-indigo-200 p-4 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-indigo-800">Accroche · 30 secondes</p>
+            <button type="button" id="sp_copy_script" class="h-8 px-3 rounded-lg border border-indigo-300 bg-white text-indigo-800 text-xs font-bold">Copier</button>
           </div>
-          <div>
-            <label class="text-[11px] font-semibold text-zinc-600 block mb-1">Email :</label>
-            <input id="sp_email" placeholder="contact@prospect.fr" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium bg-white focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
+          <p id="sp_script" class="whitespace-pre-line text-[15px] leading-relaxed text-indigo-950"></p>
+        </section>
+        <section class="space-y-2">
+          <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Arguments</p>
+          <ul id="sp_our_advantages" class="space-y-1.5 text-sm text-zinc-800"></ul>
+        </section>
+        <section class="space-y-2">
+          <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Objections</p>
+          <div id="sp_objections" class="border border-zinc-200 rounded-xl divide-y divide-zinc-100"></div>
+        </section>
+        <section class="border-t border-zinc-200 pt-4 space-y-2.5">
+          <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Issue de l'appel</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" data-outcome="interested" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-emerald-700">Intéressé</button>
+            <button type="button" data-outcome="callback" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-indigo-700">Rappeler…</button>
+            <button type="button" data-outcome="voicemail" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-zinc-700">Messagerie</button>
+            <button type="button" data-outcome="lost" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-rose-700">Pas intéressé</button>
           </div>
-        </div>
-
-        <!-- Boutons d'actions rapides -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
-          <a id="sp_link_call" href="#" class="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
-            ${icon("phone", "w-3.5 h-3.5")} Appeler
-          </a>
-          <a id="sp_link_wa" href="#" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
-            ${icon("message", "w-3.5 h-3.5")} WhatsApp
-          </a>
-          <a id="sp_link_mail" href="#" class="inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
-            ${icon("mail", "w-3.5 h-3.5")} Email
-          </a>
-          <a id="sp_link_sms" href="#" class="inline-flex items-center justify-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
-            ${icon("message", "w-3.5 h-3.5")} SMS
-          </a>
-        </div>
-
-        <div class="flex items-center justify-between pt-1">
-          <a id="sp_link_flyer" href="#" target="_blank" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1 transition-colors">
-            ${icon("file-text", "w-3.5 h-3.5")} Télécharger Flyer QR PDF
-          </a>
-          <button type="button" id="sp_save_contacts" class="text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-semibold px-3.5 py-1.5 rounded-lg shadow-sm transition-all inline-flex items-center gap-1.5">
-            ${icon("save", "w-3.5 h-3.5")} Enregistrer
-          </button>
-        </div>
-        <div id="sp_contacts_msg" class="text-[11px] font-semibold"></div>
+          <label for="sp_quick_note" class="block text-xs font-semibold text-zinc-700">Note rapide (ajoutée à l'historique)</label>
+          <input id="sp_quick_note" placeholder="Ex : rappeler jeudi matin, le gérant décide" class="w-full h-11 border border-zinc-300 rounded-xl px-3 text-sm">
+          <p id="sp_outcome_msg" class="text-xs text-zinc-600">Un clic enregistre l'issue, la note et met à jour l'étape.</p>
+        </section>
       </div>
 
-      <!-- 2. Comparatif Ancien Site vs Nouveau Site Généré -->
-      <div class="border border-zinc-200 rounded-xl p-4 space-y-3 bg-white shadow-sm">
-        <div class="flex items-center justify-between">
-          <h3 class="font-semibold text-xs uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
-            ${icon("globe", "w-3.5 h-3.5 text-zinc-500")} Comparatif Site Actuel vs Démo
-          </h3>
-          <span id="sp_audit_score_badge" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">Score : –/100</span>
-        </div>
-
-        <div class="grid sm:grid-cols-2 gap-3">
-          <!-- Ancien Site -->
-          <div class="border border-zinc-200 rounded-lg p-3 bg-zinc-50/50 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="font-semibold text-xs text-zinc-800 flex items-center gap-1">
-                ${icon("globe", "w-3 h-3 text-zinc-500")} Site Actuel
-              </span>
-              <a id="sp_old_site_url" href="#" target="_blank" rel="noopener" class="text-xs text-zinc-600 hover:text-zinc-900 font-semibold truncate max-w-[130px] inline-flex items-center gap-0.5">
-                Ouvrir ${icon("external", "w-3 h-3")}
-              </a>
-            </div>
-            <div id="sp_old_site_status" class="text-xs text-zinc-600"></div>
-            <div class="space-y-1">
-              <span class="text-[11px] font-semibold text-rose-800 block">Points faibles identifiés :</span>
-              <ul id="sp_old_site_weaknesses" class="list-disc list-inside text-[11px] text-rose-700 space-y-0.5 font-medium"></ul>
-            </div>
-          </div>
-
-          <!-- Nouvelle Démo / Nos Avantages -->
-          <div class="border border-indigo-200 rounded-lg p-3 bg-indigo-50/30 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="font-semibold text-xs text-indigo-950 flex items-center gap-1">
-                ${icon("zap", "w-3.5 h-3.5 text-indigo-600")} Pourquoi notre solution bat la leur
-              </span>
-              <span id="sp_demo_expiry_badge" class="text-[10px] bg-indigo-100 text-indigo-800 font-semibold px-1.5 py-0.5 rounded">Active</span>
-            </div>
-            <ul id="sp_our_advantages" class="list-disc list-inside text-[11px] text-indigo-900 space-y-0.5 font-medium"></ul>
-            <a id="sp_demo_url" href="#" target="_blank" rel="noopener" class="w-full inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
-              ${icon("eye", "w-3.5 h-3.5")} Ouvrir la Démo / Preuve (Plein écran) ↗
-            </a>
-            <div class="flex items-center justify-between gap-1.5 pt-1 border-t border-indigo-100">
-              <button type="button" id="sp_btn_revoke_demo" class="flex-1 text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md py-1 px-2 font-semibold transition-colors">
-                🔒 Invalider la démo
-              </button>
-              <button type="button" id="sp_btn_extend_demo" class="flex-1 text-[11px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-md py-1 px-2 font-semibold transition-colors">
-                🔄 Prolonger (+5 jours)
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Le Petit Laïus Closer & Dirigeant Identifié -->
-        <div class="bg-amber-50/60 border border-amber-200/80 rounded-lg p-3 space-y-1.5">
-          <div class="flex items-center justify-between gap-2 flex-wrap">
-            <span class="text-[11px] font-bold text-amber-950 flex items-center gap-1.5">
-              ${icon("sparkles", "w-3.5 h-3.5 text-amber-600")} Le Laïus Closer (Contexte & Angle d'attaque) :
-            </span>
-            <span id="sp_key_people_badge" class="hidden text-[11px] font-semibold bg-white text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md"></span>
-          </div>
-          <p id="sp_audit_summary" class="text-xs text-zinc-700 leading-relaxed"></p>
-        </div>
-      </div>
-
-      <!-- 3. Agenda & Reprogrammation d'Appel -->
-      <div class="bg-purple-50/40 border border-purple-200 rounded-xl p-4 space-y-3">
-        <div class="flex items-center justify-between flex-wrap gap-2">
-          <h3 class="font-semibold text-xs uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
-            ${icon("calendar", "w-3.5 h-3.5 text-purple-700")} Agenda & Relance Programmée
-          </h3>
-          <div class="flex items-center gap-2 text-[11px]">
-            <a id="sp_download_ics" href="#" download class="hidden text-purple-800 font-bold hover:underline inline-flex items-center gap-1" title="Télécharger l'événement .ics (Apple Calendar, Outlook, Android)">
-              ${icon("calendar", "w-3 h-3")} .ics
-            </a>
-            <button type="button" id="sp_open_gcalendar" class="text-purple-700 font-semibold hover:underline inline-flex items-center gap-0.5" title="Ajouter aussi dans Google Agenda">
-              + Google Agenda ↗
-            </button>
-            <a href="/?view=calendar" class="text-purple-700 font-semibold hover:underline inline-flex items-center gap-0.5">
-              Voir l'Agenda →
-            </a>
-          </div>
-        </div>
-
-        <div class="grid sm:grid-cols-2 gap-2.5">
-          <div>
-            <label class="text-[11px] font-semibold text-zinc-700 block mb-1">Date & Heure de Relance :</label>
-            <input id="sp_callback_at" type="datetime-local" class="w-full border border-purple-200 rounded-lg px-3 py-2 text-xs bg-white font-medium focus:ring-1 focus:ring-purple-600 focus:border-purple-600">
-          </div>
-          <div>
-            <label class="text-[11px] font-semibold text-zinc-700 block mb-1">Changer l'Étape :</label>
-            <select id="sp_stage_select" class="w-full border border-purple-200 rounded-lg px-3 py-2 text-xs bg-white font-medium focus:ring-1 focus:ring-purple-600 focus:border-purple-600">
-              ${COLUMNS.map((c) => `<option value="${c.key}">${c.label}</option>`).join("")}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label class="text-[11px] font-semibold text-zinc-700 block mb-1">Notes d'appel & Historique :</label>
-          <textarea id="sp_call_notes" rows="3" placeholder="Compte-rendu de l'échange, objections du prospect, créneau convenu..." class="w-full border border-purple-200 rounded-lg p-2.5 text-xs bg-white focus:ring-1 focus:ring-purple-600 focus:border-purple-600"></textarea>
-        </div>
-
-        <div class="flex items-center justify-between pt-1">
-          <button type="button" id="sp_save_agenda" class="text-xs bg-purple-700 hover:bg-purple-800 text-white font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors inline-flex items-center gap-1.5">
-            ${icon("save", "w-3.5 h-3.5")} Enregistrer Relance & Notes
-          </button>
-          <span id="sp_agenda_msg" class="text-[11px] font-semibold"></span>
-        </div>
-      </div>
-
+      <!-- ONGLET ÉCRIT : email et formulaire -->
+      <div data-sp-pane="ecrit" class="space-y-4 hidden">
       <!-- 4a-bis. Formulaire de contact du prospect (soumission manuelle) -->
       <div id="sp_form_block" class="hidden border border-amber-200 rounded-xl p-4 space-y-2 bg-amber-50/40 shadow-sm">
         <h3 class="font-semibold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
@@ -830,23 +721,137 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
         </div>
       </div>
 
-      <!-- 4b. Battlecard IA & Script Closer (Phoning Commercial) -->
-      <div id="sp_vocal_battlecard_block" class="border border-zinc-200 rounded-xl p-4 space-y-3 bg-white shadow-sm">
-        <h3 class="font-semibold text-xs uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
-          ${icon("zap", "w-3.5 h-3.5 text-zinc-600")} Battlecard IA & Script d'Appel
-        </h3>
-        <div class="space-y-3 text-xs">
+        <section class="border-t border-zinc-200 pt-4 space-y-2.5">
+          <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Réponse du prospect</p>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-outcome="interested" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-emerald-700">Intéressé</button>
+            <button type="button" data-outcome="callback" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-indigo-700">Relancer…</button>
+            <button type="button" data-outcome="lost" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-rose-700">Refus / STOP</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ONGLET PROSPECT : coordonnées, site actuel -->
+      <div data-sp-pane="prospect" class="space-y-4 hidden">
+      <!-- 1. Coordonnées éditables & Envoi Direct -->
+      <div class="bg-zinc-50/70 border border-zinc-200 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-xs uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
+            ${icon("phone", "w-3.5 h-3.5 text-zinc-500")} Coordonnées & Contact
+          </h3>
+          <span class="text-[11px] text-zinc-400 font-mono">Édition instantanée</span>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-2.5">
           <div>
-            <span class="font-semibold text-zinc-800 block mb-1">Pitch d'ouverture suggéré :</span>
-            <div id="sp_script" class="whitespace-pre-line text-zinc-600 bg-zinc-50 p-3 rounded-lg border border-zinc-200/80 leading-relaxed font-sans text-xs"></div>
+            <label class="text-[11px] font-semibold text-zinc-600 block mb-1">Téléphone :</label>
+            <input id="sp_phone" placeholder="06..." class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium bg-white focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
           </div>
-          <div class="space-y-1.5">
-            <span class="font-semibold text-zinc-800 block">Réponses aux Objections Fréquentes :</span>
-            <div id="sp_objections" class="space-y-1.5"></div>
+          <div>
+            <label class="text-[11px] font-semibold text-zinc-600 block mb-1">Email :</label>
+            <input id="sp_email" placeholder="contact@prospect.fr" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium bg-white focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
           </div>
+        </div>
+
+        <!-- Boutons d'actions rapides -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+          <a id="sp_link_call" href="#" class="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
+            ${icon("phone", "w-3.5 h-3.5")} Appeler
+          </a>
+          <a id="sp_link_wa" href="#" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
+            ${icon("message", "w-3.5 h-3.5")} WhatsApp
+          </a>
+          <a id="sp_link_mail" href="#" class="inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
+            ${icon("mail", "w-3.5 h-3.5")} Email
+          </a>
+          <a id="sp_link_sms" href="#" class="inline-flex items-center justify-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg py-2 text-xs font-semibold shadow-sm transition-colors">
+            ${icon("message", "w-3.5 h-3.5")} SMS
+          </a>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <a id="sp_link_flyer" href="#" target="_blank" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1 transition-colors">
+            ${icon("file-text", "w-3.5 h-3.5")} Télécharger Flyer QR PDF
+          </a>
+          <button type="button" id="sp_save_contacts" class="text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-semibold px-3.5 py-1.5 rounded-lg shadow-sm transition-all inline-flex items-center gap-1.5">
+            ${icon("save", "w-3.5 h-3.5")} Enregistrer
+          </button>
+        </div>
+        <div id="sp_contacts_msg" class="text-[11px] font-semibold"></div>
+      </div>
+
+        <section class="space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Site actuel</p>
+            <a id="sp_old_site_url" href="#" target="_blank" rel="noopener" class="text-sm font-semibold text-indigo-700 hover:underline"></a>
+          </div>
+          <div id="sp_old_site_status" class="text-xs"></div>
+          <ul id="sp_old_site_weaknesses" class="list-disc pl-5 text-[13px] text-zinc-800 space-y-0.5"></ul>
+        </section>
+      </div>
+
+      <!-- ONGLET SUIVI : étape, relance, historique -->
+      <div data-sp-pane="suivi" class="space-y-4 hidden">
+      <!-- 0. Action Étape Suivante (Process Commercial Guidé Closer & Admin) -->
+      <div id="sp_step_box" class="bg-zinc-900 text-white rounded-xl p-4 space-y-3 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] uppercase tracking-wider text-zinc-400 font-bold flex items-center gap-1.5">
+            ${icon("zap", "w-3.5 h-3.5 text-amber-400")} Process Commercial Guidé
+          </span>
+          <span id="sp_current_step_label" class="text-xs font-semibold text-zinc-300"></span>
+        </div>
+        <div id="sp_step_actions" class="space-y-2"></div>
+      </div>
+
+      <!-- 3. Agenda & Reprogrammation d'Appel -->
+      <div class="bg-purple-50/40 border border-purple-200 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h3 class="font-semibold text-xs uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
+            ${icon("calendar", "w-3.5 h-3.5 text-purple-700")} Agenda & Relance Programmée
+          </h3>
+          <div class="flex items-center gap-2 text-[11px]">
+            <a id="sp_download_ics" href="#" download class="hidden text-purple-800 font-bold hover:underline inline-flex items-center gap-1" title="Télécharger l'événement .ics (Apple Calendar, Outlook, Android)">
+              ${icon("calendar", "w-3 h-3")} .ics
+            </a>
+            <button type="button" id="sp_open_gcalendar" class="text-purple-700 font-semibold hover:underline inline-flex items-center gap-0.5" title="Ajouter aussi dans Google Agenda">
+              + Google Agenda ↗
+            </button>
+            <a href="/?view=calendar" class="text-purple-700 font-semibold hover:underline inline-flex items-center gap-0.5">
+              Voir l'Agenda →
+            </a>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="text-[11px] font-semibold text-zinc-700 block mb-1">Date & Heure de Relance :</label>
+            <input id="sp_callback_at" type="datetime-local" class="w-full border border-purple-200 rounded-lg px-3 py-2 text-xs bg-white font-medium focus:ring-1 focus:ring-purple-600 focus:border-purple-600">
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-zinc-700 block mb-1">Changer l'Étape :</label>
+            <select id="sp_stage_select" class="w-full border border-purple-200 rounded-lg px-3 py-2 text-xs bg-white font-medium focus:ring-1 focus:ring-purple-600 focus:border-purple-600">
+              ${COLUMNS.map((c) => `<option value="${c.key}">${c.label}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[11px] font-semibold text-zinc-700 block mb-1">Notes d'appel & Historique :</label>
+          <textarea id="sp_call_notes" rows="3" placeholder="Compte-rendu de l'échange, objections du prospect, créneau convenu..." class="w-full border border-purple-200 rounded-lg p-2.5 text-xs bg-white focus:ring-1 focus:ring-purple-600 focus:border-purple-600"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <button type="button" id="sp_save_agenda" class="text-xs bg-purple-700 hover:bg-purple-800 text-white font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors inline-flex items-center gap-1.5">
+            ${icon("save", "w-3.5 h-3.5")} Enregistrer Relance & Notes
+          </button>
+          <span id="sp_agenda_msg" class="text-[11px] font-semibold"></span>
         </div>
       </div>
 
+      </div>
+
+      <!-- ONGLET CLOSING : paiement et démo -->
+      <div data-sp-pane="closing" class="space-y-4 hidden">
       <!-- 5. Closing & Lien Stripe (3 Paliers d'Offres) -->
       <div class="border border-violet-200 rounded-xl p-4 bg-violet-50/40 space-y-3">
         <div class="flex items-center justify-between flex-wrap gap-2">
@@ -874,6 +879,20 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
           </button>
           <span id="sp_stripe_result" class="text-xs"></span>
         </div>
+      </div>
+        <section class="border border-zinc-200 rounded-xl p-4 space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Démo</p>
+            <span id="sp_demo_expiry_badge" class="text-[11px]">Active</span>
+          </div>
+          <a id="sp_demo_url" href="#" target="_blank" rel="noopener" class="flex items-center justify-center gap-1.5 h-10 rounded-lg border border-zinc-300 text-sm font-semibold hover:bg-zinc-50">
+            ${icon("eye", "w-4 h-4")} Ouvrir la démo en plein écran ↗
+          </a>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="sp_btn_extend_demo" class="h-10 rounded-lg border border-zinc-300 text-sm font-semibold hover:bg-zinc-50">Prolonger (+5 jours)</button>
+            <button type="button" id="sp_btn_revoke_demo" class="h-10 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm font-semibold hover:bg-rose-100">Invalider la démo</button>
+          </div>
+        </section>
       </div>
     </div>
   </aside>
@@ -980,6 +999,11 @@ function updateContactLinks(lead) {
   var mailBody = encodeURIComponent(mailLines.join('\\n'));
   $('sp_link_mail').href = email ? ('mailto:' + email + '?subject=' + mailSubject + '&body=' + mailBody) : '#';
   $('sp_link_mail').onclick = email ? null : function(e) { e.preventDefault(); alert('Veuillez d\\'abord renseigner une adresse email.'); };
+
+  // WhatsApp et SMS n'ont de sens que pour un numéro mobile.
+  var mobile = isMobileNumber(phone);
+  $('sp_link_wa').classList.toggle('hidden', !mobile);
+  $('sp_link_sms').classList.toggle('hidden', !mobile);
 }
 
 function renderSidepanelStepActions(lead) {
@@ -1043,6 +1067,207 @@ function renderSidepanelStepActions(lead) {
   box.innerHTML = html;
 }
 
+var CHANNEL_BADGES = { phone: '📞 Téléphone', email: '✉️ Email', contact_form: '📝 Formulaire' };
+
+function isMobileNumber(phone) {
+  var d = (phone || '').replace(/[^0-9+]/g, '');
+  return /^(\\+33|0033|0)[67]/.test(d);
+}
+
+function formatPhone(phone) {
+  var d = (phone || '').replace(/[^0-9]/g, '');
+  if (d.length === 10) return d.replace(/(\\d{2})(?=\\d)/g, '$1 ').trim();
+  return phone || '';
+}
+
+function setSpTab(name) {
+  document.querySelectorAll('.sp-tab').forEach(function (t) {
+    var on = t.dataset.spTab === name;
+    t.classList.toggle('font-extrabold', on);
+    t.classList.toggle('text-zinc-900', on);
+    t.classList.toggle('shadow-[inset_0_-2px_0_#4f46e5]', on);
+    t.classList.toggle('font-semibold', !on);
+    t.classList.toggle('text-zinc-500', !on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-sp-pane]').forEach(function (p) {
+    p.classList.toggle('hidden', p.dataset.spPane !== name);
+  });
+}
+
+// Premier onglet selon le canal du lead : Appel (téléphone) ou Écrit (email / formulaire).
+function arrangeSpTabs(lead, isAsyncMode) {
+  var appelTab = document.querySelector('[data-sp-tab="appel"]');
+  var ecritTab = document.querySelector('[data-sp-tab="ecrit"]');
+  appelTab.style.order = isAsyncMode ? '2' : '1';
+  ecritTab.style.order = isAsyncMode ? '1' : '2';
+  appelTab.classList.toggle('hidden', !lead.phone && isAsyncMode);
+  ['prospect', 'suivi', 'closing'].forEach(function (k, i) {
+    document.querySelector('[data-sp-tab="' + k + '"]').style.order = String(3 + i);
+  });
+  setSpTab(isAsyncMode ? 'ecrit' : 'appel');
+}
+
+document.querySelectorAll('.sp-tab').forEach(function (t) {
+  t.addEventListener('click', function () { setSpTab(t.dataset.spTab); });
+});
+
+// En-tête fixe : bouton principal selon le canal (appel ou email), badge du canal.
+function renderPanelHeader(lead, isAsyncMode) {
+  var ch = $('sp_channel_badge');
+  if (lead.primary_channel && CHANNEL_BADGES[lead.primary_channel]) {
+    ch.textContent = CHANNEL_BADGES[lead.primary_channel];
+    ch.classList.remove('hidden');
+  } else {
+    ch.classList.add('hidden');
+  }
+  var btn = $('sp_head_call');
+  var txt = $('sp_head_call_text');
+  var phone = lead.phone || '';
+  var useEmail = isAsyncMode && lead.email;
+  btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'bg-indigo-600', 'hover:bg-indigo-500', 'bg-zinc-700', 'pointer-events-none');
+  if (useEmail) {
+    btn.href = 'mailto:' + lead.email;
+    btn.onclick = null;
+    txt.textContent = lead.email;
+    btn.classList.add('bg-indigo-600', 'hover:bg-indigo-500');
+  } else if (phone) {
+    btn.href = 'tel:' + phone.replace(/[^0-9+]/g, '');
+    btn.onclick = async function (e) {
+      e.preventDefault();
+      await fetch('/api/leads/' + lead.id + '/lock', { method: 'POST' }).catch(function () {});
+      window.location.href = 'tel:' + phone.replace(/[^0-9+]/g, '');
+    };
+    txt.textContent = formatPhone(phone);
+    btn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+  } else {
+    btn.href = '#';
+    btn.onclick = function (e) { e.preventDefault(); };
+    txt.textContent = 'Aucun contact direct';
+    btn.classList.add('bg-zinc-700', 'pointer-events-none');
+  }
+}
+
+// Accroche et objections (une seule ouverte à la fois), en texte brut.
+function renderCallScript(lead) {
+  var bc = lead.battlecard || {};
+  $('sp_script').textContent = bc.callScript || bc.openingPitch || bc.cold_call_pitch || "Pas d'accroche disponible pour ce lead.";
+  $('sp_copy_script').textContent = 'Copier';
+  var box = $('sp_objections');
+  box.innerHTML = '';
+  var list = Array.isArray(bc.objections) ? bc.objections : [];
+  if (!list.length) {
+    var empty = document.createElement('p');
+    empty.className = 'px-3 py-2.5 text-[13px] text-zinc-500';
+    empty.textContent = 'Aucune objection préparée.';
+    box.appendChild(empty);
+    return;
+  }
+  list.forEach(function (o) {
+    var d = document.createElement('details');
+    d.className = 'group';
+    var sum = document.createElement('summary');
+    sum.className = 'cursor-pointer list-none flex justify-between items-center gap-2 px-3 min-h-11 py-2.5 text-sm font-semibold text-zinc-900';
+    var q = document.createElement('span');
+    q.textContent = '« ' + (o.objection || '') + ' »';
+    var plus = document.createElement('span');
+    plus.className = 'text-zinc-400 group-open:rotate-45 transition-transform';
+    plus.setAttribute('aria-hidden', 'true');
+    plus.textContent = '+';
+    sum.appendChild(q);
+    sum.appendChild(plus);
+    var a = document.createElement('p');
+    a.className = 'px-3 pb-3 text-[13px] leading-relaxed text-zinc-700';
+    a.textContent = o.reply || o.response || '';
+    d.appendChild(sum);
+    d.appendChild(a);
+    d.addEventListener('toggle', function () {
+      if (d.open) box.querySelectorAll('details').forEach(function (x) { if (x !== d) x.open = false; });
+    });
+    box.appendChild(d);
+  });
+}
+
+$('sp_copy_script').onclick = function () {
+  var t = $('sp_script').textContent || '';
+  if (navigator.clipboard) navigator.clipboard.writeText(t).catch(function () {});
+  $('sp_copy_script').textContent = 'Copié ✓';
+};
+
+// Issue de l'appel ou réponse écrite : note horodatée + étape, en un clic.
+var OUTCOMES = {
+  interested: { label: 'Intéressé', status: 'called', icon: '✅' },
+  callback: { label: 'À rappeler', status: 'callback_scheduled', icon: '📅' },
+  voicemail: { label: 'Messagerie', status: 'callback_scheduled', icon: '📭' },
+  lost: { label: 'Pas intéressé', status: 'lost', icon: '✕' }
+};
+
+function tomorrowAt10() {
+  var d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(10, 0, 0, 0);
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T10:00';
+}
+
+document.addEventListener('click', async function (e) {
+  var btn = e.target.closest('.sp-outcome');
+  if (!btn || !activeLeadId) return;
+  e.preventDefault();
+  var kind = btn.dataset.outcome;
+  var def = OUTCOMES[kind];
+  var lead = LEADS_MAP[activeLeadId];
+  if (!def || !lead) return;
+
+  if (kind === 'callback') {
+    // Choix de la date dans l'onglet Suivi, étape pré-remplie.
+    setSpTab('suivi');
+    var sel = $('sp_stage_select');
+    if (sel && sel.querySelector('option[value="callback_scheduled"]')) sel.value = 'callback_scheduled';
+    var note = $('sp_quick_note').value.trim();
+    if (note) $('sp_call_notes').value = ($('sp_call_notes').value ? $('sp_call_notes').value + '\\n' : '') + note;
+    $('sp_callback_at').focus();
+    return;
+  }
+  if (kind === 'lost' && !confirm('Classer ' + lead.company_name + ' comme perdu ? La démo sera invalidée.')) return;
+
+  var msg = $('sp_outcome_msg');
+  msg.textContent = 'Enregistrement…';
+  msg.className = 'text-xs text-indigo-700 font-semibold';
+  var stamp = new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  var quick = $('sp_quick_note').value.trim();
+  var entry = '[' + stamp + '] ' + def.icon + ' ' + def.label + (quick ? ' — ' + quick : '');
+  var notes = (lead.call_notes ? lead.call_notes + '\\n' : '') + entry;
+
+  try {
+    if (kind === 'voicemail') {
+      var r1 = await fetch('/api/leads/' + activeLeadId + '/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callback_scheduled_at: tomorrowAt10() })
+      });
+      if (!r1.ok) throw new Error('update');
+    }
+    var r = await fetch('/api/leads/' + activeLeadId + '/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: def.status, notes: notes })
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) {
+      msg.textContent = 'Erreur : ' + (j.message || j.error || r.status);
+      msg.className = 'text-xs text-rose-700 font-semibold';
+      return;
+    }
+    msg.textContent = '✔ ' + def.label + ' enregistré' + (kind === 'voicemail' ? ' · relance demain 10 h' : '');
+    msg.className = 'text-xs text-emerald-700 font-semibold';
+    setTimeout(function () { location.reload(); }, 700);
+  } catch (err) {
+    msg.textContent = 'Erreur réseau.';
+    msg.className = 'text-xs text-rose-700 font-semibold';
+  }
+});
+
 function openSidepanel(id) {
   var lead = LEADS_MAP[id];
   if (!lead) return;
@@ -1084,7 +1309,6 @@ function openSidepanel(id) {
   var oldLink = $('sp_old_site_url');
   var oldStatus = $('sp_old_site_status');
   var weaknessesList = $('sp_old_site_weaknesses');
-  var auditScoreBadge = $('sp_audit_score_badge');
   var auditSummary = $('sp_audit_summary');
 
   if (lead.website_url) {
@@ -1099,14 +1323,6 @@ function openSidepanel(id) {
   } else {
     oldLink.classList.add('hidden');
     oldStatus.innerHTML = '<span class="text-amber-700 font-semibold text-[11px]">Aucun site web trouvé</span>';
-  }
-
-  if (lead.audit && lead.audit.score !== undefined) {
-    auditScoreBadge.textContent = 'Score : ' + lead.audit.score + '/100';
-    auditScoreBadge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold ' + (lead.audit.score < 50 ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200');
-  } else {
-    auditScoreBadge.textContent = 'Score : Non audité';
-    auditScoreBadge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200';
   }
 
   weaknessesList.innerHTML = '';
@@ -1143,7 +1359,7 @@ function openSidepanel(id) {
   var keyPeopleArr = (lead.audit && Array.isArray(lead.audit.key_people)) ? lead.audit.key_people : [];
   if (kpBadge) {
     if (keyPeopleArr.length > 0) {
-      kpBadge.textContent = '👤 Dirigeant : ' + keyPeopleArr.join(', ');
+      kpBadge.textContent = 'Demander : ' + keyPeopleArr.join(' · ');
       kpBadge.classList.remove('hidden');
     } else {
       kpBadge.classList.add('hidden');
@@ -1162,9 +1378,16 @@ function openSidepanel(id) {
               'Mise en valeur immédiate des ' + (lead.google_reviews_count || '') + ' avis Google (' + (lead.google_rating || '5') + '★)',
               'Design moderne ultra-rapide avec reprise du vrai logo client'
             ]);
-    advItems.forEach(function(a) {
+    advItems.slice(0, 3).forEach(function(a) {
       var li = document.createElement('li');
-      li.textContent = a;
+      li.className = 'flex gap-2';
+      var tick = document.createElement('span');
+      tick.className = 'text-emerald-600 font-extrabold';
+      tick.textContent = '✓';
+      var txt = document.createElement('span');
+      txt.textContent = a;
+      li.appendChild(tick);
+      li.appendChild(txt);
       advList.appendChild(li);
     });
   }
@@ -1237,31 +1460,13 @@ function openSidepanel(id) {
   var isAsyncMode = lead.primary_channel ? lead.primary_channel !== 'phone' : (oppDef.channel === 'async_email' || hasColdEmail);
   setupContactForm(lead);
 
-  var vocalBlock = $('sp_vocal_battlecard_block');
   setupEmailComposer(lead, oppDef, coldEmailData);
-
-  if (isAsyncMode) {
-    // Replier la battlecard vocale car inutile pour une approche 100% asynchrone
-    if (vocalBlock) vocalBlock.classList.add('hidden');
-  } else {
-    if (vocalBlock) vocalBlock.classList.remove('hidden');
-
-    var scriptDiv = $('sp_script');
-    var objDiv = $('sp_objections');
-    if (lead.battlecard) {
-      scriptDiv.textContent = lead.battlecard.callScript || lead.battlecard.cold_call_pitch || "Pas de script d'appel disponible.";
-      objDiv.innerHTML = '';
-      (lead.battlecard.objections || []).forEach(function(o) {
-        var d = document.createElement('div');
-        d.className = 'border-l-2 border-indigo-400 pl-2.5 py-1 bg-slate-50 rounded-r-lg';
-        d.innerHTML = '<p class="font-bold text-slate-800">« ' + o.objection + ' »</p><p class="text-slate-600 text-[11px] mt-0.5">' + (o.reply || o.response || '') + '</p>';
-        objDiv.appendChild(d);
-      });
-    } else {
-      scriptDiv.textContent = 'Aucune battlecard disponible.';
-      objDiv.innerHTML = '';
-    }
-  }
+  renderCallScript(lead);
+  renderPanelHeader(lead, isAsyncMode);
+  $('sp_quick_note').value = '';
+  $('sp_outcome_msg').textContent = "Un clic enregistre l'issue, la note et met à jour l'étape.";
+  $('sp_outcome_msg').className = 'text-xs text-zinc-600';
+  arrangeSpTabs(lead, isAsyncMode);
 
   // Ouverture visuelle fluide
   $('sp_backdrop').classList.remove('hidden');
@@ -1352,6 +1557,7 @@ document.addEventListener('click', function (e) {
   var btn = e.target.closest('.sp-jump-agenda');
   if (!btn) return;
   e.preventDefault();
+  setSpTab('suivi');
   var input = $('sp_callback_at');
   if (input) {
     input.focus();
@@ -1383,6 +1589,15 @@ function renderDemoAccessStatus(lead) {
   }
   if (btnExtend) {
     btnExtend.textContent = state.extendButtonText;
+  }
+  var headDemo = $('sp_head_demo');
+  if (headDemo) {
+    headDemo.href = lead.demo_url;
+    headDemo.classList.toggle('hidden', !state.canOpenDemo);
+  }
+  var headInfo = $('sp_head_demo_info');
+  if (headInfo) {
+    headInfo.textContent = 'Démo vue ' + (lead.demo_viewed_count || 0) + ' fois · ' + state.sidepanelBadgeText;
   }
 
   // Synchronise tous les emplacements de démo des cartes (Kanban, Liste, Agenda) en respectant leur variante
