@@ -95,7 +95,7 @@ describe("composant sélecteur de modèle", () => {
   it("garde la liste de secours dans le champ caché envoyé à l'enregistrement", () => {
     const html = renderFallbackPicker("demo", '["gemini-3.1-flash-lite","gemini-2.5-flash-lite"]');
     assert.match(html, /id="fb_demo" value="gemini-3.1-flash-lite, gemini-2.5-flash-lite"/);
-    assert.match(html, /id="fb_search_demo"/);
+    assert.match(html, /id="fb_sel_demo" data-searchable="1"/);
   });
   it("script navigateur syntaxiquement valide, lisant le catalogue nommé", () => {
     const js = modelPickerScript("ALL_MODELS");

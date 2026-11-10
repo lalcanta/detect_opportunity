@@ -3,7 +3,7 @@ import { CHANNEL_IDS, CHANNEL_LABELS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEF
 import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedChannels, parseAllowedOpportunities } from "../types";
 import { tokenRowForDisplay, type AdminStats, type ModelSettingRow } from "../routes/admin";
 import type { ScanJob, ScheduledScan } from "../routes/scans";
-import { modelPickerScript, renderFallbackPicker, renderModelFilter } from "./modelPicker";
+import { modelPickerScript, renderFallbackPicker } from "./modelPicker";
 import type { GeminiQuotaRow, GeminiQuotaSummary } from "../services/geminiQuota";
 import { esc, icon, layout, navbar, type IconName } from "./layout";
 import { formatStatusLabel, opportunityBadgeMeta, renderStatusPill as formatStatusPill } from "./components";
@@ -1136,7 +1136,6 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             </div>
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Sélectionner un modèle :</label>
-              ${renderModelFilter("demo")}
               <select id="sel_mod_demo" data-target="demo" class="mod-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
                 ${renderModelSelectOptions(mDemo.provider, mDemo.model, availableModels)}
               </select>
@@ -1187,7 +1186,6 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             </div>
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Sélectionner un modèle :</label>
-              ${renderModelFilter("audit")}
               <select id="sel_mod_audit" data-target="audit" class="mod-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
                 ${renderModelSelectOptions(mAudit.provider, mAudit.model, availableModels)}
               </select>
@@ -1238,7 +1236,6 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             </div>
             <div>
               <label class="text-xs font-semibold text-zinc-700 block mb-1">Sélectionner un modèle :</label>
-              ${renderModelFilter("card")}
               <select id="sel_mod_card" data-target="card" class="mod-select w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
                 ${renderModelSelectOptions(mCard.provider, mCard.model, availableModels)}
               </select>
@@ -2398,9 +2395,6 @@ document.querySelectorAll('.prov-select').forEach(function (ps) {
     }
     html += '<optgroup label="Saisie manuelle"><option value="__custom__">Saisie personnalisée / autre...</option></optgroup>';
     sel.innerHTML = html;
-    sel._fullHtml = html;
-    var search = document.querySelector('.mod-search[data-target="' + target + '"]');
-    if (search) search.value = '';
 
     if (filtered.length > 0) {
       var pick = flagships.length > 0 ? flagships[0].model_id : filtered[0].model_id;

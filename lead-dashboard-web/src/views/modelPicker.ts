@@ -1,18 +1,14 @@
 /**
  * Composant « sélecteur de modèle IA » de l'admin.
- * - renderModelFilter : champ de recherche posé au-dessus d'un <select id="sel_mod_<cible>"> déjà rempli ;
- *   la liste reste complète, la saisie n'affiche que les modèles correspondants.
- * - renderFallbackPicker : liste ordonnée de modèles de secours, choisis dans le catalogue avec le même filtre ;
+ * - Liste déroulante avec recherche : tout <select class="mod-select"> (ou marqué data-searchable) est remplacé à
+ *   l'écran par un bouton qui ouvre la liste, avec un champ de recherche en tête. Le <select> d'origine reste caché
+ *   et garde la valeur : les scripts existants (onchange, .value, options reconstruites) continuent de marcher.
+ * - renderFallbackPicker : liste ordonnée de modèles de secours, ajoutés depuis la même liste déroulante ;
  *   la valeur envoyée reste le champ caché #fb_<cible> (« fournisseur:modèle, … »).
- * - modelPickerScript : le script navigateur des deux, à inclure une fois dans la page.
+ * - modelPickerScript : le script navigateur, à inclure une fois dans la page, après les gestionnaires des selects.
  *   Il lit le catalogue dans la variable globale nommée (tableau d'AvailableModel).
  */
 import { esc } from "./layout";
-
-/** Champ de filtre d'un sélecteur de modèle principal. */
-export function renderModelFilter(target: string): string {
-  return `<input type="search" data-target="${esc(target)}" placeholder="Filtrer la liste (ex : lite, 3.5, flash)" aria-label="Filtrer les modèles" class="mod-search w-full border border-zinc-200 rounded-lg px-3 py-1.5 mb-1.5 text-xs bg-white">`;
-}
 
 /** Modèles de secours d'une action, essayés dans l'ordre si le principal est en quota ou indisponible. */
 export function renderFallbackPicker(target: string, raw?: string | null): string {
@@ -23,16 +19,12 @@ export function renderFallbackPicker(target: string, raw?: string | null): strin
   } catch {
     list = [];
   }
-  // La liste de modèles est remplie côté navigateur depuis le catalogue (ALL_MODELS), comme le sélecteur principal.
-  return `<div class="fb-picker" data-target="${target}">
+  // Les options sont remplies côté navigateur depuis le catalogue, sans les modèles déjà choisis.
+  return `<div class="fb-picker" data-target="${esc(target)}">
     <label class="text-xs font-semibold text-zinc-700 block mb-1">Modèles de secours (facultatif, dans l'ordre) :</label>
-    <input type="hidden" id="fb_${target}" value="${esc(list.join(", "))}">
-    <ol id="fb_list_${target}" class="space-y-1 mb-1.5"></ol>
-    <input type="search" id="fb_search_${target}" data-target="${target}" placeholder="Filtrer la liste (ex : lite, 3.1, claude)" aria-label="Filtrer les modèles de secours" class="fb-search w-full border border-zinc-200 rounded-lg px-3 py-1.5 mb-1.5 text-xs bg-white">
-    <div class="flex gap-1.5">
-      <select id="fb_sel_${target}" aria-label="Modèle de secours à ajouter" class="min-w-0 flex-1 border border-zinc-200 rounded-lg px-2 py-1.5 text-xs bg-white"></select>
-      <button type="button" class="fb-add shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-zinc-900 text-white hover:bg-zinc-700" data-target="${target}">Ajouter</button>
-    </div>
+    <input type="hidden" id="fb_${esc(target)}" value="${esc(list.join(", "))}">
+    <ol id="fb_list_${esc(target)}" class="space-y-1 mb-1.5"></ol>
+    <select id="fb_sel_${esc(target)}" data-searchable="1" aria-label="Ajouter un modèle de secours" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"></select>
     <p class="text-[10px] text-zinc-500 mt-1">Essayés dans l'ordre si le principal est en quota, saturé ou introuvable. Aucun : repli historique sur gemini-3-flash-preview.</p>
   </div>`;
 }
@@ -40,43 +32,168 @@ export function renderFallbackPicker(target: string, raw?: string | null): strin
 /** Script navigateur du composant (pas d'antislash : il est inséré dans un template literal). */
 export function modelPickerScript(catalogVar: string): string {
   return `
-// Filtre des sélecteurs de modèles : la liste reste préremplie, on n'affiche que ce qui correspond.
+// ---- Liste déroulante avec recherche (remplace l'affichage d'un <select>, qui reste la source de la valeur) ----
 function modelMatches(q, text) {
   var t = text.toLowerCase();
   return q.toLowerCase().split(' ').filter(Boolean).every(function (w) { return t.indexOf(w) >= 0; });
 }
-function applyModelFilter(sel, q) {
-  if (!sel) return;
-  if (sel._fullHtml === undefined) sel._fullHtml = sel.innerHTML;
-  var current = sel.value;
-  var box = document.createElement('select');
-  box.innerHTML = sel._fullHtml;
-  if (q.trim()) {
-    Array.prototype.slice.call(box.querySelectorAll('option')).forEach(function (o) {
-      if (o.value !== '__custom__' && !modelMatches(q, o.value + ' ' + o.textContent)) o.remove();
-    });
-    Array.prototype.slice.call(box.querySelectorAll('optgroup')).forEach(function (g) {
-      if (!g.querySelector('option')) g.remove();
-    });
+var SS_OPEN = null;
+document.addEventListener('mousedown', function (e) {
+  if (SS_OPEN && !SS_OPEN.root.contains(e.target)) SS_OPEN.close(false);
+});
+function enhanceSelect(sel) {
+  if (!sel || sel._ss) return;
+  var root = document.createElement('div');
+  root.className = 'relative';
+  sel.parentNode.insertBefore(root, sel);
+  root.appendChild(sel);
+  sel.classList.add('hidden');
+
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.setAttribute('aria-haspopup', 'listbox');
+  btn.setAttribute('aria-expanded', 'false');
+  if (sel.getAttribute('aria-label')) btn.setAttribute('aria-label', sel.getAttribute('aria-label'));
+  btn.className = 'w-full flex items-center justify-between gap-2 border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium bg-white text-left hover:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-400 disabled:cursor-not-allowed';
+  var label = document.createElement('span');
+  label.className = 'min-w-0 truncate';
+  var caret = document.createElement('span');
+  caret.className = 'shrink-0 text-zinc-700 text-sm leading-none';
+  caret.setAttribute('aria-hidden', 'true');
+  caret.textContent = '▾';
+  btn.appendChild(label);
+  btn.appendChild(caret);
+  root.appendChild(btn);
+
+  var panel = document.createElement('div');
+  panel.className = 'hidden absolute z-50 left-0 right-0 mt-1 min-w-[260px] bg-white border border-zinc-200 rounded-lg shadow-lg overflow-hidden';
+  var search = document.createElement('input');
+  search.type = 'search';
+  search.placeholder = 'Rechercher (ex : lite, 3.1, claude)';
+  search.setAttribute('aria-label', 'Rechercher un modèle');
+  search.className = 'w-full border-0 border-b border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:ring-0';
+  var list = document.createElement('ul');
+  list.setAttribute('role', 'listbox');
+  list.className = 'max-h-72 overflow-y-auto py-1';
+  panel.appendChild(search);
+  panel.appendChild(list);
+  root.appendChild(panel);
+
+  var items = [];
+  var active = -1;
+
+  function refresh() {
+    var o = sel.options[sel.selectedIndex];
+    label.textContent = o ? o.textContent : '';
+    label.className = 'min-w-0 truncate' + (o && !o.value ? ' text-zinc-500' : '');
+    btn.disabled = sel.disabled;
   }
-  sel.innerHTML = box.innerHTML;
-  var opts = Array.prototype.slice.call(sel.options);
-  if (opts.some(function (o) { return o.value === current; })) {
-    sel.value = current;
-    return;
+  function setActive(i) {
+    if (!items.length) { active = -1; return; }
+    active = Math.max(0, Math.min(items.length - 1, i));
+    items.forEach(function (li, j) {
+      li.className = 'px-3 py-1.5 text-xs cursor-pointer flex items-center gap-2 ' + (j === active ? 'bg-zinc-900 text-white' : 'text-zinc-800 hover:bg-zinc-100');
+      li.setAttribute('aria-selected', j === active ? 'true' : 'false');
+    });
+    var el = items[active];
+    if (el) el.scrollIntoView({ block: 'nearest' });
   }
-  // Le modèle choisi ne correspond plus au filtre : on prend le premier qui correspond.
-  var first = opts.find(function (o) { return o.value !== '__custom__'; });
-  if (first) {
-    sel.value = first.value;
+  function renderList() {
+    var q = search.value;
+    list.innerHTML = '';
+    items = [];
+    var selectedPos = -1;
+    function addOption(o) {
+      if (!o.value || o.disabled) return false;
+      if (q.trim() && !modelMatches(q, o.value + ' ' + o.textContent)) return false;
+      var li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      var check = document.createElement('span');
+      check.className = 'w-3 shrink-0';
+      check.textContent = o.value === sel.value ? '✓' : '';
+      var txt = document.createElement('span');
+      txt.className = 'min-w-0 truncate';
+      txt.textContent = o.textContent;
+      txt.title = o.textContent;
+      li.appendChild(check);
+      li.appendChild(txt);
+      li.onmousedown = function (e) { e.preventDefault(); pick(o.value); };
+      if (o.value === sel.value) selectedPos = items.length;
+      items.push(li);
+      list.appendChild(li);
+      return true;
+    }
+    Array.prototype.forEach.call(sel.children, function (child) {
+      if (child.tagName === 'OPTGROUP') {
+        var head = document.createElement('li');
+        head.className = 'px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400';
+        head.textContent = child.label;
+        list.appendChild(head);
+        var any = false;
+        Array.prototype.forEach.call(child.children, function (o) { if (addOption(o)) any = true; });
+        if (!any) head.remove();
+      } else if (child.tagName === 'OPTION') {
+        addOption(child);
+      }
+    });
+    if (!items.length) {
+      var none = document.createElement('li');
+      none.className = 'px-3 py-2 text-xs text-zinc-400';
+      none.textContent = 'Aucun modèle ne correspond';
+      list.appendChild(none);
+    }
+    setActive(q.trim() || selectedPos < 0 ? 0 : selectedPos);
+  }
+  function open() {
+    if (sel.disabled) return;
+    if (SS_OPEN && SS_OPEN !== api) SS_OPEN.close(false);
+    SS_OPEN = api;
+    search.value = '';
+    panel.classList.remove('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    renderList();
+    search.focus();
+  }
+  function close(focusBtn) {
+    panel.classList.add('hidden');
+    btn.setAttribute('aria-expanded', 'false');
+    if (SS_OPEN === api) SS_OPEN = null;
+    if (focusBtn) btn.focus();
+  }
+  function pick(value) {
+    close(true);
+    if (sel.value === value) return;
+    sel.value = value;
+    refresh();
     if (sel.onchange) sel.onchange();
   }
-}
-document.querySelectorAll('.mod-search').forEach(function (inp) {
-  inp.oninput = function () { applyModelFilter(document.getElementById('sel_mod_' + inp.dataset.target), inp.value); };
-});
+  var api = { root: root, close: close };
 
-// Modèles de secours : liste ordonnée, choisie dans le catalogue avec le même filtre.
+  btn.onclick = function () { if (panel.classList.contains('hidden')) open(); else close(true); };
+  btn.onkeydown = function (e) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open(); }
+  };
+  search.oninput = renderList;
+  search.onkeydown = function (e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      var li = items[active];
+      if (li && li.onmousedown) li.onmousedown({ preventDefault: function () {} });
+    } else if (e.key === 'Escape') { e.preventDefault(); close(true); }
+    else if (e.key === 'Tab') close(false);
+  };
+
+  // Les scripts existants changent .value puis appellent onchange, ou reconstruisent les options : on suit les deux.
+  var original = sel.onchange;
+  sel.onchange = function () { refresh(); if (original) return original.apply(this, arguments); };
+  new MutationObserver(refresh).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+  sel._ss = api;
+  refresh();
+}
+
+// ---- Modèles de secours : liste ordonnée, ajoutés depuis la liste déroulante ----
 var FB_PROVIDERS = { gemini: 'Gemini', openai: 'OpenAI', anthropic: 'Claude', openrouter: 'OpenRouter', cloudflare: 'Cloudflare' };
 var FB_MAX = 5;
 var FB_SKIP = /tts|image|lyria|transcribe|robotics|computer-use|banana|deep-research|embedding|antigravity|imagen|veo/i;
@@ -140,16 +257,19 @@ function renderFallbackPicker(target) {
     list.appendChild(li);
   });
 
-  var q = document.getElementById('fb_search_' + target).value;
   var sel = document.getElementById('fb_sel_' + target);
   var chosen = items.map(function (r) { return fbDescribe(r).id; });
+  var full = items.length >= FB_MAX;
+  sel.innerHTML = '';
+  var placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = full ? FB_MAX + ' modèles de secours au maximum' : '+ Ajouter un modèle de secours…';
+  sel.appendChild(placeholder);
   var groups = {};
   ${catalogVar}.forEach(function (m) {
     if (!FB_PROVIDERS[m.provider] || FB_SKIP.test(m.model_id) || chosen.indexOf(m.model_id) >= 0) return;
-    if (q.trim() && !modelMatches(q, m.model_id + ' ' + m.display_name)) return;
     (groups[m.provider] = groups[m.provider] || []).push(m);
   });
-  sel.innerHTML = '';
   Object.keys(FB_PROVIDERS).forEach(function (p) {
     if (!groups[p]) return;
     var g = document.createElement('optgroup');
@@ -162,30 +282,18 @@ function renderFallbackPicker(target) {
     });
     sel.appendChild(g);
   });
-  var full = items.length >= FB_MAX;
-  var empty = sel.options.length === 0;
-  if (empty) {
-    var none = document.createElement('option');
-    none.textContent = 'Aucun modèle ne correspond';
-    sel.appendChild(none);
-  }
-  sel.disabled = full || empty;
-  var add = document.querySelector('.fb-add[data-target="' + target + '"]');
-  if (add) {
-    add.disabled = full || empty;
-    add.className = 'fb-add shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg ' + (full || empty ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-zinc-900 text-white hover:bg-zinc-700');
-    add.textContent = full ? FB_MAX + ' max' : 'Ajouter';
-  }
+  sel.value = '';
+  sel.disabled = full;
 }
 document.querySelectorAll('.fb-picker').forEach(function (box) {
   var target = box.dataset.target;
-  document.getElementById('fb_search_' + target).oninput = function () { renderFallbackPicker(target); };
-  box.querySelector('.fb-add').onclick = function () {
-    var sel = document.getElementById('fb_sel_' + target);
-    if (!sel.value || sel.disabled) return;
-    fbSetItems(target, fbItems(target).concat([sel.value]));
+  var sel = document.getElementById('fb_sel_' + target);
+  sel.onchange = function () {
+    if (sel.value) fbSetItems(target, fbItems(target).concat([sel.value]));
   };
   renderFallbackPicker(target);
 });
+
+document.querySelectorAll('select.mod-select, select[data-searchable]').forEach(enhanceSelect);
 `;
 }
