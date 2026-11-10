@@ -89,6 +89,7 @@ export function buildUnqualifiedPayload(p: {
     google_rating: lead.rating,
     google_reviews_count: lead.reviewsCount,
     opportunity_type: p.opportunityType,
+    scanned_at: new Date().toISOString(),
     status: "unqualified",
     contacts: buildLeadContacts(lead, inspection, null),
     audit_data: {

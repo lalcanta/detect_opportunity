@@ -11,6 +11,7 @@ import {
   renderGoogleRatingBadge,
   renderOpportunityBadge,
   renderChannelBadge,
+  formatScanDate,
 } from "./components";
 
 export { OPP_META };
@@ -143,6 +144,8 @@ function backlogCard(l: LeadRow, user: User, _origin: string): string {
       ? `<div class="text-[11px] bg-amber-50 text-amber-800 rounded px-2 py-1 flex items-center gap-1 ${isAdmin ? "ml-4" : ""}">${icon("clock", "w-3 h-3")} En appel : ${esc(l.locker_name)}</div>`
       : ""
   }
+
+  ${formatScanDate(l.created_at) ? `<p class="text-[10px] text-zinc-400 ${isAdmin ? "pl-4" : ""}">Scanné le ${formatScanDate(l.created_at)}</p>` : ""}
 
   <!-- Footer : Assigné & Lien Démo -->
   <div class="pt-2 border-t border-zinc-100 flex items-center justify-between text-xs ${isAdmin ? "pl-4" : ""}">
@@ -956,6 +959,7 @@ var LEADS_MAP = ${JSON.stringify(
       opportunity_type: opportunityIdOf(l.opportunity_type),
       primary_channel: l.primary_channel || "",
       duplicate_of: l.duplicate_of || "",
+      scanned_on: formatScanDate(l.created_at),
       contact_form_url: l.contact_form_url || "",
       contact_form_captcha: parseFormMeta(l.contact_form_meta).captcha,
       callback_scheduled_at: l.callback_scheduled_at || "",
@@ -1427,7 +1431,7 @@ function openSidepanel(id) {
   activeLeadId = id;
 
   $('sp_company_name').textContent = lead.company_name;
-  $('sp_activity_city').textContent = (lead.activity || 'Activité non spécifiée') + ' · ' + (lead.city || 'Ville non spécifiée');
+  $('sp_activity_city').textContent = (lead.activity || 'Activité non spécifiée') + ' · ' + (lead.city || 'Ville non spécifiée') + (lead.scanned_on ? ' · scanné le ' + lead.scanned_on : '');
   if ($('sp_rating_text')) $('sp_rating_text').textContent = (lead.google_rating || '–') + ' (' + (lead.google_reviews_count || 0) + ' avis)';
 
   var col = COLUMNS_MAP[lead.status] || { label: lead.status, badgeBg: 'bg-zinc-100 text-zinc-700' };

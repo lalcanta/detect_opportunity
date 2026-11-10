@@ -250,6 +250,7 @@ async function processLead(
     google_rating: lead.rating,
     google_reviews_count: lead.reviewsCount,
     opportunity_type: opportunityIdOf(opportunityType),
+    scanned_at: new Date().toISOString(),
     primary_channel: primaryChannel,
     contacts: buildLeadContacts(lead, inspection, primaryChannel),
     audit_data: {

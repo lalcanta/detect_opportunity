@@ -518,3 +518,22 @@ describe("Canaux traités par un closer (phase 3)", () => {
     assert.deepEqual(parseAllowedChannels("pas du json"), ["phone", "email", "contact_form"]);
   });
 });
+
+describe("Date de scan d'un lead", () => {
+  it("accepte une date ISO plausible, refuse une date future, trop ancienne ou illisible", async () => {
+    const { parseScanDate } = await import("../routes/public");
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 3600_000).toISOString();
+    assert.equal(parseScanDate(twoDaysAgo), twoDaysAgo);
+    assert.equal(parseScanDate(new Date(Date.now() + 3600_000).toISOString()), null);
+    assert.equal(parseScanDate("2020-01-01T00:00:00Z"), null);
+    assert.equal(parseScanDate("hier"), null);
+    assert.equal(parseScanDate(undefined), null);
+  });
+
+  it("s'affiche au fuseau de Paris, y compris au format SQLite", async () => {
+    const { formatScanDate } = await import("../views/components");
+    assert.equal(formatScanDate("2026-11-09T23:30:00.000Z"), "10/11/2026");
+    assert.equal(formatScanDate("2026-11-10 10:58:23"), "10/11/2026");
+    assert.equal(formatScanDate(null), "");
+  });
+});

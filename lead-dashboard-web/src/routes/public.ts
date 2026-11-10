@@ -81,6 +81,8 @@ publicRoutes.post("/api/sync", async (c) => {
   const isPending = !isUnqualified && (body.status === "pending_generation" || (!body.demo_html && !body.battlecard_data));
   const targetStatus = isUnqualified ? "unqualified" : isPending ? "pending_generation" : "demo_ready";
   const siren = extractSiren(body.audit_data);
+  // Date du scan envoyée par le CLI : date de création d'un nouveau lead (jamais modifiée ensuite).
+  const scannedAt = parseScanDate(body.scanned_at) ?? new Date().toISOString();
   const existed = await c.env.DB.prepare("SELECT 1 AS x FROM leads WHERE id = ?").bind(body.id).first();
 
   const flyerUrl = body.flyer_pdf_base64 ? `/api/leads/${body.id}/flyer` : null;
@@ -129,7 +131,7 @@ publicRoutes.post("/api/sync", async (c) => {
       flyerUrl,
       body.flyer_pdf_base64 ?? null,
       body.battlecard_data ? JSON.stringify(body.battlecard_data) : null,
-      new Date().toISOString(),
+      scannedAt,
       oppType,
       targetStatus,
       primaryChannel,
@@ -186,6 +188,16 @@ publicRoutes.post("/api/sync", async (c) => {
   }
   return c.json({ ok: true, id: body.id, status: finalStatus, duplicates: duplicates.map((d) => d.id) });
 });
+
+/** Date de scan valide (ISO, ni future, ni de plus d'un an), sinon null. */
+export function parseScanDate(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const t = Date.parse(raw);
+  if (Number.isNaN(t)) return null;
+  const now = Date.now();
+  if (t > now + 5 * 60_000 || t < now - 365 * 24 * 3600_000) return null;
+  return new Date(t).toISOString();
+}
 
 /** SIREN relevé à l'inspection (audit_data.siren), normalisé sur 9 chiffres. */
 export function extractSiren(audit: unknown): string | null {

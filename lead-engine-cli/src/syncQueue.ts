@@ -202,6 +202,7 @@ export async function syncQueue(): Promise<void> {
         google_reviews_count: meta.google_reviews_count,
         opportunity_type: opportunityIdOf(meta.opportunity_type),
         primary_channel: meta.primary_channel ?? null,
+        scanned_at: typeof meta.preparedAt === "string" ? meta.preparedAt : undefined,
         contacts: Array.isArray(meta.contacts) ? meta.contacts : undefined,
         audit_data: {
           score: meta.loadTimeMs && meta.loadTimeMs > 4000 ? 35 : 45,

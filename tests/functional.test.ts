@@ -340,6 +340,21 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.ok(page.includes("Doublon ?"), "badge doublon sur la carte");
     });
 
+    it("doit dater un nouveau lead à la date du scan, sans la modifier aux synchronisations suivantes", async () => {
+      const id = "da7e00c0ffee0006";
+      const scannedAt = new Date(Date.now() - 3 * 24 * 3600_000).toISOString();
+      const sync = (body: Record<string, unknown>) =>
+        fetch(`${BASE_URL}/api/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SYNC_SECRET}` },
+          body: JSON.stringify({ id, company_name: "Lead Daté", ...body }),
+        });
+      await sync({ scanned_at: scannedAt, status: "pending_generation" });
+      await sync({ scanned_at: new Date().toISOString(), demo_html: "<html><body>d</body></html>", battlecard_data: { callScript: "Bonjour" } });
+      const lead = ((await (await fetch(`${BASE_URL}/api/leads/${id}`, { headers: { Cookie: ADMIN_COOKIE } })).json()) as { lead: { created_at: string } }).lead;
+      assert.equal(lead.created_at, scannedAt);
+    });
+
     it("doit enregistrer le canal principal et les contacts (lead_contacts), et ignorer les contacts invalides", async () => {
       const contactLeadId = "c0ffee00c0ffee01";
       const formUrl = "https://agence-contact-test.fr/contact";

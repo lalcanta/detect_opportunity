@@ -260,6 +260,8 @@ export interface SyncBody {
   status?: LeadStatus | null;
   /** Canal principal du lead (phone | email | contact_form) */
   primary_channel?: string | null;
+  /** Date du scan (ISO) : date de création du lead */
+  scanned_at?: string | null;
   /** Contacts trouvés par le CLI, enregistrés dans lead_contacts */
   contacts?: unknown[];
   token_usage?: {

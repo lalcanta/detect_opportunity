@@ -102,6 +102,13 @@ export function renderOpportunityBadge(opportunityType?: string | null): string 
   return `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold border ${opp.cls}">${esc(opp.label)}</span>`;
 }
 
+/** Date du scan d'un lead (created_at), au fuseau de Paris. */
+export function formatScanDate(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 /** Badge du canal principal d'un lead ; rien pour un lead antérieur à la phase 1. */
 export function renderChannelBadge(primaryChannel?: string | null): string {
   if (!isChannelId(primaryChannel)) return "";

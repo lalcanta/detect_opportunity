@@ -357,6 +357,7 @@ export async function runPrepScan(
           google_rating: lead.rating,
           google_reviews_count: lead.reviewsCount,
           opportunity_type: oppType,
+          scanned_at: meta.preparedAt,
           primary_channel: primaryChannel,
           contacts,
           audit_data: {

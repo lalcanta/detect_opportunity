@@ -139,6 +139,8 @@ export interface SyncPayload {
   battlecard_data?: Battlecard | null;
   token_usage?: TokenUsageRecord[];
   status?: string | null;
+  /** Date du scan (ISO) : date de création du lead dans le CRM */
+  scanned_at?: string;
   /** Canal principal du lead selon son opportunité (phone | email | contact_form) */
   primary_channel?: string | null;
   /** Contacts trouvés, enregistrés dans lead_contacts */
