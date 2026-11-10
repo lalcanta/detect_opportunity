@@ -4,6 +4,7 @@ import { LEAD_STATUSES, parseAllowedOpportunities, type AppEnv, type Battlecard,
 import { requireUser } from "../auth";
 import { createPaymentLink } from "../services/stripe";
 import { syncLeadToGoogleCalendar } from "../services/googleCalendar";
+import { ACTIVITY_TEXT_MAX, cleanText, listActivities, logActivity, parseUserActivity, statusLabel } from "../services/activities";
 
 export const leadRoutes = new Hono<AppEnv>();
 const LOCK_MINUTES = 15;
@@ -54,6 +55,8 @@ leadRoutes.post("/api/leads/:id/lock", requireUser("closer"), async (c) => {
 interface StatusBody {
   status?: string;
   notes?: string;
+  /** Issue d'appel ou réponse écrite (bouton du panneau) : historisée à la place d'un simple changement d'étape. */
+  outcome?: { label?: string; note?: string };
   sendStripe?: boolean;
   offerTier?: "static" | "admin_cms" | "custom";
   customAmountEur?: number;
@@ -124,6 +127,25 @@ leadRoutes.post("/api/leads/:id/status", requireUser("closer"), async (c) => {
   )
     .bind(status, finalNotes, user.id, nowIso, shouldRevoke, shouldArmExpiry ? 1 : 0, autoExpireIso, id)
     .run();
+
+  const outcomeLabel = cleanText(body.outcome?.label, 60);
+  if (outcomeLabel) {
+    await logActivity(c.env.DB, {
+      leadId: id,
+      userId: user.id,
+      kind: "call_outcome",
+      summary: `Issue : ${outcomeLabel}`,
+      content: { note: cleanText(body.outcome?.note, 2000) || null, from: lead.status, to: status },
+    });
+  } else if (status !== lead.status) {
+    await logActivity(c.env.DB, {
+      leadId: id,
+      userId: user.id,
+      kind: "status_change",
+      summary: `Étape : ${statusLabel(lead.status)} → ${statusLabel(status)}`,
+      content: { from: lead.status, to: status },
+    });
+  }
 
   return c.json({ ok: true, paymentUrl });
 });
@@ -214,6 +236,15 @@ leadRoutes.post("/api/leads/:id/email-sent", requireUser("closer"), async (c) =>
     .bind(notes, email, user.id, id)
     .run();
 
+  await logActivity(c.env.DB, {
+    leadId: id,
+    userId: user.id,
+    kind: "email_sent",
+    channel: "email",
+    summary: `Email envoyé à ${to} — « ${subject} »`,
+    content: { to, subject, body: cleanText(b.body, ACTIVITY_TEXT_MAX), template_id: b.template_id ?? null },
+  });
+
   return c.json({ ok: true, call_notes: notes });
 });
 
@@ -224,7 +255,7 @@ leadRoutes.post("/api/leads/:id/email-sent", requireUser("closer"), async (c) =>
 leadRoutes.post("/api/leads/:id/form-submitted", requireUser("closer"), async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
-  const b = await c.req.json<{ form_url?: string }>().catch(() => ({}) as { form_url?: string });
+  const b = await c.req.json<{ form_url?: string; body?: string }>().catch(() => ({}) as { form_url?: string; body?: string });
   const formUrl = (b.form_url ?? "").trim().slice(0, 500);
   if (!/^https?:\/\//i.test(formUrl)) {
     return c.json({ error: "invalid_payload", message: "URL du formulaire requise." }, 400);
@@ -248,8 +279,61 @@ leadRoutes.post("/api/leads/:id/form-submitted", requireUser("closer"), async (c
   await c.env.DB.prepare("UPDATE leads SET call_notes = ?1, assigned_to = COALESCE(assigned_to, ?2) WHERE id = ?3")
     .bind(notes, user.id, id)
     .run();
+  await logActivity(c.env.DB, {
+    leadId: id,
+    userId: user.id,
+    kind: "form_submitted",
+    channel: "contact_form",
+    summary: "Message soumis via le formulaire de contact",
+    content: { form_url: formUrl, body: cleanText(b.body, ACTIVITY_TEXT_MAX) },
+  });
   return c.json({ ok: true, call_notes: notes });
 });
+
+/** Contrôle d'accès commun : le closer n'agit que sur ses leads (ou non attribués) et ses opportunités. */
+async function loadLeadForUser(
+  db: D1Database,
+  user: { id: string; role: string; allowed_opportunities?: string | null },
+  id: string,
+): Promise<{ lead: LeadRow } | { error: string; status: 403 | 404 }> {
+  const lead = await db.prepare("SELECT * FROM leads WHERE id = ?").bind(id).first<LeadRow>();
+  if (!lead) return { error: "not_found", status: 404 };
+  if (user.role === "closer") {
+    if (lead.assigned_to && lead.assigned_to !== user.id) return { error: "forbidden", status: 403 };
+    const allowed = parseAllowedOpportunities(user.allowed_opportunities);
+    if (!allowed.includes(opportunityIdOf(lead.opportunity_type) as OpportunityTypeId)) return { error: "forbidden", status: 403 };
+  }
+  return { lead };
+}
+
+/** GET /api/leads/:id/activities — fil chronologique des échanges (plus récent d'abord). */
+leadRoutes.get("/api/leads/:id/activities", requireUser("closer"), async (c) => {
+  const res = await loadLeadForUser(c.env.DB, c.get("user"), c.req.param("id"));
+  if ("error" in res) return c.json({ error: res.error }, res.status);
+  const rows = await listActivities(c.env.DB, res.lead.id);
+  return c.json({
+    activities: rows.map((r) => ({ ...r, content: r.content ? safeJson(r.content) : null })),
+  });
+});
+
+/** POST /api/leads/:id/activities — réponse reçue ou note, saisie par l'utilisateur. */
+leadRoutes.post("/api/leads/:id/activities", requireUser("closer"), async (c) => {
+  const user = c.get("user");
+  const res = await loadLeadForUser(c.env.DB, user, c.req.param("id"));
+  if ("error" in res) return c.json({ error: res.error }, res.status);
+  const parsed = parseUserActivity(await c.req.json().catch(() => null));
+  if (!parsed) return c.json({ error: "invalid_payload", message: "Type d'activité non autorisé ou texte vide." }, 400);
+  await logActivity(c.env.DB, { leadId: res.lead.id, userId: user.id, ...parsed });
+  return c.json({ ok: true });
+});
+
+function safeJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 interface UpdateLeadBody {
   phone?: string;
@@ -296,6 +380,16 @@ leadRoutes.post("/api/leads/:id/update", requireUser("closer"), async (c) => {
   )
     .bind(phone, email, status, callback, notes, user.id, id)
     .run();
+
+  if (status !== current.status) {
+    await logActivity(c.env.DB, {
+      leadId: id,
+      userId: user.id,
+      kind: "status_change",
+      summary: `Étape : ${statusLabel(current.status)} → ${statusLabel(status)}`,
+      content: { from: current.status, to: status, callback_scheduled_at: callback },
+    });
+  }
 
   let googleCalendarResult: { ok: boolean; eventId?: string; error?: string } | null = null;
   if (callback && callback !== current.callback_scheduled_at) {

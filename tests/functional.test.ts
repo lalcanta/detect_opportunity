@@ -1136,6 +1136,61 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.equal((lead.lead ?? lead).email, "dev@pixel-test.fr");
     });
 
+    it("L'historique garde l'email complet, accepte une réponse collée et refuse un contenu vide", async () => {
+      const body = "Bonjour,\nVoici le rapport complet.\nCordialement";
+      await fetch(`${BASE_URL}/api/leads/${qaLeadId}/email-sent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: CLOSER_COOKIE },
+        body: JSON.stringify({ to: "dev@pixel-test.fr", subject: "Objet historique", body }),
+      });
+      const reply = await fetch(`${BASE_URL}/api/leads/${qaLeadId}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: CLOSER_COOKIE },
+        body: JSON.stringify({ kind: "reply_received", channel: "email", from: "dev@pixel-test.fr", text: "Merci, on regarde ça demain." }),
+      });
+      assert.equal(reply.status, 200);
+
+      const empty = await fetch(`${BASE_URL}/api/leads/${qaLeadId}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: CLOSER_COOKIE },
+        body: JSON.stringify({ kind: "reply_received", text: "   " }),
+      });
+      assert.equal(empty.status, 400);
+      const forged = await fetch(`${BASE_URL}/api/leads/${qaLeadId}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: CLOSER_COOKIE },
+        body: JSON.stringify({ kind: "email_sent", text: "faux envoi" }),
+      });
+      assert.equal(forged.status, 400, "un email envoyé ne se déclare que via /email-sent");
+
+      const list = await fetch(`${BASE_URL}/api/leads/${qaLeadId}/activities`, { headers: { Cookie: CLOSER_COOKIE } });
+      assert.equal(list.status, 200);
+      const { activities } = (await list.json()) as {
+        activities: Array<{ kind: string; summary: string; user_name: string | null; content: { body?: string; subject?: string; text?: string } | null }>;
+      };
+      const sent = activities.find((a) => a.kind === "email_sent" && a.content?.subject === "Objet historique");
+      assert.ok(sent, "email envoyé présent dans l'historique");
+      assert.equal(sent!.content?.body, body, "corps complet conservé");
+      assert.ok(sent!.user_name, "auteur renseigné");
+      assert.equal(activities[0]!.kind, "reply_received", "plus récent en premier");
+      assert.equal(activities[0]!.content?.text, "Merci, on regarde ça demain.");
+    });
+
+    it("Une issue d'appel est historisée avec sa note et le changement d'étape", async () => {
+      const res = await fetch(`${BASE_URL}/api/leads/${qaLeadId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: CLOSER_COOKIE },
+        body: JSON.stringify({ status: "callback_scheduled", outcome: { label: "Messagerie", note: "rappeler le CTO" } }),
+      });
+      assert.equal(res.status, 200);
+      const list = await fetch(`${BASE_URL}/api/leads/${qaLeadId}/activities`, { headers: { Cookie: CLOSER_COOKIE } });
+      const { activities } = (await list.json()) as { activities: Array<{ kind: string; summary: string; content: { note?: string; to?: string } | null }> };
+      assert.equal(activities[0]!.kind, "call_outcome");
+      assert.equal(activities[0]!.summary, "Issue : Messagerie");
+      assert.equal(activities[0]!.content?.note, "rappeler le CTO");
+      assert.equal(activities[0]!.content?.to, "callback_scheduled");
+    });
+
     it("Un closer ne peut pas historiser un envoi sur un lead d'une opportunité désactivée -> HTTP 403", async () => {
       await fetch(`${BASE_URL}/api/admin/users/u_closer1/opportunities`, {
         method: "POST",

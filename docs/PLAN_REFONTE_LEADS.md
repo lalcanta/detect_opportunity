@@ -315,6 +315,11 @@ de comportement  lead_contacts          unqualified            allowed_channels 
   - Pas encore fait : statut `unqualified` (phase 2), les activités « envoyé / soumis » restent dans `call_notes`.
 
 **Phase 2 — Statuts et historique**
+- ✅ *Fait le 10/11/2026, avant le reste de la phase* : table `lead_activities` (`services/activities.ts`, créée à chaud
+  par `ensureAuthSchema`, `migrations/0005`). Sont historisés avec leur contenu complet : email marqué envoyé (objet,
+  corps, destinataire), message soumis via formulaire, issue d'appel (note, étape avant/après), changement d'étape,
+  réponse reçue collée par le closer (bouton « Réponse reçue » de l'onglet Écrit). Fil chronologique dans l'onglet
+  Suivi (`GET/POST /api/leads/:id/activities`). `call_notes` reste en parallèle comme « Notes libres ».
 - Migration de reconstruction de `leads` et nouveaux statuts, y compris `unqualified`.
 - Table `lead_activities` et reprise de `call_notes`.
 - Mise à jour de tout le code qui compare des statuts, et des tests fonctionnels.

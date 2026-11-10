@@ -722,7 +722,31 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
       </div>
 
         <section class="border-t border-zinc-200 pt-4 space-y-2.5">
-          <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Réponse du prospect</p>
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Réponse du prospect</p>
+            <button type="button" id="sp_reply_toggle" class="h-9 px-3 rounded-lg border border-zinc-300 text-xs font-bold text-zinc-800 hover:bg-zinc-50">+ Réponse reçue</button>
+          </div>
+          <div id="sp_reply_form" class="hidden space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+            <div class="grid grid-cols-2 gap-2">
+              <label class="text-xs font-semibold text-zinc-700 space-y-1">Reçue par
+                <select id="sp_reply_channel" class="w-full h-10 border border-zinc-300 rounded-lg px-2 text-sm font-normal bg-white">
+                  <option value="email">Email</option>
+                  <option value="contact_form">Formulaire</option>
+                  <option value="phone">Téléphone</option>
+                </select>
+              </label>
+              <label class="text-xs font-semibold text-zinc-700 space-y-1">De (facultatif)
+                <input id="sp_reply_from" placeholder="Nom ou adresse" class="w-full h-10 border border-zinc-300 rounded-lg px-2 text-sm font-normal bg-white">
+              </label>
+            </div>
+            <label class="block text-xs font-semibold text-zinc-700 space-y-1">Texte de la réponse
+              <textarea id="sp_reply_text" rows="5" placeholder="Collez ici la réponse du prospect" class="w-full border border-zinc-300 rounded-lg p-2 text-[13px] font-normal bg-white"></textarea>
+            </label>
+            <div class="flex items-center gap-2">
+              <button type="button" id="sp_reply_save" class="h-10 px-4 rounded-lg bg-zinc-900 text-white text-sm font-bold">Enregistrer la réponse</button>
+              <span id="sp_reply_msg" class="text-xs"></span>
+            </div>
+          </div>
           <div class="grid grid-cols-3 gap-2">
             <button type="button" data-outcome="interested" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-emerald-700">Intéressé</button>
             <button type="button" data-outcome="callback" class="sp-outcome min-h-11 rounded-xl border border-zinc-300 bg-white font-bold text-sm transition-colors text-indigo-700">Relancer…</button>
@@ -836,7 +860,7 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
         </div>
 
         <div>
-          <label class="text-[11px] font-semibold text-zinc-700 block mb-1">Notes d'appel & Historique :</label>
+          <label class="text-[11px] font-semibold text-zinc-700 block mb-1">Notes libres :</label>
           <textarea id="sp_call_notes" rows="3" placeholder="Compte-rendu de l'échange, objections du prospect, créneau convenu..." class="w-full border border-purple-200 rounded-lg p-2.5 text-xs bg-white focus:ring-1 focus:ring-purple-600 focus:border-purple-600"></textarea>
         </div>
 
@@ -847,7 +871,13 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
           <span id="sp_agenda_msg" class="text-[11px] font-semibold"></span>
         </div>
       </div>
-
+        <section class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Historique des échanges</p>
+            <span id="sp_timeline_count" class="text-[11px] text-zinc-500"></span>
+          </div>
+          <ol id="sp_timeline" class="space-y-2"></ol>
+        </section>
       </div>
 
       <!-- ONGLET CLOSING : paiement et démo -->
@@ -1251,7 +1281,7 @@ document.addEventListener('click', async function (e) {
     var r = await fetch('/api/leads/' + activeLeadId + '/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: def.status, notes: notes })
+      body: JSON.stringify({ status: def.status, notes: notes, outcome: { label: def.label, note: quick } })
     });
     var j = await r.json().catch(function () { return {}; });
     if (!r.ok) {
@@ -1267,6 +1297,118 @@ document.addEventListener('click', async function (e) {
     msg.className = 'text-xs text-rose-700 font-semibold';
   }
 });
+
+var TIMELINE_ICONS = { call_outcome: '☎', email_sent: '✉️', form_submitted: '📝', reply_received: '💬', note: '🗒', status_change: '↪' };
+
+function timelineDate(iso) {
+  var d = new Date(String(iso).replace(' ', 'T') + (String(iso).length <= 19 ? 'Z' : ''));
+  return isNaN(d.getTime()) ? String(iso) : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+// Fil chronologique : chaque email, message ou réponse se déplie pour relire son contenu exact.
+function renderTimeline(list) {
+  var box = $('sp_timeline');
+  box.innerHTML = '';
+  $('sp_timeline_count').textContent = list.length ? list.length + ' échange(s)' : '';
+  if (!list.length) {
+    var empty = document.createElement('li');
+    empty.className = 'text-[13px] text-zinc-500';
+    empty.textContent = 'Aucun échange enregistré pour l\\'instant.';
+    box.appendChild(empty);
+    return;
+  }
+  list.forEach(function (a) {
+    var c = a.content || {};
+    var li = document.createElement('li');
+    var isReply = a.kind === 'reply_received';
+    li.className = 'rounded-lg border px-3 py-2 ' + (isReply ? 'border-emerald-200 bg-emerald-50' : 'border-zinc-200 bg-white');
+    var head = document.createElement('div');
+    head.className = 'flex items-start gap-2';
+    var ic = document.createElement('span');
+    ic.setAttribute('aria-hidden', 'true');
+    ic.textContent = TIMELINE_ICONS[a.kind] || '•';
+    var main = document.createElement('div');
+    main.className = 'min-w-0 flex-1';
+    var title = document.createElement('p');
+    title.className = 'text-[13px] font-semibold text-zinc-900';
+    title.textContent = a.summary;
+    var meta = document.createElement('p');
+    meta.className = 'text-[11px] text-zinc-500';
+    meta.textContent = timelineDate(a.created_at) + (a.user_name ? ' · ' + a.user_name : '');
+    main.appendChild(title);
+    main.appendChild(meta);
+    var text = c.body || c.text || c.note || '';
+    if (text) {
+      var det = document.createElement('details');
+      det.className = 'mt-1';
+      var sum = document.createElement('summary');
+      sum.className = 'cursor-pointer text-xs font-semibold text-indigo-700';
+      sum.textContent = a.kind === 'email_sent' ? 'Voir l\\'email' : a.kind === 'form_submitted' ? 'Voir le message' : isReply ? 'Voir la réponse' : 'Voir la note';
+      var pre = document.createElement('div');
+      pre.className = 'mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-800';
+      pre.textContent = (c.subject ? 'Objet : ' + c.subject + '\\n\\n' : '') + text;
+      det.appendChild(sum);
+      det.appendChild(pre);
+      if (isReply) det.open = true;
+      main.appendChild(det);
+    }
+    head.appendChild(ic);
+    head.appendChild(main);
+    li.appendChild(head);
+    box.appendChild(li);
+  });
+}
+
+async function loadTimeline(leadId) {
+  $('sp_timeline').innerHTML = '<li class="text-[13px] text-zinc-500">Chargement…</li>';
+  try {
+    var r = await fetch('/api/leads/' + leadId + '/activities');
+    var j = await r.json();
+    if (activeLeadId !== leadId) return;
+    renderTimeline(r.ok ? (j.activities || []) : []);
+  } catch (e) {
+    $('sp_timeline').innerHTML = '<li class="text-[13px] text-rose-700">Historique indisponible.</li>';
+  }
+}
+
+$('sp_reply_toggle').onclick = function () {
+  $('sp_reply_form').classList.toggle('hidden');
+  $('sp_reply_msg').textContent = '';
+  var lead = LEADS_MAP[activeLeadId];
+  if (lead && lead.primary_channel && $('sp_reply_channel').querySelector('option[value="' + lead.primary_channel + '"]')) {
+    $('sp_reply_channel').value = lead.primary_channel;
+  }
+};
+
+$('sp_reply_save').onclick = async function () {
+  if (!activeLeadId) return;
+  var text = $('sp_reply_text').value.trim();
+  var msg = $('sp_reply_msg');
+  if (!text) { msg.textContent = 'Collez le texte de la réponse.'; msg.className = 'text-xs text-rose-700 font-semibold'; return; }
+  var btn = this; btn.disabled = true;
+  try {
+    var r = await fetch('/api/leads/' + activeLeadId + '/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'reply_received', channel: $('sp_reply_channel').value, from: $('sp_reply_from').value, text: text })
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (r.ok) {
+      msg.textContent = '✔ Réponse ajoutée à l\\'historique';
+      msg.className = 'text-xs text-emerald-700 font-semibold';
+      $('sp_reply_text').value = '';
+      $('sp_reply_from').value = '';
+      loadTimeline(activeLeadId);
+    } else {
+      msg.textContent = j.message || 'Erreur';
+      msg.className = 'text-xs text-rose-700 font-semibold';
+    }
+  } catch (e) {
+    msg.textContent = 'Erreur réseau';
+    msg.className = 'text-xs text-rose-700 font-semibold';
+  }
+  btn.disabled = false;
+};
 
 function openSidepanel(id) {
   var lead = LEADS_MAP[id];
@@ -1467,6 +1609,8 @@ function openSidepanel(id) {
   $('sp_outcome_msg').textContent = "Un clic enregistre l'issue, la note et met à jour l'étape.";
   $('sp_outcome_msg').className = 'text-xs text-zinc-600';
   arrangeSpTabs(lead, isAsyncMode);
+  $('sp_reply_form').classList.add('hidden');
+  loadTimeline(id);
 
   // Ouverture visuelle fluide
   $('sp_backdrop').classList.remove('hidden');
@@ -2211,11 +2355,12 @@ $('sp_mark_form_submitted').onclick = async function () {
     var r = await fetch('/api/leads/' + activeLeadId + '/form-submitted', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ form_url: lead.contact_form_url })
+      body: JSON.stringify({ form_url: lead.contact_form_url, body: $('sp_email_body') ? $('sp_email_body').value : '' })
     });
     var j = await r.json();
     if (r.ok) {
-      $('sp_form_feedback').textContent = '✔ Soumission historisée dans les notes';
+      $('sp_form_feedback').textContent = '✔ Soumission ajoutée à l\\'historique';
+      loadTimeline(activeLeadId);
       lead.call_notes = j.call_notes;
       if ($('sp_call_notes')) $('sp_call_notes').value = j.call_notes;
     } else alert(j.message || 'Erreur');
@@ -2275,7 +2420,8 @@ $('sp_mark_sent').onclick = async function () {
     });
     var j = await r.json();
     if (r.ok) {
-      copyFeedback('✔ Envoi historisé dans les notes');
+      copyFeedback('✔ Email ajouté à l\\'historique');
+      loadTimeline(activeLeadId);
       if (LEADS_MAP[activeLeadId]) { LEADS_MAP[activeLeadId].call_notes = j.call_notes; LEADS_MAP[activeLeadId].email = to; }
       if ($('sp_call_notes')) $('sp_call_notes').value = j.call_notes;
       if ($('sp_email')) $('sp_email').value = to;

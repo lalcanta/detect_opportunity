@@ -69,6 +69,19 @@ CREATE TABLE IF NOT EXISTS lead_contacts (
 );
 CREATE INDEX IF NOT EXISTS idx_lead_contacts_lead ON lead_contacts(lead_id, kind);
 
+-- Historique structuré des échanges : email envoyé, formulaire, réponse, issue d'appel, étape (docs/PLAN_REFONTE_LEADS.md §3.4)
+CREATE TABLE IF NOT EXISTS lead_activities (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  lead_id     TEXT NOT NULL REFERENCES leads(id),
+  user_id     TEXT,
+  kind        TEXT NOT NULL,     -- call_outcome | email_sent | form_submitted | reply_received | note | status_change
+  channel     TEXT,              -- phone | email | contact_form
+  summary     TEXT NOT NULL,
+  content     TEXT,              -- JSON : objet, corps, réponse, note…
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_lead_activities_lead ON lead_activities(lead_id, created_at);
+
 CREATE TABLE IF NOT EXISTS token_usage (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   lead_id         TEXT NOT NULL,
