@@ -86,6 +86,22 @@ function renderModelInfoBox(target: string, initialModelId: string, available: i
   </div>`;
 }
 
+/** Modèles de secours d'une action, essayés dans l'ordre si le principal est en quota ou indisponible. */
+function renderFallbackInput(target: string, raw?: string | null): string {
+  let list: string[] = [];
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (Array.isArray(parsed)) list = parsed.filter((x): x is string => typeof x === "string");
+  } catch {
+    list = [];
+  }
+  return `<div>
+    <label for="fb_${target}" class="text-xs font-semibold text-zinc-700 block mb-1">Modèles de secours (facultatif, dans l'ordre) :</label>
+    <input id="fb_${target}" list="model-presets" value="${esc(list.join(", "))}" placeholder="ex : gemini-3.6-flash, gemini-3-flash-preview" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-mono bg-white">
+    <p class="text-[10px] text-zinc-500 mt-1">Essayés si le principal est en quota, saturé ou introuvable. Vide : repli historique sur gemini-3-flash-preview. Préfixe possible « openai: », « anthropic: »…</p>
+  </div>`;
+}
+
 function renderThinkingSlider(target: string, value: number): string {
   const getLabel = (v: number) => {
     if (v === 0) return "0 (Désactivé - Rapide)";
@@ -305,9 +321,9 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
   const hot = stats.byStatus.find((s) => s.status === "hot_lead")?.n ?? 0;
   const card = "bg-white rounded-2xl shadow-sm border border-zinc-200/80 p-5";
 
-  const mDemo = models.find((m) => m.action_type === "demo") || { provider: "cloudflare", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", thinking_budget: 0 };
-  const mAudit = models.find((m) => m.action_type === "audit") || { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinking_budget: 0 };
-  const mCard = models.find((m) => m.action_type === "battlecard") || { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinking_budget: 0 };
+  const mDemo = models.find((m) => m.action_type === "demo") || { provider: "cloudflare", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", thinking_budget: 0, fallback_models: null as string | null };
+  const mAudit = models.find((m) => m.action_type === "audit") || { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinking_budget: 0, fallback_models: null as string | null };
+  const mCard = models.find((m) => m.action_type === "battlecard") || { provider: "cloudflare", model: "@cf/meta/llama-3.1-8b-instruct-fp8", thinking_budget: 0, fallback_models: null as string | null };
 
   const pendingLeads = leads.filter((l) => l.status === "pending_generation");
   const pendingCount = pendingLeads.length;
@@ -1104,6 +1120,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               <input id="mod_demo" value="${esc(mDemo.model)}" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-mono bg-white">
             </div>
             ${renderThinkingSlider("demo", mDemo.thinking_budget)}
+            ${renderFallbackInput("demo", mDemo.fallback_models)}
           </div>
 
           <!-- Info Box Dynamique -->
@@ -1153,6 +1170,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               <input id="mod_audit" value="${esc(mAudit.model)}" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-mono bg-white">
             </div>
             ${renderThinkingSlider("audit", mAudit.thinking_budget)}
+            ${renderFallbackInput("audit", mAudit.fallback_models)}
           </div>
 
           <!-- Info Box Dynamique -->
@@ -1202,6 +1220,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               <input id="mod_card" value="${esc(mCard.model)}" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs font-mono bg-white">
             </div>
             ${renderThinkingSlider("card", mCard.thinking_budget)}
+            ${renderFallbackInput("card", mCard.fallback_models)}
           </div>
 
           <!-- Info Box Dynamique -->
@@ -2495,9 +2514,9 @@ async function handleSaveModels(btn) {
 
   var payload = {
     settings: [
-      { action_type: 'demo', provider: $('prov_demo').value, model: getModelVal('demo'), thinking_budget: Number($('thk_demo')?.value) || 0 },
-      { action_type: 'audit', provider: $('prov_audit').value, model: getModelVal('audit'), thinking_budget: Number($('thk_audit')?.value) || 0 },
-      { action_type: 'battlecard', provider: $('prov_card').value, model: getModelVal('card'), thinking_budget: Number($('thk_card')?.value) || 0 }
+      { action_type: 'demo', provider: $('prov_demo').value, model: getModelVal('demo'), thinking_budget: Number($('thk_demo')?.value) || 0, fallback_models: $('fb_demo') ? $('fb_demo').value : '' },
+      { action_type: 'audit', provider: $('prov_audit').value, model: getModelVal('audit'), thinking_budget: Number($('thk_audit')?.value) || 0, fallback_models: $('fb_audit') ? $('fb_audit').value : '' },
+      { action_type: 'battlecard', provider: $('prov_card').value, model: getModelVal('card'), thinking_budget: Number($('thk_card')?.value) || 0, fallback_models: $('fb_card') ? $('fb_card').value : '' }
     ]
   };
 

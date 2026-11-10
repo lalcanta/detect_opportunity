@@ -157,8 +157,16 @@ publicRoutes.post("/api/sync", async (c) => {
   for (const t of body.token_usage ?? []) {
     stmts.push(
       c.env.DB.prepare(
-        "INSERT INTO token_usage (lead_id, task, model, input_tokens, output_tokens, thinking_tokens) VALUES (?,?,?,?,?,?)",
-      ).bind(body.id, t.task, t.model, t.inputTokens | 0, t.outputTokens | 0, t.thinkingTokens | 0),
+        "INSERT INTO token_usage (lead_id, task, model, input_tokens, output_tokens, thinking_tokens, requested_model) VALUES (?,?,?,?,?,?,?)",
+      ).bind(
+        body.id,
+        t.task,
+        t.model,
+        t.inputTokens | 0,
+        t.outputTokens | 0,
+        t.thinkingTokens | 0,
+        typeof t.requestedModel === "string" && t.requestedModel !== t.model ? t.requestedModel.slice(0, 120) : null,
+      ),
     );
   }
   const results = await c.env.DB.batch(stmts);

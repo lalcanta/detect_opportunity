@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { loadConfig } from "./config";
 import { pushLead } from "./sync/pushLead";
 import { log, stripCodeFences } from "./utils/helpers";
-import type { Battlecard, LeadContact, SyncPayload } from "./types";
+import type { Battlecard, LeadContact, SyncPayload, TokenUsageRecord } from "./types";
 
 interface RawBattlecardFile {
   closerBrief?: string;
@@ -103,6 +103,17 @@ export function buildQueueBattlecard(
       : ["Site web existant lent à charger sur smartphone", "Absence de barre d'appel immédiate pour les urgences", "Avis clients Google non mis en valeur"]);
 
   return { battlecard, summary, weaknesses };
+}
+
+/** Consommations à 0 € qui tracent qui a généré la démo et la battlecard d'un lead de la file. */
+export function queueGenerationUsage(meta: Pick<QueueMeta, "opportunity_type">, agent = process.env.LEADENGINE_AGENT): TokenUsageRecord[] {
+  const who = `agent:${(agent || "inconnu").trim().slice(0, 40) || "inconnu"}`;
+  const deterministicDemo = getOpportunityOrDefault(meta.opportunity_type).proof.generator === "tracker_report";
+  const zero = { inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
+  return [
+    { task: "demo", model: deterministicDemo ? "deterministe:tracker_report" : who, ...zero },
+    { task: "battlecard", model: who, ...zero },
+  ];
 }
 
 /** Retire du manifeste les leads dont le dossier n'est plus dans queue/pending (synchronisés ou supprimés). */
@@ -233,7 +244,8 @@ export async function syncQueue(): Promise<void> {
         demo_html: demoHtml,
         flyer_pdf_base64: flyerPdfBase64,
         battlecard_data: battlecard,
-        token_usage: [], // 0 external API cost (Généré par Antigravity CLI)
+        // Provenance (0 € d'API) : l'agent qui a écrit les fichiers (LEADENGINE_AGENT), ou le générateur déterministe.
+        token_usage: queueGenerationUsage(meta),
       };
 
       log("sync-queue", `☁️ Envoi de ${meta.company_name} vers ${cfg.REMOTE_APP_URL}...`);

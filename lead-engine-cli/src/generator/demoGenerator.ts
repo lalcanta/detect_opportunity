@@ -111,7 +111,7 @@ A. EN-TÊTE & HERO HAUTE CONVERSION :
   * CTA 1 (Appel immédiat avec numéro très visible) : <a href="tel:${cleanPhone}" class="inline-flex items-center justify-center gap-2 bg-brand text-white font-bold px-6 py-3.5 rounded-xl shadow-lg hover:opacity-95 transition-all text-base"><i data-lucide="phone" class="w-5 h-5"></i> <span>Appeler le ${formattedPhone}</span></a>
   * CTA 2 (Devis gratuit) : <a href="#devis" class="inline-flex items-center justify-center gap-2 bg-white text-zinc-900 border border-zinc-200 font-semibold px-6 py-3.5 rounded-xl hover:bg-zinc-50 transition-all text-base"><i data-lucide="file-text" class="w-5 h-5 text-zinc-500"></i> <span>Demander un devis gratuit</span></a>
 - Badges de réassurance sous le Hero : UNIQUEMENT des engagements sans affirmation factuelle (« Devis gratuit », « Artisan local à ${lead.city} »${lead.rating != null ? `, « ${lead.rating}/5 sur Google »` : ""}).
-  INTERDIT d'affirmer une certification, un label ou une garantie (RGE, Qualibat, garantie décennale, assurance, agrément), un délai d'intervention ou une disponibilité 7j/7 : aucun n'est vérifié pour ce prospect.
+  INTERDIT d'affirmer une certification, un label ou une garantie (RGE, Qualibat, garantie décennale, assurance, agrément), un délai d'intervention, une disponibilité 7j/7 ou des HORAIRES / jours d'ouverture : aucun n'est vérifié pour ce prospect (écris « Horaires à confirmer » si la mise en page en a besoin).
   Pour ces éléments, prévois un encadré discret « Vos certifications et garanties (à compléter) ».
   Exemples de badges utilisés par les sites du secteur, à NE PAS reprendre comme des faits : ${benchmark.conversionBlueprint.hero.trustBadges.join(", ")}
 

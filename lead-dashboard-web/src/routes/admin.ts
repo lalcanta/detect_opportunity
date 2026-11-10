@@ -128,6 +128,20 @@ export interface ModelSettingRow {
   provider: string;
   model: string;
   thinking_budget: number;
+  /** JSON : modèles de secours dans l'ordre, ou null */
+  fallback_models?: string | null;
+}
+
+/** Liste de secours saisie (tableau ou texte séparé par des virgules) → identifiants nettoyés, 5 au plus. */
+export function normalizeFallbackModels(raw: unknown): string[] {
+  const items = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(/[,\n]/) : [];
+  const out: string[] = [];
+  for (const it of items) {
+    if (typeof it !== "string") continue;
+    const v = it.trim();
+    if (v && v.length <= 120 && /^[\w@.:/-]+$/.test(v) && !out.includes(v)) out.push(v);
+  }
+  return out.slice(0, 5);
 }
 
 /** GET /api/admin/models — liste la configuration et les modèles disponibles. */
@@ -317,8 +331,31 @@ adminRoutes.post("/api/worker/models/sync", async (c) => {
 
 /** POST /api/admin/models — met à jour la configuration des modèles. */
 adminRoutes.post("/api/admin/models", requireUser("admin"), async (c) => {
-  const b = await c.req.json<{ settings?: ModelSettingRow[] }>().catch(() => ({}) as { settings?: ModelSettingRow[] });
+  const b = await c.req
+    .json<{ settings?: Array<ModelSettingRow & { fallback_models?: unknown }> }>()
+    .catch(() => ({}) as { settings?: Array<ModelSettingRow & { fallback_models?: unknown }> });
   if (!b.settings || !Array.isArray(b.settings)) return c.json({ error: "invalid_payload" }, 400);
+  const fallbacksByAction = new Map(b.settings.map((s) => [s.action_type, normalizeFallbackModels(s.fallback_models)]));
+
+  // Un modèle Cloudflare inexistant ferait basculer chaque appel sur Gemini sans bruit : on l'essaie (quelques tokens).
+  if (c.env.AI) {
+    const cfModels = [
+      ...new Set([
+        ...b.settings.filter((s) => s.provider === "cloudflare" && s.model).map((s) => s.model.trim()),
+        ...[...fallbacksByAction.values()].flat().filter((m) => m.startsWith("@cf/") || m.startsWith("cloudflare:")).map((m) => m.replace(/^cloudflare:/, "")),
+      ]),
+    ];
+    for (const model of cfModels) {
+      try {
+        await c.env.AI.run(model, { messages: [{ role: "user", content: "OK" }], max_tokens: 1 });
+      } catch (err) {
+        return c.json(
+          { error: `Modèle Cloudflare refusé : ${model} (${(err as Error).message.slice(0, 120)}). Rien n'a été enregistré.` },
+          400,
+        );
+      }
+    }
+  }
 
   const stmts: D1PreparedStatement[] = [];
   const now = new Date().toISOString();
@@ -326,14 +363,22 @@ adminRoutes.post("/api/admin/models", requireUser("admin"), async (c) => {
     if (!["demo", "audit", "battlecard"].includes(s.action_type) || !s.provider || !s.model) continue;
     stmts.push(
       c.env.DB.prepare(
-        `INSERT INTO model_settings (action_type, provider, model, thinking_budget, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)
+        `INSERT INTO model_settings (action_type, provider, model, thinking_budget, fallback_models, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(action_type) DO UPDATE SET
            provider = excluded.provider,
            model = excluded.model,
            thinking_budget = excluded.thinking_budget,
+           fallback_models = excluded.fallback_models,
            updated_at = excluded.updated_at`,
-      ).bind(s.action_type, s.provider, s.model.trim(), s.thinking_budget || 0, now),
+      ).bind(
+        s.action_type,
+        s.provider,
+        s.model.trim(),
+        s.thinking_budget || 0,
+        fallbacksByAction.get(s.action_type)?.length ? JSON.stringify(fallbacksByAction.get(s.action_type)) : null,
+        now,
+      ),
     );
   }
   if (stmts.length) await c.env.DB.batch(stmts);
@@ -412,7 +457,7 @@ export function computeTokenMetrics(rawList: Array<{
       cloudflareNeuronsToday += neuronsToday;
       const overAfter = Math.max(0, cloudflareNeuronsToday - 10000);
       cost = ((overAfter - overBefore) / 1000) * 0.011 * 0.92;
-    } else if (m.includes("antigravity") || m.includes("cli")) {
+    } else if (m.includes("antigravity") || m.includes("cli") || m.startsWith("agent:") || m.startsWith("deterministe")) {
       quotaCat = "cli_0euro";
       cost = 0;
     } else if (m.includes("flash")) {

@@ -54,6 +54,25 @@ function parseAudit(raw: string | null): AuditData | null {
   }
 }
 
+const TASK_LABELS: Record<string, string> = { demo: "Démo", audit: "Audit", battlecard: "Battlecard" };
+
+/** Provenance lisible : une ligne par tâche, avec le repli éventuel (ex. « Démo : gemini-3-flash-preview — repli de @cf/… »). */
+export function describeGeneration(raw?: string | null): string[] {
+  if (!raw) return [];
+  const seen = new Map<string, string>();
+  for (const part of raw.split(";")) {
+    const [task = "", model = "", requested = ""] = part.split("|");
+    if (!task || !model) continue;
+    const who = model.startsWith("agent:")
+      ? `agent ${model.slice(6)} (mode prep, 0 €)`
+      : model.startsWith("deterministe")
+        ? "généré sans IA (déterministe)"
+        : model;
+    seen.set(task, requested ? `${who} — repli, ${requested} indisponible` : who);
+  }
+  return [...seen.entries()].map(([task, who]) => `${TASK_LABELS[task] ?? task} : ${who}`);
+}
+
 function parseFormMeta(raw?: string | null): { captcha: string } {
   if (!raw) return { captcha: "" };
   try {
@@ -811,6 +830,10 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
       </div>
 
         <section class="space-y-1.5">
+          <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Généré par</p>
+          <ul id="sp_generated_by" class="text-[13px] text-zinc-800 space-y-0.5"></ul>
+        </section>
+        <section class="space-y-1.5">
           <div class="flex items-center justify-between gap-2">
             <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Site actuel</p>
             <a id="sp_old_site_url" href="#" target="_blank" rel="noopener" class="text-sm font-semibold text-indigo-700 hover:underline"></a>
@@ -959,6 +982,7 @@ var LEADS_MAP = ${JSON.stringify(
       opportunity_type: opportunityIdOf(l.opportunity_type),
       primary_channel: l.primary_channel || "",
       duplicate_of: l.duplicate_of || "",
+      generated_by: describeGeneration(l.generated_by),
       scanned_on: formatScanDate(l.created_at),
       contact_form_url: l.contact_form_url || "",
       contact_form_captcha: parseFormMeta(l.contact_form_meta).captcha,
@@ -1624,6 +1648,14 @@ function openSidepanel(id) {
   $('sp_outcome_msg').textContent = "Un clic enregistre l'issue, la note et met à jour l'étape.";
   $('sp_outcome_msg').className = 'text-xs text-zinc-600';
   arrangeSpTabs(lead, isAsyncMode);
+  var genList = $('sp_generated_by');
+  genList.innerHTML = '';
+  (lead.generated_by && lead.generated_by.length ? lead.generated_by : ['Inconnu (lead antérieur au suivi de provenance)']).forEach(function (line) {
+    var li = document.createElement('li');
+    li.textContent = line;
+    if (line.indexOf('repli') !== -1) li.className = 'text-amber-800 font-semibold';
+    genList.appendChild(li);
+  });
   $('sp_reply_form').classList.add('hidden');
   loadTimeline(id);
 

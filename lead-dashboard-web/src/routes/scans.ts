@@ -273,7 +273,7 @@ scanRoutes.post("/api/worker/claim", async (c) => {
   )
     .bind(new Date().toISOString())
     .first<ScanJob>();
-  const models = await c.env.DB.prepare("SELECT action_type, provider, model, thinking_budget FROM model_settings").all();
+  const models = await c.env.DB.prepare("SELECT action_type, provider, model, thinking_budget, fallback_models FROM model_settings").all();
   return c.json({ job: job ?? null, models: models.results });
 });
 
@@ -370,6 +370,8 @@ scanRoutes.post("/api/worker/ai/run", async (c) => {
       },
     });
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 500);
+    const message = (err as Error).message;
+    // 5007 : modèle inexistant sur Workers AI (erreur de configuration, pas une panne).
+    return c.json({ error: message }, /No such model|5007/.test(message) ? 400 : 502);
   }
 });

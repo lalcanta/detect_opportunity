@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildQueueBattlecard, pruneManifest } from "../syncQueue";
+import { buildQueueBattlecard, pruneManifest, queueGenerationUsage } from "../syncQueue";
 
 const APP = "https://app.test";
 
@@ -50,5 +50,13 @@ describe("syncQueue — purge du manifeste (audit 1.7)", () => {
 
     const list = JSON.parse(await readFile(manifest, "utf-8")) as { id: string }[];
     assert.deepEqual(list.map((l) => l.id), ["still"]);
+  });
+});
+
+describe("syncQueue — provenance des leads générés par un agent", () => {
+  it("trace l'agent pour la démo et la battlecard, le générateur déterministe pour le rapport QA", () => {
+    assert.deepEqual(queueGenerationUsage({ opportunity_type: "website" }, "claude-code").map((u) => u.model), ["agent:claude-code", "agent:claude-code"]);
+    assert.deepEqual(queueGenerationUsage({ opportunity_type: "audit_qa_trackers" }, "antigravity").map((u) => u.model), ["deterministe:tracker_report", "agent:antigravity"]);
+    assert.equal(queueGenerationUsage({ opportunity_type: "website" }, undefined)[0]!.model, "agent:inconnu");
   });
 });

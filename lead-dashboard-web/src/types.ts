@@ -214,6 +214,8 @@ export interface LeadRow {
   opportunity_type?: string | null;
   /** SIREN (9 chiffres) relevé à l'inspection, pour repérer les doublons */
   siren?: string | null;
+  /** Provenance : « tâche|modèle|modèle demandé » séparés par « ; » (token_usage) */
+  generated_by?: string | null;
   /** « Nom · Ville » d'un autre lead de même SIREN, s'il existe */
   duplicate_of?: string | null;
   /** Canal principal (phone | email | contact_form), null pour les leads antérieurs à la phase 1 */
@@ -270,6 +272,8 @@ export interface SyncBody {
     inputTokens: number;
     outputTokens: number;
     thinkingTokens: number;
+    /** Modèle configuré, quand le modèle utilisé est un repli */
+    requestedModel?: string;
   }[];
 }
 

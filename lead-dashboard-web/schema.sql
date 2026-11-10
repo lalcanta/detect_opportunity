@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS token_usage (
   input_tokens    INTEGER NOT NULL DEFAULT 0,
   output_tokens   INTEGER NOT NULL DEFAULT 0,
   thinking_tokens INTEGER NOT NULL DEFAULT 0,
+  requested_model TEXT,             -- modèle configuré quand le modèle utilisé est un repli (sinon NULL)
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -149,6 +150,7 @@ CREATE TABLE IF NOT EXISTS model_settings (
   provider        TEXT NOT NULL DEFAULT 'gemini',
   model           TEXT NOT NULL DEFAULT 'gemini-3-flash-preview',
   thinking_budget INTEGER NOT NULL DEFAULT 0,
+  fallback_models TEXT,             -- JSON : modèles de secours essayés dans l'ordre (quota, surcharge), NULL = aucun
   updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

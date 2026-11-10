@@ -117,6 +117,8 @@ export interface Battlecard {
 export interface TokenUsageRecord {
   task: string;
   model: string;
+  /** Modèle configuré, quand `model` est un repli */
+  requestedModel?: string;
   inputTokens: number;
   outputTokens: number;
   thinkingTokens: number;

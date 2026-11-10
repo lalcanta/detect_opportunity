@@ -75,6 +75,7 @@ export const PROOF_GENERATORS: Record<ProofGeneratorId, ProofGenerator> = {
     const audit = buildTrackerAudit(ctx.inspection);
     await ctx.onSubStep?.(`🛡️ Génération du Rapport Interactif QA & Traceurs RGPD...`);
     const demoHtml = generateTrackerReportHtml({ leadId: ctx.leadId, lead: ctx.lead, inspection: ctx.inspection, remoteAppUrl: ctx.remoteAppUrl });
+    ctx.usage.push({ task: "demo", model: "deterministe:tracker_report", inputTokens: 0, outputTokens: 0, thinkingTokens: 0 });
     return { audit, demoHtml };
   },
 };
@@ -90,6 +91,7 @@ export const PITCH_GENERATORS: Record<PitchGeneratorId, PitchGenerator> = {
   },
   tracker_cold_email: async (ctx) => {
     await ctx.onSubStep?.(`✉️ Préparation du brouillon d'email Dev-to-Dev (relecture manuelle)...`);
+    ctx.usage.push({ task: "battlecard", model: "deterministe:tracker_cold_email", inputTokens: 0, outputTokens: 0, thinkingTokens: 0 });
     return buildDeterministicQaBattlecard(ctx.lead, ctx.inspection, ctx.demoUrl);
   },
 };

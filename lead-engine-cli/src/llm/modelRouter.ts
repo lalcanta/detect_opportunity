@@ -42,6 +42,51 @@ export interface ActionModelConfig {
   provider: ModelProvider;
   model: string;
   thinkingBudget: number;
+  /** Modèles de secours essayés dans l'ordre si le principal échoue (quota, surcharge, modèle inexistant). */
+  fallbacks?: ModelRef[];
+}
+
+export interface ModelRef {
+  provider: ModelProvider;
+  model: string;
+}
+
+/** Filet de sécurité historique quand aucune liste de secours n'est configurée. */
+const LEGACY_FALLBACK: ModelRef = { provider: "gemini", model: "gemini-3-flash-preview" };
+
+const PROVIDERS: readonly ModelProvider[] = ["gemini", "openai", "anthropic", "openrouter", "cloudflare"];
+
+/** Fournisseur d'un identifiant de modèle : préfixe explicite « fournisseur:modèle », sinon déduit du nom. */
+export function parseModelRef(raw: string): ModelRef | null {
+  const v = raw.trim();
+  if (!v) return null;
+  const m = v.match(/^(gemini|openai|anthropic|openrouter|cloudflare):(.+)$/);
+  if (m) return { provider: m[1] as ModelProvider, model: m[2]!.trim() };
+  if (v.startsWith("@cf/")) return { provider: "cloudflare", model: v };
+  if (/^(gemini|gemma)/i.test(v)) return { provider: "gemini", model: v };
+  if (/^claude/i.test(v)) return { provider: "anthropic", model: v };
+  if (v.includes("/")) return { provider: "openrouter", model: v };
+  if (/^(gpt|o\d)/i.test(v)) return { provider: "openai", model: v };
+  return { provider: "gemini", model: v };
+}
+
+/** Liste de secours stockée en JSON (ou texte séparé par des virgules) ; vide ou illisible = aucune. */
+export function parseFallbackModels(raw: unknown): ModelRef[] {
+  let items: unknown[] = [];
+  if (Array.isArray(raw)) items = raw;
+  else if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      items = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      items = raw.split(",");
+    }
+  }
+  return items
+    .filter((x): x is string => typeof x === "string")
+    .map(parseModelRef)
+    .filter((r): r is ModelRef => r !== null && PROVIDERS.includes(r.provider))
+    .slice(0, 5);
 }
 
 interface KeySlot {
@@ -80,22 +125,30 @@ export class ModelRouter {
   }
 
   /** Met à jour dynamiquement la configuration des modèles depuis l'admin du dashboard. */
-  updateSettings(settings: { action_type: string; provider: string; model: string; thinking_budget?: number }[]): void {
+  updateSettings(
+    settings: { action_type: string; provider: string; model: string; thinking_budget?: number; fallback_models?: unknown }[],
+  ): void {
     for (const s of settings) {
       if (!s.action_type || !s.provider || !s.model) continue;
-      this.actionConfigs.set(s.action_type, {
+      const cfg: ActionModelConfig = {
         provider: s.provider as ModelProvider,
         model: s.model.trim(),
         thinkingBudget: Number(s.thinking_budget) || 0,
-      });
-      if (s.action_type === "demo") {
-        this.actionConfigs.set("TASK_HEAVY", {
-          provider: s.provider as ModelProvider,
-          model: s.model.trim(),
-          thinkingBudget: Number(s.thinking_budget) || 0,
-        });
-      }
+        fallbacks: parseFallbackModels(s.fallback_models),
+      };
+      this.actionConfigs.set(s.action_type, cfg);
+      if (s.action_type === "demo") this.actionConfigs.set("TASK_HEAVY", { ...cfg });
     }
+  }
+
+  /** Chaîne essayée pour une action : principal, puis secours configurés (ou le filet historique Gemini 3 Flash). */
+  chainFor(config: ActionModelConfig): ModelRef[] {
+    const chain: ModelRef[] = [{ provider: config.provider, model: config.model }];
+    const backups = config.fallbacks?.length ? config.fallbacks : [LEGACY_FALLBACK];
+    for (const b of backups) {
+      if (!chain.some((c) => c.provider === b.provider && c.model === b.model)) chain.push(b);
+    }
+    return chain;
   }
 
   /** Vrai si le coupe-circuit a basculé toutes les actions génératives en provider "cli". */
@@ -110,6 +163,37 @@ export class ModelRouter {
       thinkingBudget: 0,
     };
 
+    if (config.provider === "cli") throw new ZeroCostModeError(req.task);
+    // Un fournisseur inconnu ne doit pas retomber silencieusement sur une API payante.
+    if (!PROVIDERS.includes(config.provider)) throw new Error(`Provider IA inconnu « ${String(config.provider)} » pour « ${req.task} »`);
+
+    // Chaîne de modèles : le premier qui répond l'emporte. Les consommations d'un secours gardent le modèle configuré.
+    const before = req.usageSink?.length ?? 0;
+    const chain = this.chainFor(config);
+    let lastError: unknown;
+    for (let i = 0; i < chain.length; i++) {
+      const ref = chain[i]!;
+      try {
+        const result = await this.dispatch({ ...config, provider: ref.provider, model: ref.model }, req);
+        if (req.usageSink && result.model !== config.model) {
+          for (const rec of req.usageSink.slice(before)) rec.requestedModel = config.model;
+        }
+        return result;
+      } catch (err) {
+        if (err instanceof ZeroCostModeError) throw err;
+        lastError = err;
+        const next = chain[i + 1];
+        log(
+          "llm",
+          `${ref.provider}/${ref.model} indisponible pour « ${req.task} » : ${(err as Error).message.split("\n")[0]?.slice(0, 160)}` +
+            (next ? ` → bascule sur ${next.provider}/${next.model}` : " → plus de modèle de secours"),
+        );
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`Aucun modèle disponible pour « ${req.task} »`);
+  }
+
+  private async dispatch(config: ActionModelConfig, req: GenerateRequest): Promise<GenerateResult> {
     switch (config.provider) {
       case "cloudflare":
         return await this.callCloudflareWorkersAi(config, req);
@@ -122,7 +206,7 @@ export class ModelRouter {
       case "cli":
         throw new ZeroCostModeError(req.task);
       case "gemini":
-        return await this.callGeminiWithFallback(config, req);
+        return await this.callGemini(config, req);
       default:
         // Un provider inconnu ne doit pas retomber silencieusement sur une API payante.
         throw new Error(`Provider IA inconnu « ${String(config.provider)} » pour « ${req.task} »`);
@@ -146,7 +230,10 @@ export class ModelRouter {
           max_tokens: 8192,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status} sur /api/worker/ai/run`);
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status} sur /api/worker/ai/run${detail ? ` : ${detail.slice(0, 160)}` : ""}`);
+      }
       const data = (await res.json()) as {
         ok?: boolean;
         text?: string;
@@ -169,36 +256,30 @@ export class ModelRouter {
         provider: "cloudflare",
       };
     } catch (err) {
-      log("llm", `Workers AI (${config.model}) indisponible : ${(err as Error).message} → repli Gemini`);
-      return await this.callGeminiWithFallback(config, req);
+      throw new Error(`Workers AI (${config.model}) : ${(err as Error).message}`);
     }
   }
 
   /* ------------------- GEMINI ------------------- */
 
-  private async callGeminiWithFallback(config: ActionModelConfig, req: GenerateRequest): Promise<GenerateResult> {
-    const fallbackModel = "gemini-3-flash-preview";
-    const modelsToTry =
-      config.model === fallbackModel || config.model.startsWith("@cf/") || config.provider === "cloudflare"
-        ? [fallbackModel]
-        : [config.model, fallbackModel];
+  /** Un seul modèle Gemini, en alternant les clés API ; une clé en quota est mise en pause 60 s pour ce modèle. */
+  private async callGemini(config: ActionModelConfig, req: GenerateRequest): Promise<GenerateResult> {
+    const model = config.model;
     let lastError: unknown;
-
-    for (const model of modelsToTry) {
-      for (let attempt = 0; attempt < Math.max(1, this.geminiSlots.length); attempt++) {
-        const slot = this.pickGeminiSlot(model);
-        if (!slot) continue;
-        try {
-          return await this.executeGemini(slot, model, config.thinkingBudget, req);
-        } catch (err) {
-          if (!isRetryable(err)) throw err;
-          slot.cooldownUntil.set(model, Date.now() + COOLDOWN_MS);
-          lastError = err;
-          log("llm", `${slot.label}/${model} indisponible → bascule`);
-        }
+    for (let attempt = 0; attempt < Math.max(1, this.geminiSlots.length); attempt++) {
+      const slot = this.pickGeminiSlot(model);
+      if (!slot) break;
+      try {
+        return await this.executeGemini(slot, model, config.thinkingBudget, req);
+      } catch (err) {
+        lastError = err;
+        if (!isRetryable(err)) break;
+        slot.cooldownUntil.set(model, Date.now() + COOLDOWN_MS);
+        log("llm", `${slot.label}/${model} en quota ou indisponible → clé suivante`);
       }
     }
-    throw lastError instanceof Error ? lastError : new Error("Échec Gemini : aucun slot disponible");
+    if (this.geminiSlots.length === 0) throw new Error("Aucune clé GEMINI_API_KEY configurée");
+    throw lastError instanceof Error ? lastError : new Error(`${model} : toutes les clés sont en pause (quota)`);
   }
 
   private pickGeminiSlot(model: string): KeySlot | null {
@@ -254,10 +335,7 @@ export class ModelRouter {
     isOpenRouter: boolean,
   ): Promise<GenerateResult> {
     const apiKey = isOpenRouter ? this.cfg.OPENROUTER_API_KEY : this.cfg.OPENAI_API_KEY;
-    if (!apiKey) {
-      log("llm", `Clé ${isOpenRouter ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"} absente → repli sur Gemini`);
-      return this.callGeminiWithFallback({ provider: "gemini", model: "gemini-3-flash-preview", thinkingBudget: 0 }, req);
-    }
+    if (!apiKey) throw new Error(`Clé ${isOpenRouter ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"} absente`);
     const endpoint = isOpenRouter
       ? "https://openrouter.ai/api/v1/chat/completions"
       : `${this.cfg.OPENAI_BASE_URL.replace(/\/+$/, "")}/chat/completions`;
@@ -292,8 +370,7 @@ export class ModelRouter {
 
     if (!res.ok) {
       const errTxt = await res.text().catch(() => "");
-      log("llm", `Erreur ${config.provider} (${res.status}) : ${errTxt.slice(0, 150)} → repli Gemini`);
-      return this.callGeminiWithFallback({ provider: "gemini", model: "gemini-3-flash-preview", thinkingBudget: 0 }, req);
+      throw new Error(`${config.provider} HTTP ${res.status} : ${errTxt.slice(0, 150)}`);
     }
 
     const data = (await res.json()) as {
@@ -317,10 +394,7 @@ export class ModelRouter {
 
   private async callAnthropic(config: ActionModelConfig, req: GenerateRequest): Promise<GenerateResult> {
     const apiKey = this.cfg.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      log("llm", "Clé ANTHROPIC_API_KEY absente → repli sur Gemini");
-      return this.callGeminiWithFallback({ provider: "gemini", model: "gemini-3-flash-preview", thinkingBudget: 0 }, req);
-    }
+    if (!apiKey) throw new Error("Clé ANTHROPIC_API_KEY absente");
 
     const content: unknown[] = [];
     for (const img of req.images ?? []) {
@@ -356,8 +430,7 @@ export class ModelRouter {
 
     if (!res.ok) {
       const errTxt = await res.text().catch(() => "");
-      log("llm", `Erreur Anthropic (${res.status}) : ${errTxt.slice(0, 150)} → repli Gemini`);
-      return this.callGeminiWithFallback({ provider: "gemini", model: "gemini-3-flash-preview", thinkingBudget: 0 }, req);
+      throw new Error(`Anthropic HTTP ${res.status} : ${errTxt.slice(0, 150)}`);
     }
 
     const data = (await res.json()) as {

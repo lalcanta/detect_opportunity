@@ -46,7 +46,8 @@ File vide → réponds en une ligne (« file vide ») et arrête-toi : pas de sy
 Si au moins un lead a été complété :
 
 ```bash
-npm run sync-queue:prod   # argument "local" → npm run sync-queue
+LEADENGINE_AGENT=claude-code npm run sync-queue:prod   # argument "local" → LEADENGINE_AGENT=claude-code npm run sync-queue
+# LEADENGINE_AGENT trace dans le CRM quel agent a généré la démo et la battlecard (« Généré par »).
 ```
 
 Les leads complets partent dans le CRM et sont déplacés dans `queue/completed/` ; le manifeste est purgé

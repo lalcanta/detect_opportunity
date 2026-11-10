@@ -51,10 +51,10 @@ Antigravity exécute :
 Une fois les fichiers `demo.html` et `battlecard.json` écrits :
 ```bash
 # Pour synchroniser vers Cloudflare Pages (Production) :
-npm run sync-queue:prod
+LEADENGINE_AGENT=antigravity npm run sync-queue:prod
 
 # Pour synchroniser vers le serveur local (http://localhost:8788) :
-npm run sync-queue
+LEADENGINE_AGENT=antigravity npm run sync-queue
 ```
 Les leads sont poussés dans le Cloud CRM via `/api/sync` et déplacés dans `queue/completed/<leadId>/`.
 Les closers retrouvent immédiatement les fiches dans le Kanban avec démo interactive, flyer PDF prêt à l'emploi et battlecard d'appel.

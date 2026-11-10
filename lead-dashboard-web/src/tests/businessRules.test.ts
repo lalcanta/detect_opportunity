@@ -537,3 +537,24 @@ describe("Date de scan d'un lead", () => {
     assert.equal(formatScanDate(null), "");
   });
 });
+
+describe("Provenance d'un lead (Généré par)", () => {
+  it("décrit modèle, repli, agent et générateur déterministe", async () => {
+    const { describeGeneration } = await import("../views/closer");
+    assert.deepEqual(
+      describeGeneration("demo|gemini-3-flash-preview|@cf/x;audit|gemini-3.5-flash-lite|;battlecard|agent:claude-code|"),
+      ["Démo : gemini-3-flash-preview — repli, @cf/x indisponible", "Audit : gemini-3.5-flash-lite", "Battlecard : agent claude-code (mode prep, 0 €)"],
+    );
+    assert.deepEqual(describeGeneration("demo|deterministe:tracker_report|"), ["Démo : généré sans IA (déterministe)"]);
+    assert.deepEqual(describeGeneration(null), []);
+  });
+
+  it("classe l'agent et le déterministe en 0 € dans le cockpit des quotas", async () => {
+    const { computeTokenMetrics } = await import("../routes/admin");
+    const { tokens } = computeTokenMetrics([
+      { model: "agent:claude-code", input: 0, output: 0, thinking: 0, total_calls: 9, input_today: 0, output_today: 0, calls_today: 9 },
+      { model: "deterministe:tracker_report", input: 0, output: 0, thinking: 0, total_calls: 1, input_today: 0, output_today: 0, calls_today: 1 },
+    ]);
+    assert.deepEqual(tokens.map((t) => t.quotaCategory), ["cli_0euro", "cli_0euro"]);
+  });
+});
