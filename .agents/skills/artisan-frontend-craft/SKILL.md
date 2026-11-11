@@ -145,6 +145,10 @@ Toujours intégrée en bas pour les smartphones :
 
 Avant de livrer `demo.html`, vérifiez :
 1. ✅ **La démo a-t-elle son propre style visuel ?** Si elle ressemble à la démo précédente, changez immédiatement la palette, la typographie et la disposition de la Hero section.
+   `prompt_demo.md` impose une **direction artistique** (Éditorial XXL, Nuit premium, Bento, Néo-brutal, Plein cadre,
+   Grille suisse, Organique, Split cinétique : voir `lead-engine-cli/src/generator/designDirections.ts`) : elle prime
+   sur la palette et la typographie de l'archétype, qui gardent la psychologie client et le composant signature.
+   Le premier écran doit produire un effet « wahou » (animation d'entrée, typographie expressive, profondeur).
 2. ✅ **Rien n'est inventé ?** Vrais avis Google seulement (sinon note réelle + emplacement), aucune certification,
    garantie, délai ou prix affirmé sans source (voir §0).
 3. ✅ **Le numéro de téléphone réel et le WhatsApp fonctionnent-ils ?**

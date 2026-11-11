@@ -23,59 +23,9 @@ import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
 import { pushLead } from "./sync/pushLead";
 import { leadId, log, parseDirectDomainLeads } from "./utils/helpers";
 import type { MapsLead } from "./types";
+import { detectArtisanArchetype, pickDesignDirection, renderDesignBrief } from "./generator/designDirections";
 
-export function detectArtisanArchetype(activity: string): {
-  archetype: string;
-  palette: string;
-  fonts: string;
-  signatureComponent: string;
-  advice: string;
-} {
-  const act = activity.toLowerCase();
-  if (/couvr|toit|charp|ma[çc]on|fa[çc]ad|terras|carrel/.test(act)) {
-    return {
-      archetype: "MATIÈRE & GROS ŒUVRE (Bâtiment Noble)",
-      palette: "Pierre de calcaire (#F9F8F5), Terre cuite / Cuivre oxydé (#9A3412 ou #C05621), Noir forge (#111827)",
-      fonts: "Titres puissants avec empattements ou bold brut (font-serif ou Plus Jakarta Sans font-extrabold)",
-      signatureComponent: "Comparateur Avant / Après interactif (slider de rénovation toiture/maçonnerie) + Sceau Garantie Décennale",
-      advice: "Mettre en valeur la solidité, la protection contre les intempéries, la garantie décennale et des chantiers récents locaux.",
-    };
-  }
-  if (/boulang|p[aâ]tiss|bouch|traiteur|restau|chocolat|cavist|fromag/.test(act)) {
-    return {
-      archetype: "GOURMAND & COMMERCE DE PROXIMITÉ (Bouche & Terroir)",
-      palette: "Crème douce / Beurre frais (#FDFBF7), Doré croustillant (#D97706), Chocolat noir (#3E2723) ou Bordeaux velours",
-      fonts: "Typographie chaleureuse, ronde ou serif rétro moderne (Fraunces ou Cinzel)",
-      signatureComponent: "Badge dynamique 'Actuellement Ouvert' + Vitrine des spécialités '100% Fait Maison' avec réservation",
-      advice: "Mettre en valeur l'authenticité, les matières premières locales, le fait maison et la convivialité de quartier.",
-    };
-  }
-  if (/plomb|chauff|clim|electr|serrur|d[eé]pann|vitr/.test(act)) {
-    return {
-      archetype: "HAUTE VÉLOCITÉ & URGENCE (Dépannage & Sécurité)",
-      palette: "Blanc pur technique (#FFFFFF), Orange sécurité (#EA580C) ou Bleu électrique (#0284C7), Alerte sombre (#09090B)",
-      fonts: "Monospace technique pour les chiffres (JetBrains Mono) et gros boutons d'action XXL faciles à presser",
-      signatureComponent: "Bandeau d'Astreinte Immédiate ('Sur place en 30-45 min') + Grille des 3 forfaits clairs sans mauvaise surprise",
-      advice: "Désamorcer immédiatement l'angoisse de l'arnaque avec des prix indicatifs transparents et une réactivité maximale.",
-    };
-  }
-  if (/peint|d[eé]co|cuisin|éb[eé]n|menuis|paysag|architect|art|tapiss/.test(act)) {
-    return {
-      archetype: "STUDIO & MÉTIERS D'ART (Décoration & Agencement)",
-      palette: "Greige chic (#F4F1EA), Vert sauge / Olive (#4A5548), Laiton brossé ou Noir atelier (#18181B)",
-      fonts: "Design minimaliste haute visibilité avec grands espacements (tracking-wide, interligne généreux)",
-      signatureComponent: "Nuancier de finitions/matières cliquable + Simulateur de projet en 3 étapes interactif",
-      advice: "Approche magazine d'architecture intérieure, photos grand format, élégance et valorisation du sur-mesure.",
-    };
-  }
-  return {
-    archetype: "SAVOIR-FAIRE ARTISANAL UNIQUE",
-    palette: "Contraste soigné adapté aux couleurs de marque détectées, fond clair moderne, zéro template générique",
-    fonts: "Typographie moderne soignée adaptée à l'artisan",
-    signatureComponent: "Composant interactif engageant (calculateur ou sélecteur de besoins)",
-    advice: "Concevoir un univers sur-mesure distinctif reflétant l'expertise locale du professionnel.",
-  };
-}
+export { detectArtisanArchetype } from "./generator/designDirections";
 
 export interface PrepScanOptions {
   query: string;
@@ -409,6 +359,7 @@ export async function runPrepScan(
       const isSeoOffer = demoFocus === "seo_local";
       const isAdsOffer = demoFocus === "ads_acquisition";
       const craft = detectArtisanArchetype(lead.activity || opts.query || "");
+      const direction = pickDesignDirection(id, lead.activity || opts.query || "");
 
       const promptDemo = `# Consigne de Génération Démo Tailwind pour Antigravity (Skill artisan-frontend-craft)
 
@@ -427,6 +378,9 @@ Enregistre le code HTML complet et autonome directement dans :
 - **Typographie suggérée** : ${craft.fonts}
 - **Composant signature obligatoire** : ${craft.signatureComponent}
 - **Conseil d'impact** : ${craft.advice}
+
+## Direction Artistique de cette démo (prioritaire sur la palette et la typographie de l'archétype) :
+${renderDesignBrief(direction)}
 
 ## Cible & Type de Besoin Détecté :
 - Type d'offre : ${oppLabel} (id: ${oppType})

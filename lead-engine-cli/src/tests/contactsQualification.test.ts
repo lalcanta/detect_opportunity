@@ -185,3 +185,24 @@ describe("avis via l'API Places", () => {
     if (saved === undefined) delete process.env.GOOGLE_PLACES_API_KEY; else process.env.GOOGLE_PLACES_API_KEY = saved;
   });
 });
+
+describe("directions artistiques des démos", () => {
+  it("donne une direction stable par lead, compatible avec son métier", async () => {
+    const { pickDesignDirection, DESIGN_DIRECTIONS, detectArtisanArchetype } = await import("../generator/designDirections");
+    assert.equal(pickDesignDirection("abc", "Couvreur").id, pickDesignDirection("abc", "Couvreur").id);
+    for (const id of ["a1", "b2", "c3", "d4", "e5", "f6", "g7", "h8"]) {
+      const d = pickDesignDirection(id, "Serrurier");
+      assert.ok(d.suits.includes("urgence"), `${d.id} doit convenir à un métier d'urgence`);
+    }
+    const used = new Set(["a1", "b2", "c3", "d4", "e5", "f6", "g7", "h8", "i9", "j10"].map((id) => pickDesignDirection(id, "Boulangerie").id));
+    assert.ok(used.size >= 3, "plusieurs boulangeries ne reçoivent pas toutes la même direction");
+    assert.equal(detectArtisanArchetype("Charcuterie").id, "gourmand");
+    assert.ok(DESIGN_DIRECTIONS.length >= 6);
+  });
+  it("charge les deux polices de la direction", async () => {
+    const { googleFontsHref, renderDesignBrief, DESIGN_DIRECTIONS } = await import("../generator/designDirections");
+    const neo = DESIGN_DIRECTIONS.find((d) => d.id === "neo_brutal")!;
+    assert.equal(googleFontsHref(neo), "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700;800&display=swap");
+    assert.match(renderDesignBrief(neo), /Néo-brutal coloré[\s\S]*prefers-reduced-motion/);
+  });
+});

@@ -1,4 +1,5 @@
 import { getCompetitorBenchmark } from "../benchmarks/competitorBenchmarks";
+import { detectArtisanArchetype, pickDesignDirection, renderDesignBrief } from "./designDirections";
 import type { ModelRouter } from "../llm/modelRouter";
 import type { DemoFocus } from "../../../shared/opportunities";
 import type { MapsLead, SiteAudit, SiteInspection, TokenUsageRecord } from "../types";
@@ -62,120 +63,80 @@ export async function generateDemoHtml(
     .replace("{VILLE}", lead.city)
     .replace("{NOM_ENTREPRISE}", lead.name);
 
-  const prompt = `Tu dois concevoir une refonte de landing page HAUTE CONVERSION pour un artisan local, en UN SEUL fichier HTML autonome.
+  const direction = pickDesignDirection(input.leadId, lead.activity);
+  const craft = detectArtisanArchetype(lead.activity);
+
+  const prompt = `Conçois la refonte du site de ce professionnel local : une landing page MODERNE, MÉMORABLE et à forte conversion, en UN SEUL fichier HTML autonome. Le prospect doit avoir un effet « wahou » en l'ouvrant : c'est ce qui décroche le rendez-vous.
 
 ================================================================================
-1. RÈGLE MAJEURE : REPRISE DU VRAI LOGO CLIENT (ON N'EN REFAIT PAS UN !)
+1. LE PROSPECT
+================================================================================
+- Nom : ${lead.name}
+- Métier : ${lead.activity} — famille « ${craft.archetype} » (${craft.advice})
+- Ville : ${lead.city}
+- Téléphone : ${formattedPhone}
+- Note Google : ${lead.rating != null ? `${lead.rating}/5 sur ${lead.reviewsCount ?? "?"} avis` : "non disponible (n'affiche aucune note)"}
+- Couleurs de marque relevées sur son site : ${palette} (principale ${primaryColor}, secondaire ${secondaryColor})
+- Faiblesses de son site actuel, à dépasser largement : ${audit.weaknesses.join(" ; ")}
+
+================================================================================
+2. ${renderDesignBrief(direction)}
+================================================================================
+
+================================================================================
+3. LOGO : LE VRAI, JAMAIS UN FAUX
 ================================================================================
 ${
   inspection?.logoUrl
-    ? `LE CLIENT POSSÈDE SON PROPRE LOGO RÉEL :
-- CONSIGNE STRICTE : Tu DOIS impérativement intégrer ce logo tel quel dans le header / navbar en utilisant EXACTEMENT cette balise HTML :
-  <img src="${LOGO_PLACEHOLDER}" alt="${lead.name}" class="h-10 sm:h-12 w-auto object-contain max-w-[200px]" loading="eager">
-- INTERDICTION FORMELLE d'inventer, de dessiner ou de remplacer ce logo par une icône ou un faux logo !
-- LE DESIGN DOIT SE MODERNISER AUTOUR DE SON LOGO : toute la mise en page (boutons, bordures, cartes, accents) s'harmonise avec l'identité de son logo existant.`
-    : `LE CLIENT N'A PAS DE FICHIER LOGO IMAGE DÉTECTÉ SUR SON ANCIEN SITE :
-- INTERDICTION FORMELLE D'INVENTER UN FAUX LOGO (aucun dessin de marteau, aucun symbole SVG ou emblème fictif inventé) !
-- Tu dois afficher EXCLUSIVEMENT son nom commercial exact "${lead.name}" sous forme de LOGOTYPE TEXTUEL PUR (Wordmark élégant avec police moderne et épurée, text-xl sm:text-2xl font-bold tracking-tight text-zinc-900).`
+    ? `Le client a un logo. Affiche-le dans l'en-tête avec EXACTEMENT cette source : <img src="${LOGO_PLACEHOLDER}" alt="${lead.name}" …> (classes libres, hauteur 40 à 56 px, object-contain). N'invente, ne dessine et ne remplace jamais ce logo. Le design s'harmonise avec lui.`
+    : `Aucun logo détecté : affiche le nom commercial exact « ${lead.name} » en logotype texte soigné, dans la police des titres. INTERDIT d'inventer un logo, une icône-emblème ou un monogramme.`
 }
 
-- Identité de marque et couleurs extraites du logo / site client :
-  * Couleur primaire : ${primaryColor}
-  * Couleur secondaire : ${secondaryColor}
-  * Nuances associées : ${palette}
-
-Injecte cette configuration Tailwind dans le <head> pour appliquer les vraies couleurs de sa marque :
-<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          brand: '${primaryColor}',
-          brandDark: '${primaryColor}',
-          brandSecondary: '${secondaryColor}',
-        }
-      }
-    }
-  };
-</script>
+================================================================================
+4. CONTENU (l'ordre et la mise en page suivent la direction artistique, pas un gabarit)
+================================================================================
+A. Hero : accroche inspirée de « ${headline} » et « ${subheadline} » (reformule librement, garde le métier et la ville). Deux actions : appeler (lien tel:${cleanPhone}, numéro visible) et demander un devis (ancre #devis).
+   Réassurance UNIQUEMENT avec des engagements sans affirmation factuelle (« Devis gratuit », « Artisan local à ${lead.city} »${lead.rating != null ? `, « ${lead.rating}/5 sur Google »` : ""}).
+B. Prestations — section « ${benchmark.conversionBlueprint.servicesGrid.sectionTitle} » : 6 prestations adaptées à « ${lead.activity} », mises en scène selon la direction artistique (bento, liste numérotée, carrousel, défilement…), pas une grille de cartes identiques :
+${benchmark.conversionBlueprint.servicesGrid.servicesList.map((sv, idx) => `   ${idx + 1}. ${sv}`).join("\n")}
+C. Pourquoi nous — « ${benchmark.conversionBlueprint.competitiveAdvantages.sectionTitle.replace("{VILLE}", lead.city)} », engagements génériques (aucun délai, chiffre, marque ou label affirmé) :
+${benchmark.conversionBlueprint.competitiveAdvantages.points.map((pt) => `   - ${pt.title} : ${pt.desc}`).join("\n")}
+D. Avis : ${
+    lead.recentReviews.length
+      ? `mets en scène ces VRAIS avis Google sans modifier leur texte :\n${lead.recentReviews.map((r, i) => `   ${i + 1}. ${r.author} (${r.rating ?? "?"}★, ${r.relativeDate}) : "${r.text}"`).join("\n")}`
+      : `aucun texte d'avis disponible. N'INVENTE AUCUN AVIS NI NOM DE CLIENT : ${lead.rating != null ? "mets en valeur la note réelle et le nombre d'avis, avec un emplacement « Vos avis Google s'afficheront ici »" : "prévois un emplacement « Vos avis Google s'afficheront ici »"}.`
+  }
+E. Devis (id="devis") : formulaire court et élégant (Nom, Téléphone, Prestation, Ville/CP) ; ${benchmark.conversionBlueprint.coverageAreaPrompt.replace("{VILLE}", lead.city)}
+F. Composant interactif signature du métier, en JavaScript pur : ${craft.signatureComponent} (les éléments qui reposent sur des faits non vérifiés deviennent des exemples signalés « Exemple » ou des emplacements « à compléter »).
+G. Barre d'appel mobile : barre fixe en bas d'écran sur mobile uniquement (fixed bottom-0, masquée à partir de sm), avec le lien tel:${cleanPhone} ; style assorti à la direction artistique. Laisse un espace en bas de page pour qu'elle ne masque rien.
 
 ================================================================================
-2. INSPIRATION DES SITES CONCURRENTS LEADERS À FORT TRAFIC (SECTEUR : ${benchmark.categoryName})
+5. HONNÊTETÉ (prioritaire sur tout le reste)
 ================================================================================
-Inspire-toi directement des recettes éprouvées des sites concurrents les plus performants dans ce domaine (${benchmark.trafficLeaders.map((l) => l.name).join(", ")}) :
-
-A. EN-TÊTE & HERO HAUTE CONVERSION :
-- Titre Hero percutant : "${headline}"
-- Sous-titre rassurant : "${subheadline}"
-- Double Call-To-Action immédiat :
-  * CTA 1 (Appel immédiat avec numéro très visible) : <a href="tel:${cleanPhone}" class="inline-flex items-center justify-center gap-2 bg-brand text-white font-bold px-6 py-3.5 rounded-xl shadow-lg hover:opacity-95 transition-all text-base"><i data-lucide="phone" class="w-5 h-5"></i> <span>Appeler le ${formattedPhone}</span></a>
-  * CTA 2 (Devis gratuit) : <a href="#devis" class="inline-flex items-center justify-center gap-2 bg-white text-zinc-900 border border-zinc-200 font-semibold px-6 py-3.5 rounded-xl hover:bg-zinc-50 transition-all text-base"><i data-lucide="file-text" class="w-5 h-5 text-zinc-500"></i> <span>Demander un devis gratuit</span></a>
-- Badges de réassurance sous le Hero : UNIQUEMENT des engagements sans affirmation factuelle (« Devis gratuit », « Artisan local à ${lead.city} »${lead.rating != null ? `, « ${lead.rating}/5 sur Google »` : ""}).
-  INTERDIT d'affirmer une certification, un label ou une garantie (RGE, Qualibat, garantie décennale, assurance, agrément), un délai d'intervention, une disponibilité 7j/7 ou des HORAIRES / jours d'ouverture : aucun n'est vérifié pour ce prospect (écris « Horaires à confirmer » si la mise en page en a besoin).
-  Pour ces éléments, prévois un encadré discret « Vos certifications et garanties (à compléter) ».
-  Exemples de badges utilisés par les sites du secteur, à NE PAS reprendre comme des faits : ${benchmark.conversionBlueprint.hero.trustBadges.join(", ")}
-
-B. GRILLE DES PRESTATIONS STARS DU SECTEUR :
-Titre de section : "${benchmark.conversionBlueprint.servicesGrid.sectionTitle}"
-Génère une grille moderne de 6 prestations concrètes, adaptées à "${lead.activity}" :
-${benchmark.conversionBlueprint.servicesGrid.servicesList.map((s, idx) => `  ${idx + 1}. ${s}`).join("\n")}
-Chaque carte de prestation doit être claire, avec une icône Lucide adaptée, 2 ou 3 puces bénéfices et un petit lien "Demander un devis pour cette prestation ➔".
-
-C. SECTION "POURQUOI NOUS CHOISIR ?" (ARGUMENTS DIFFÉRENCIATEURS DES LEADERS) :
-Titre de section : "${benchmark.conversionBlueprint.competitiveAdvantages.sectionTitle.replace("{VILLE}", lead.city)}"
-Points à développer, reformulés comme des engagements génériques : n'affirme ni délai, ni marque partenaire, ni chiffre, ni label (rien n'est vérifié) :
-${benchmark.conversionBlueprint.competitiveAdvantages.points.map((p) => `  - ${p.title} : ${p.desc}`).join("\n")}
-
-D. PREUVE SOCIALE & AVIS GOOGLE RÉELS DE L'ARTISAN :
-${lead.rating != null ? `Note globale réelle : ${lead.rating}/5 sur ${lead.reviewsCount ?? "?"} avis Google.` : "Note Google non disponible : n'affiche aucune note."}
-${
-  lead.recentReviews.length
-    ? `Mets en scène ces VRAIS avis clients Google de façon valorisante, sans en modifier le texte :\n${lead.recentReviews
-        .map((r, i) => `  ${i + 1}. ${r.author} (${r.rating ?? "?"}★, ${r.relativeDate}) : "${r.text}"`)
-        .join("\n")}`
-    : `Aucun texte d'avis disponible : N'INVENTE AUCUN AVIS NI AUCUN NOM DE CLIENT. Affiche la note réelle et un emplacement « Vos avis Google s'afficheront ici ».`
-}
-
-E. FORMULAIRE DE DEVIS EXPRESS & ANCRAGE LOCAL :
-- Formulaire épuré et moderne (Nom, Téléphone, Prestation souhaitée, Ville/CP).
-- ${benchmark.conversionBlueprint.coverageAreaPrompt.replace("{VILLE}", lead.city)}
-
-F. MOBILE-FIRST & BARRE FLOTTANTE D'APPEL DIRECT :
-- Les leaders du trafic enregistrent 75% de leurs appels sur mobile.
-- Intègre impérativement un bandeau sticky fixe en bas sur mobile :
-  <div class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-zinc-200 p-3 z-50 flex items-center justify-between gap-3 sm:hidden shadow-2xl">
-    <div class="min-w-0">
-      <p class="text-xs font-bold text-zinc-900 truncate">${lead.name}</p>
-      <p class="text-[11px] text-emerald-600 font-semibold flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Disponible à ${lead.city}</p>
-    </div>
-    <a href="tel:${cleanPhone}" class="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md shrink-0">
-      <i data-lucide="phone-call" class="w-4 h-4"></i>
-      <span>Appeler (${formattedPhone})</span>
-    </a>
-  </div>
+- N'affirme aucune certification, label ou garantie (RGE, Qualibat, décennale, assurance, agrément), aucun délai d'intervention, aucune disponibilité 7j/7, aucun prix, aucune année d'expérience, aucun nombre de chantiers, aucun « fait maison », « produits locaux », « du terroir » ou « savoir-faire reconnu », aucun HORAIRE ni jour d'ouverture : rien de cela n'est vérifié (« Horaires à confirmer » si la mise en page en a besoin ; un encadré discret « Vos certifications et garanties (à compléter) » est bienvenu).
+- Exemples de badges du secteur, à NE PAS présenter comme des faits : ${benchmark.conversionBlueprint.hero.trustBadges.join(", ")}.
+- Les seuls chiffres animables sont la note et le nombre d'avis Google réels ; ne qualifie pas les avis de « vérifiés ».
 
 ================================================================================
-3. CONTRAINTES TECHNIQUES
+6. CONTRAINTES TECHNIQUES
 ================================================================================
-- CDN obligatoires dans le <head> :
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-- À la fin du <body> : <script>lucide.createIcons();</script>
-- Faiblesses constatées sur son ancien site (à dépasser totalement) : ${audit.weaknesses.join(" ; ")}
+- Dans le <head> : <script src="https://cdn.tailwindcss.com"></script>, <script src="https://unpkg.com/lucide@latest"></script> et le lien Google Fonts ci-dessus.
+- Configure Tailwind avec les couleurs de la direction (tailwind.config = { theme: { extend: { colors: { brand: '…', … }, fontFamily: { display: ['${direction.fonts.display}', 'serif'], body: ['${direction.fonts.body}', 'sans-serif'] } } } }).
+- À la fin du <body> : <script>lucide.createIcons();</script> puis ton script d'animations.
 - IMAGES : ${
     inspection?.siteImages?.length
       ? `utilise EN PRIORITÉ ces vraies photos du prospect (son site), en lien direct, avec un alt descriptif :\n${inspection.siteImages.map((u) => `    * ${u}`).join("\n")}\n  Ne les remplace pas par des photos de banque d'images.`
-      : "aucune photo du prospect n'est disponible : préfère des aplats, dégradés et motifs CSS. Si tu utilises une photo générique, ajoute une petite mention « Photo d'exemple » dessus."
+      : "aucune photo du prospect : construis les visuels en CSS (dégradés maillés, formes, textures, typographie). Si tu utilises une photo générique, ajoute une petite mention « Photo d'exemple » dessus."
   }
-- N'ajoute AUCUN script de tracking supplémentaire (il est injecté automatiquement après).
-- Réponds UNIQUEMENT avec le code HTML complet (<!DOCTYPE html> ... </html>), sans aucun bloc markdown (\`\`\`) ni commentaire avant/après.`;
+- N'ajoute AUCUN script de tracking (il est injecté automatiquement après).
+- Réponds UNIQUEMENT avec le code HTML complet (<!DOCTYPE html> ... </html>), sans bloc markdown (\`\`\`) ni commentaire avant ou après.`;
 
   const focusInstruction = demoFocusInstruction(input.focus, lead.city);
   const { text } = await router.generate({
     task: "demo",
     prompt: focusInstruction ? `${prompt}\n\n${focusInstruction}` : prompt,
     system:
-      "Tu es un directeur artistique et lead developer web spécialisé dans la refonte de sites d'artisans d'élite. Tu respectes scrupuleusement le logo réel du client sans jamais en inventer un faux, tu modernises l'ergonomie autour de son identité, et tu appliques rigoureusement les benchmarks des sites concurrents qui ont le plus de trafic et de conversions en France.",
+      "Tu es un directeur artistique et développeur front-end primé (sites de l'année sur Awwwards), spécialisé dans les sites de professionnels locaux. Chaque site que tu livres a une identité forte, des animations soignées et une conversion redoutable. Tu respectes le vrai logo du client, tu n'inventes jamais de fait, et tu suis à la lettre la direction artistique demandée.",
     images: inspection?.screenshot ? [{ mimeType: "image/jpeg", data: inspection.screenshot }] : undefined,
     usageSink,
   });

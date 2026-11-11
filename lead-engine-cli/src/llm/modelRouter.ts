@@ -282,7 +282,7 @@ export class ModelRouter {
       }
     }
     if (this.geminiSlots.length === 0) throw new Error("Aucune clé GEMINI_API_KEY configurée");
-    throw lastError instanceof Error ? lastError : new Error(`${model} : toutes les clés sont en pause (quota)`);
+    throw lastError instanceof Error ? lastError : new Error(`${model} : toutes les clés sont en pause (quota ou surcharge Google)`);
   }
 
   private pickGeminiSlot(model: string): KeySlot | null {

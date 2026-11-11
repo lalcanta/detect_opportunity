@@ -37,3 +37,6 @@ Thumbs.db
 
 # Gemini / Antigravity local config
 .gemini/
+
+# Démos de test (à supprimer après comparaison)
+test_demo/
