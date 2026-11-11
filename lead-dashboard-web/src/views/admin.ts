@@ -1,3 +1,4 @@
+import { jobModeBadge } from "./jobMode";
 import type { LeadRow, User } from "../types";
 import { CHANNEL_IDS, CHANNEL_LABELS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../../shared/opportunities";
 import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedChannels, parseAllowedOpportunities } from "../types";
@@ -374,6 +375,18 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
 
   const pendingLeads = leads.filter((l) => l.status === "pending_generation");
   const pendingCount = pendingLeads.length;
+  // Leads déjà confiés à un job de génération API en attente ou en cours.
+  const busyGeneration = new Set<string>();
+  for (const j of scans) {
+    if (j.job_type !== "generate" || (j.status !== "queued" && j.status !== "running")) continue;
+    try {
+      const ids = JSON.parse(j.lead_ids || "[]");
+      if (Array.isArray(ids)) for (const id of ids) if (typeof id === "string") busyGeneration.add(id);
+    } catch {
+      // ignoré
+    }
+  }
+  const generatableCount = pendingLeads.filter((l) => !busyGeneration.has(l.id)).length;
   const unqualifiedLeads = leads.filter((l) => l.status === "unqualified");
   const unqualifiedReasons = (raw: string | null): string[] => {
     try {
@@ -865,14 +878,12 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
               .map((s) => {
                 const o = opportunityBadgeMeta(s.opportunity_type);
                 const filterTag = s.website_filter && s.website_filter !== "all" ? ` <span class="text-[9px] opacity-75">(${s.website_filter === "no_website" ? "sans site" : "avec site"})</span>` : "";
-                const isPrep = s.execution_mode === "prep_only";
-                const modeBadge = isPrep
-                  ? `<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Préparation locale dans queue/pending/ sans coût API">🛠️ CLI 0€</span>`
-                  : `<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Cycle complet avec clés API et synchronisation CRM">⚡ Full Auto</span>`;
+                const modeBadge = jobModeBadge(s);
+                const isGen = s.job_type === "generate";
                 return `<tr class="hover:bg-zinc-50">
               <td class="py-3 font-mono font-bold text-zinc-400">${s.id}</td>
-              <td class="py-3 font-semibold text-zinc-800">${esc(s.query)} · ${esc(s.city)} <span class="text-xs text-zinc-400 font-normal">(${s.lead_limit} max${s.use_cdp ? ", CDP" : ""})</span></td>
-              <td class="py-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold border ${o.cls}">${o.label}${filterTag}</span></td>
+              <td class="py-3 font-semibold text-zinc-800">${esc(s.query)} · ${esc(s.city)}${isGen ? "" : ` <span class="text-xs text-zinc-400 font-normal">(${s.lead_limit} max${s.use_cdp ? ", CDP" : ""})</span>`}</td>
+              <td class="py-3">${isGen ? '<span class="text-zinc-400">—</span>' : `<span class="px-2 py-0.5 rounded text-[11px] font-semibold border ${o.cls}">${o.label}${filterTag}</span>`}</td>
               <td class="py-3">${modeBadge}</td>
               <td class="py-3"><span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ${badge[s.status] ?? ""}">${esc(s.status)}</span></td>
               <td class="py-3 font-mono text-zinc-700 font-medium">${s.processed}/${s.total || "?"}</td>
@@ -947,7 +958,13 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
             <h3 class="font-semibold text-sm text-zinc-900">Prospects Qualifiés en Attente</h3>
             <span class="text-xs bg-zinc-100 text-zinc-700 font-semibold px-2 py-0.5 rounded">${pendingCount}</span>
           </div>
+          ${
+            generatableCount
+              ? `<button type="button" class="btn-gen-api text-xs bg-violet-600 hover:bg-violet-700 text-white rounded-lg px-3 py-1.5 font-semibold shadow-sm inline-flex items-center gap-1.5" data-gen-all="1" title="Le worker du Mac génère démo et battlecard avec les modèles de l'onglet Modèles, puis synchronise">🤖 Tout générer via l'API (${generatableCount})</button>`
+              : ""
+          }
         </div>
+        <p id="gen_api_msg" class="hidden mt-3 text-xs rounded-lg px-3 py-2"></p>
 
         <div class="overflow-x-auto mt-4">
           <table class="w-full text-xs text-left">
@@ -960,6 +977,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
                 <th class="py-2.5 font-semibold">Présence Web</th>
                 <th class="py-2.5 font-semibold">Flyer PDF</th>
                 <th class="py-2.5 font-semibold">Statut</th>
+                <th class="py-2.5 font-semibold">Génération</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-zinc-100">
@@ -1001,10 +1019,17 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
                       En attente IA (0€)
                     </span>
                   </td>
+                  <td class="py-3">
+                    ${
+                      busyGeneration.has(l.id)
+                        ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-violet-50 border border-violet-200 text-violet-700"><span class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>API en cours</span>'
+                        : `<button type="button" class="btn-gen-api text-[11px] bg-white hover:bg-violet-50 text-violet-700 border border-violet-200 rounded-lg px-2.5 py-1 font-semibold" data-gen-id="${esc(l.id)}">🤖 Générer via l'API</button>`
+                    }
+                  </td>
                 </tr>`,
                   )
                   .join("") ||
-                `<tr><td colspan="7" class="text-zinc-400 py-10 text-center">Aucun prospect en attente de génération dans la file.<br><span class="text-xs text-zinc-400">Lancez un scan en mode 'Préparation CLI 0€' depuis l'onglet Scanner.</span></td></tr>`
+                `<tr><td colspan="8" class="text-zinc-400 py-10 text-center">Aucun prospect en attente de génération dans la file.<br><span class="text-xs text-zinc-400">Lancez un scan en mode 'Préparation CLI 0€' depuis l'onglet Scanner.</span></td></tr>`
               }
             </tbody>
           </table>
@@ -2078,14 +2103,12 @@ function updateScanUI(scans) {
       var oppKey = s.opportunity_type || ${JSON.stringify(DEFAULT_OPPORTUNITY_ID)};
       var o = oppList.find(function (x) { return x.id === oppKey; }) || { badge: '🎯 ' + oppKey };
       var filterTag = s.website_filter && s.website_filter !== 'all' ? ' <span class="text-[9px] opacity-75">(' + (s.website_filter === 'no_website' ? 'sans site' : 'avec site') + ')</span>' : '';
-      var isPrep = s.execution_mode === 'prep_only';
-      var modeBadge = isPrep
-        ? '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Préparation locale dans queue/pending/ sans coût API">🛠️ CLI 0€</span>'
-        : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Cycle complet avec clés API et synchronisation CRM">⚡ Full Auto</span>';
+      var isGen = s.job_type === 'generate';
+      var modeBadge = s.mode_badge || '';
       rowsHtml += '<tr class="hover:bg-zinc-50">' +
         '<td class="py-3 font-mono font-bold text-zinc-400">' + s.id + '</td>' +
-        '<td class="py-3 font-semibold text-zinc-800">' + escHtml(s.query) + ' · ' + escHtml(s.city) + ' <span class="text-xs text-zinc-400 font-normal">(' + s.lead_limit + ' max' + (s.use_cdp ? ', CDP' : '') + ')</span></td>' +
-        '<td class="py-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200">' + escHtml(o.badge) + filterTag + '</span></td>' +
+        '<td class="py-3 font-semibold text-zinc-800">' + escHtml(s.query) + ' · ' + escHtml(s.city) + (isGen ? '' : ' <span class="text-xs text-zinc-400 font-normal">(' + s.lead_limit + ' max' + (s.use_cdp ? ', CDP' : '') + ')</span>') + '</td>' +
+        '<td class="py-3">' + (isGen ? '<span class="text-zinc-400">—</span>' : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200">' + escHtml(o.badge) + filterTag + '</span>') + '</td>' +
         '<td class="py-3">' + modeBadge + '</td>' +
         '<td class="py-3"><span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ' + (badgeClasses[s.status] || '') + '">' + escHtml(s.status) + '</span></td>' +
         '<td class="py-3 font-mono text-zinc-700 font-medium">' + s.processed + '/' + (s.total || '?') + '</td>' +
@@ -2290,6 +2313,38 @@ async function fetchAndDisplayScanLogs(scanId) {
 }
 
 document.addEventListener('click', async function (e) {
+  var genBtn = e.target.closest('.btn-gen-api');
+  if (genBtn) {
+    var ids = genBtn.dataset.genId ? [genBtn.dataset.genId] : null;
+    var all = ids ? null : document.querySelectorAll('.btn-gen-api[data-gen-id]');
+    var label = genBtn.textContent;
+    genBtn.disabled = true;
+    genBtn.textContent = 'Envoi…';
+    var msg = $('gen_api_msg');
+    try {
+      var r = await post('/api/admin/leads/generate-api', ids ? { lead_ids: ids } : {});
+      var data = await r.json().catch(function () { return {}; });
+      if (!r.ok) throw new Error(data.message || ('Erreur ' + r.status));
+      var done = ids ? [genBtn] : Array.prototype.slice.call(all);
+      done.forEach(function (btn) {
+        btn.outerHTML = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-violet-50 border border-violet-200 text-violet-700"><span class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>API en cours</span>';
+      });
+      if (!ids) genBtn.remove();
+      if (msg) {
+        msg.className = 'mt-3 text-xs rounded-lg px-3 py-2 bg-violet-50 text-violet-800 border border-violet-200';
+        msg.textContent = 'Job #' + data.id + ' créé pour ' + data.count + " lead(s). Le worker du Mac s'en charge : suivi et logs dans l'onglet Scanner.";
+      }
+    } catch (err) {
+      genBtn.disabled = false;
+      genBtn.textContent = label;
+      if (msg) {
+        msg.className = 'mt-3 text-xs rounded-lg px-3 py-2 bg-rose-50 text-rose-800 border border-rose-200';
+        msg.textContent = err.message;
+      }
+    }
+    return;
+  }
+
   var b = e.target.closest('[data-cancel]');
   if (b) {
     b.disabled = true;

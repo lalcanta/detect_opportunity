@@ -23,6 +23,9 @@ qu'un index). Pour chacun, détermine ce qui manque :
 | `audit_facts.json` | (audit QA) Constats réseau **mesurés** — à reprendre tels quels, ne rien inventer |
 | `screenshot.png` | Capture du site actuel, à regarder avant d'écrire la démo |
 
+Un dossier qui contient `api_generation.lock` est en cours de génération par API (bouton « Générer via l'API » du
+dashboard, exécuté par le worker) : ne le touche pas.
+
 File vide → réponds en une ligne (« file vide ») et arrête-toi : pas de sync, pas de résumé long.
 
 ## 2. Génération (un lead à la fois)

@@ -129,25 +129,61 @@ export async function pruneManifest(manifestPath = MANIFEST_PATH): Promise<void>
   }
 }
 
-export async function syncQueue(): Promise<void> {
+/** Fichier posé pendant qu'une génération par API écrit dans le dossier : l'agent et la synchro le laissent de côté. */
+export const API_LOCK_FILE = "api_generation.lock";
+/** Consommations réelles d'une génération par API, à remonter à la place de la provenance « agent ». */
+export const API_USAGE_FILE = "generation_usage.json";
+
+export interface SyncQueueOptions {
+  /** Ne synchronise que ces leads (génération API ciblée). */
+  only?: string[];
+  /** Pas de rapport console (appel depuis le worker). */
+  quiet?: boolean;
+}
+
+export interface SyncQueueResult {
+  synced: string[];
+  waiting: { id: string; reason: string }[];
+  failed: { id: string; reason: string }[];
+}
+
+/** Provenance remontée au CRM : consommations API enregistrées par le worker, sinon l'agent qui a écrit les fichiers. */
+export async function queueUsageFor(dir: string, meta: Pick<QueueMeta, "opportunity_type">): Promise<TokenUsageRecord[]> {
+  const path = `${dir}/${API_USAGE_FILE}`;
+  if (existsSync(path)) {
+    try {
+      const recorded = JSON.parse(await readFile(path, "utf-8"));
+      if (Array.isArray(recorded) && recorded.length) return recorded as TokenUsageRecord[];
+    } catch {
+      // Fichier illisible : on retombe sur la provenance agent.
+    }
+  }
+  return queueGenerationUsage(meta);
+}
+
+export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueResult> {
   const cfg = loadConfig();
   const pendingDir = "queue/pending";
   const completedDir = "queue/completed";
+  const result: SyncQueueResult = { synced: [], waiting: [], failed: [] };
 
   if (!existsSync(pendingDir)) {
-    console.log("Aucun dossier queue/pending trouvé. Lancez d'abord npm run prep.");
-    return;
+    if (!opts.quiet) console.log("Aucun dossier queue/pending trouvé. Lancez d'abord npm run prep.");
+    return result;
   }
 
   await mkdir(completedDir, { recursive: true });
 
   const entries = await readdir(pendingDir, { withFileTypes: true });
-  const leadDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  const leadDirs = entries
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((name) => !opts.only || opts.only.includes(name));
 
   if (leadDirs.length === 0) {
     await pruneManifest();
-    console.log("Aucun prospect en attente dans queue/pending/.");
-    return;
+    if (!opts.quiet) console.log("Aucun prospect en attente dans queue/pending/.");
+    return result;
   }
 
   log("sync-queue", `Analyse de ${leadDirs.length} dossier(s) dans queue/pending/`);
@@ -164,6 +200,12 @@ export async function syncQueue(): Promise<void> {
 
     if (!existsSync(metaPath)) {
       log("sync-queue", `[SKIP] ${id} : meta.json manquant`);
+      result.failed.push({ id, reason: "meta.json manquant" });
+      continue;
+    }
+    if (existsSync(`${dir}/${API_LOCK_FILE}`)) {
+      log("sync-queue", `⏳ ${id} : génération par API en cours, ignoré`);
+      result.waiting.push({ id, reason: "génération par API en cours" });
       continue;
     }
 
@@ -175,6 +217,7 @@ export async function syncQueue(): Promise<void> {
       if (!hasDemo) missing.push("demo.html");
       if (!hasBattlecard) missing.push("battlecard.json");
       log("sync-queue", `⏳ ${id} : en attente de génération (${missing.join(", ")})`);
+      result.waiting.push({ id, reason: `${missing.join(", ")} manquant` });
       waitingCount++;
       continue;
     }
@@ -190,6 +233,7 @@ export async function syncQueue(): Promise<void> {
       const built = buildQueueBattlecard(meta, rawBc, facts, cfg.REMOTE_APP_URL);
       if ("waiting" in built) {
         log("sync-queue", `⏳ ${id} : en attente de génération (${built.waiting})`);
+        result.waiting.push({ id, reason: built.waiting });
         waitingCount++;
         continue;
       }
@@ -244,8 +288,9 @@ export async function syncQueue(): Promise<void> {
         demo_html: demoHtml,
         flyer_pdf_base64: flyerPdfBase64,
         battlecard_data: battlecard,
-        // Provenance (0 € d'API) : l'agent qui a écrit les fichiers (LEADENGINE_AGENT), ou le générateur déterministe.
-        token_usage: queueGenerationUsage(meta),
+        // Provenance : consommations API (génération lancée depuis le dashboard), sinon l'agent (LEADENGINE_AGENT)
+        // ou le générateur déterministe, à 0 €.
+        token_usage: await queueUsageFor(dir, meta),
       };
 
       log("sync-queue", `☁️ Envoi de ${meta.company_name} vers ${cfg.REMOTE_APP_URL}...`);
@@ -260,19 +305,23 @@ export async function syncQueue(): Promise<void> {
       }
 
       syncedCount++;
+      result.synced.push(id);
       log("sync-queue", `✔ ${meta.company_name} synchronisé et déplacé dans completed/`);
     } catch (err) {
       log("sync-queue", `✘ Erreur synchronisation ${id} : ${(err as Error).message}`);
+      result.failed.push({ id, reason: (err as Error).message });
     }
   }
 
   await pruneManifest();
+  if (opts.quiet) return result;
 
   console.log(`\n========================================================`);
   console.log(`🎉 Rapport de synchronisation :`);
   console.log(`- Synchronisés avec succès dans le CRM : ${syncedCount}`);
   console.log(`- En attente de génération par Antigravity : ${waitingCount}`);
   console.log(`========================================================\n`);
+  return result;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

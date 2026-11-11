@@ -2,6 +2,7 @@ import { loadConfig, type Config } from "./config";
 import { ModelRouter } from "./llm/modelRouter";
 import { runScan } from "./scanRunner";
 import { runPrepScan } from "./prepScan";
+import { generateQueuedLeadsViaApi } from "./generateQueue";
 import { log, sleep } from "./utils/helpers";
 
 /**
@@ -22,6 +23,25 @@ interface RemoteJob {
   opportunity_type?: string;
   website_filter?: "all" | "no_website" | "has_website";
   execution_mode?: "full_auto" | "prep_only";
+  /** "scan" (Maps + inspection) ou "generate" (génération par API de leads déjà préparés). */
+  job_type?: "scan" | "generate";
+  /** Leads à générer, en JSON (job "generate"). */
+  lead_ids?: string | null;
+}
+
+/** Mode réellement exécuté par le worker, remonté au dashboard (diffère du mode demandé si le coupe-circuit 0 € force la préparation). */
+export function effectiveModeOf(job: Pick<RemoteJob, "execution_mode" | "job_type">, zeroCost: boolean): "full_auto" | "prep_only" | "api_generation" {
+  if (job.job_type === "generate") return "api_generation";
+  return job.execution_mode === "prep_only" || zeroCost ? "prep_only" : "full_auto";
+}
+
+export function parseLeadIds(raw: string | null | undefined): string[] {
+  try {
+    const list = JSON.parse(raw || "[]");
+    return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string" && /^[\w-]{1,64}$/.test(x)) : [];
+  } catch {
+    return [];
+  }
 }
 
 async function api<T>(cfg: Config, path: string, body?: unknown, method: "GET" | "POST" = "POST"): Promise<T> {
@@ -34,16 +54,58 @@ async function api<T>(cfg: Config, path: string, body?: unknown, method: "GET" |
   return (await res.json()) as T;
 }
 
+async function handleGenerateJob(cfg: Config, router: ModelRouter, job: RemoteJob, report: (b: Record<string, unknown>) => Promise<{ cancel?: boolean }>): Promise<void> {
+  const ids = parseLeadIds(job.lead_ids);
+  log("worker", `Job #${job.id} [Génération API] : ${ids.length} lead(s) de la file`);
+  if (!ids.length) {
+    await report({ status: "failed", message: "Aucun lead à générer", log_entry: "❌ Aucun lead valide dans le job." });
+    return;
+  }
+  const result = await generateQueuedLeadsViaApi(ids, cfg, router, {
+    onProgress: async (processed, total, message) => {
+      const r = await report({ status: "running", processed, total, message, log_entry: message }).catch(() => ({ cancel: false }));
+      return r.cancel ? false : undefined;
+    },
+  });
+  if (result.cancelled) return;
+  const failed = result.failures.length ? ` · ${result.failures.length} échec(s) : ${result.failures.map((f) => `${f.id.slice(0, 8)} (${f.reason})`).join(" ; ")}` : "";
+  await report({
+    status: result.processed === 0 && result.failures.length ? "failed" : "done",
+    processed: result.processed,
+    total: result.total,
+    message: `${result.processed}/${result.total} lead(s) générés par API et synchronisés${failed}`.slice(0, 500),
+    log_entry: `🎉 Génération API terminée : ${result.processed}/${result.total} synchronisé(s)${failed}`,
+  });
+}
+
 async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Promise<void> {
+  const effectiveMode = effectiveModeOf(job, router.isZeroCostMode());
+  const report = (b: Record<string, unknown>): Promise<{ cancel?: boolean }> =>
+    api<{ cancel?: boolean }>(cfg, `/api/worker/jobs/${job.id}/progress`, b);
+
+  if (effectiveMode === "api_generation") {
+    await report({ status: "running", effective_mode: effectiveMode }).catch(() => undefined);
+    try {
+      await handleGenerateJob(cfg, router, job, report);
+    } catch (err) {
+      log("worker", `Job #${job.id} en échec : ${(err as Error).message}`);
+      await report({ status: "failed", message: (err as Error).message, log_entry: `❌ ${(err as Error).message}` }).catch(() => undefined);
+    }
+    return;
+  }
+
   // Coupe-circuit 0 € actif : un job "full_auto" est exécuté en préparation seule (aucun appel API).
-  const forcedPrep = job.execution_mode !== "prep_only" && router.isZeroCostMode();
-  const isPrep = job.execution_mode === "prep_only" || forcedPrep;
+  const isPrep = effectiveMode === "prep_only";
+  const forcedPrep = isPrep && job.execution_mode !== "prep_only";
   log(
     "worker",
     `Job #${job.id} [${isPrep ? "Préparation CLI 0€" : "Cycle Complet"}${forcedPrep ? " — forcé par le coupe-circuit" : ""}] : ${job.query} / ${job.city} (limite ${job.lead_limit}${job.use_cdp ? ", CDP" : ""})`,
   );
-  const report = (b: Record<string, unknown>): Promise<{ cancel?: boolean }> =>
-    api<{ cancel?: boolean }>(cfg, `/api/worker/jobs/${job.id}/progress`, b);
+  await report({
+    status: "running",
+    effective_mode: effectiveMode,
+    log_entry: forcedPrep ? "⚠️ Coupe-circuit 0 € actif : job demandé en Cycle Complet, exécuté en préparation (file locale pour l'agent)." : undefined,
+  }).catch(() => undefined);
 
   try {
     if (isPrep) {
@@ -71,7 +133,7 @@ async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Prom
           status: "done",
           processed: result.processed,
           total: result.total,
-          message: `${result.processed}/${result.total} leads préparés dans queue/pending/ (prêts pour Antigravity CLI 0€)`,
+          message: `${result.processed}/${result.total} leads préparés dans queue/pending/ (prêts pour l'agent, ou « Générer via l'API » dans la file)${forcedPrep ? " — préparation forcée par le coupe-circuit 0 €" : ""}`,
           log_entry: `🎉 Scan terminé : ${result.processed}/${result.total} leads préparés en local.`,
         });
       }
@@ -518,7 +580,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

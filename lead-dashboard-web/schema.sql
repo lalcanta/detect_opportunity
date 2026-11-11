@@ -110,6 +110,9 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
   opportunity_type TEXT NOT NULL DEFAULT 'website',
   website_filter  TEXT NOT NULL DEFAULT 'all',
   execution_mode  TEXT NOT NULL DEFAULT 'full_auto', -- 'full_auto' (cycle complet) ou 'prep_only' (dossier local + prompts pour Antigravity CLI)
+  job_type        TEXT NOT NULL DEFAULT 'scan',      -- 'scan' (Maps + inspection) ou 'generate' (génération API de leads préparés)
+  lead_ids        TEXT,                              -- JSON des leads à générer (job 'generate')
+  effective_mode  TEXT,                              -- mode réellement exécuté par le worker : full_auto | prep_only | api_generation
   status          TEXT NOT NULL DEFAULT 'queued'
                   CHECK (status IN ('queued','running','done','failed','cancelled')),
   requested_by    TEXT,

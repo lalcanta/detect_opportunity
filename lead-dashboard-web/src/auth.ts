@@ -7,7 +7,7 @@ import type { AppEnv, Role, User } from "./types";
 const COOKIE = "lead_session";
 export const SESSION_COOKIE = COOKIE;
 
-const AUTH_SCHEMA_VERSION = 12;
+const AUTH_SCHEMA_VERSION = 13;
 let migrationChecked = 0;
 
 /** Assure que les colonnes Whitelist / Invitation / Password / Expiration démo, execution_mode et la table scheduled_scans existent. */
@@ -42,6 +42,9 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       "ALTER TABLE users ADD COLUMN allowed_channels TEXT NOT NULL DEFAULT '[\"phone\",\"email\",\"contact_form\"]'",
       "ALTER TABLE scan_jobs ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'full_auto'",
       "ALTER TABLE scheduled_scans ADD COLUMN execution_mode TEXT NOT NULL DEFAULT 'full_auto'",
+      "ALTER TABLE scan_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'scan'",
+      "ALTER TABLE scan_jobs ADD COLUMN lead_ids TEXT",
+      "ALTER TABLE scan_jobs ADD COLUMN effective_mode TEXT",
       "ALTER TABLE available_models ADD COLUMN is_flagship INTEGER NOT NULL DEFAULT 1",
       "ALTER TABLE available_models ADD COLUMN speed TEXT DEFAULT 'fast'",
       "ALTER TABLE available_models ADD COLUMN cost_tier TEXT DEFAULT 'eco'",

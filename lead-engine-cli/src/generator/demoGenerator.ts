@@ -37,6 +37,9 @@ export function demoFocusInstruction(focus: DemoFocus | undefined, city: string)
  * 2. Modernisation du design et de la palette autour de son propre logo.
  * 3. Inspiration des sites concurrents leaders à fort trafic et conversion prouvée dans son métier.
  */
+export const DEMO_SYSTEM_PROMPT =
+  "Tu es un directeur artistique et développeur front-end primé (sites de l'année sur Awwwards), spécialisé dans les sites de professionnels locaux. Chaque site que tu livres a une identité forte, des animations soignées et une conversion redoutable. Tu respectes le vrai logo du client, tu n'inventes jamais de fait, et tu suis à la lettre la direction artistique demandée.";
+
 export async function generateDemoHtml(
   router: ModelRouter,
   input: DemoInput,
@@ -135,23 +138,31 @@ G. Barre d'appel mobile : barre fixe en bas d'écran sur mobile uniquement (fixe
   const { text } = await router.generate({
     task: "demo",
     prompt: focusInstruction ? `${prompt}\n\n${focusInstruction}` : prompt,
-    system:
-      "Tu es un directeur artistique et développeur front-end primé (sites de l'année sur Awwwards), spécialisé dans les sites de professionnels locaux. Chaque site que tu livres a une identité forte, des animations soignées et une conversion redoutable. Tu respectes le vrai logo du client, tu n'inventes jamais de fait, et tu suis à la lettre la direction artistique demandée.",
+    system: DEMO_SYSTEM_PROMPT,
     images: inspection?.screenshot ? [{ mimeType: "image/jpeg", data: inspection.screenshot }] : undefined,
     usageSink,
   });
 
+  return finalizeDemoHtml(text, { leadId: input.leadId, logoUrl: inspection?.logoUrl ?? null, remoteAppUrl: input.remoteAppUrl });
+}
+
+/**
+ * Post-traitement commun d'une démo écrite par un modèle (scan complet ou file d'attente générée par API) :
+ * vrai logo, no-referrer, document fermé, pixel de suivi.
+ */
+export function finalizeDemoHtml(text: string, opts: { leadId: string; logoUrl: string | null; remoteAppUrl: string }): string {
   let rawHtml = stripCodeFences(text);
+  const logoUrl = opts.logoUrl;
 
   // 1. Déterministiquement réinjecter le vrai logo client sans aucune altération/troncature LLM
-  if (inspection?.logoUrl) {
+  if (logoUrl) {
     if (rawHtml.includes(LOGO_PLACEHOLDER)) {
-      rawHtml = rawHtml.replaceAll(LOGO_PLACEHOLDER, inspection.logoUrl);
+      rawHtml = rawHtml.replaceAll(LOGO_PLACEHOLDER, logoUrl);
     } else {
       // Si le LLM a substitué le placeholder par une URL ou un dessin de substitution dans le header
       rawHtml = rawHtml.replace(
         /(<header[\s\S]*?<img[^>]+src=["'])([^"']+)(["'][^>]*>)/i,
-        `$1${inspection.logoUrl}$3`,
+        `$1${logoUrl}$3`,
       );
     }
   }
@@ -166,7 +177,7 @@ G. Barre d'appel mobile : barre fixe en bas d'écran sur mobile uniquement (fixe
     rawHtml += "\n</main>\n</body>\n</html>";
   }
 
-  return injectTracker(rawHtml, input.leadId, input.remoteAppUrl);
+  return injectTracker(rawHtml, opts.leadId, opts.remoteAppUrl);
 }
 
 export function injectTracker(html: string, leadId: string, remoteAppUrl: string): string {

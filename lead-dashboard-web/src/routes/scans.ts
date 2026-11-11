@@ -2,6 +2,7 @@ import { findOpportunity, opportunityIdOf, resolveWebsiteFilter } from "../../..
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { bearerMatches, requireUser } from "../auth";
+import { jobModeBadge } from "../views/jobMode";
 
 export const scanRoutes = new Hono<AppEnv>();
 
@@ -17,6 +18,10 @@ export interface ScanJob {
   opportunity_type?: string | null;
   website_filter?: string | null;
   execution_mode?: "full_auto" | "prep_only" | null;
+  job_type?: "scan" | "generate" | null;
+  lead_ids?: string | null;
+  /** Mode réellement exécuté, remonté par le worker. */
+  effective_mode?: "full_auto" | "prep_only" | "api_generation" | null;
   status: "queued" | "running" | "done" | "failed" | "cancelled";
   created_at: string;
   started_at: string | null;
@@ -89,7 +94,50 @@ scanRoutes.post("/api/admin/scans", requireUser("admin"), async (c) => {
   return c.json({ ok: true, id: res.meta.last_row_id });
 });
 
-scanRoutes.get("/api/admin/scans", requireUser("admin"), async (c) => c.json(await listScans(c.env.DB)));
+/**
+ * Génération par API de leads préparés (pending_generation) : crée un job « generate » que le worker du Mac exécute
+ * à partir des dossiers queue/pending. Sans lead_ids, prend tous les leads en attente.
+ */
+scanRoutes.post("/api/admin/leads/generate-api", requireUser("admin"), async (c) => {
+  const b = await c.req.json<{ lead_ids?: unknown }>().catch(() => ({}) as { lead_ids?: unknown });
+  const asked = Array.isArray(b.lead_ids) ? b.lead_ids.filter((x): x is string => typeof x === "string").slice(0, 100) : null;
+  const pending = await c.env.DB.prepare("SELECT id FROM leads WHERE status = 'pending_generation'").all<{ id: string }>();
+  const pendingIds = new Set(pending.results.map((r) => r.id));
+  const busy = await busyGenerationLeadIds(c.env.DB);
+  const ids = (asked ?? [...pendingIds]).filter((id) => pendingIds.has(id) && !busy.has(id));
+  if (!ids.length) {
+    return c.json({ error: "nothing_to_generate", message: "Aucun lead en attente à générer (déjà en cours ou déjà généré)." }, 400);
+  }
+  const res = await c.env.DB.prepare(
+    `INSERT INTO scan_jobs (query, city, lead_limit, job_type, lead_ids, execution_mode, requested_by, message)
+     VALUES (?, ?, ?, 'generate', ?, 'full_auto', ?, ?)`,
+  )
+    .bind("Génération API", `${ids.length} lead(s) en attente`, ids.length, JSON.stringify(ids), c.get("user").id, "En attente du worker")
+    .run();
+  return c.json({ ok: true, id: res.meta.last_row_id, count: ids.length });
+});
+
+/** Leads couverts par un job de génération API en attente ou en cours. */
+export async function busyGenerationLeadIds(db: D1Database): Promise<Set<string>> {
+  const r = await db
+    .prepare("SELECT lead_ids FROM scan_jobs WHERE job_type = 'generate' AND status IN ('queued','running')")
+    .all<{ lead_ids: string | null }>()
+    .catch(() => ({ results: [] as { lead_ids: string | null }[] }));
+  const out = new Set<string>();
+  for (const row of r.results) {
+    try {
+      const list = JSON.parse(row.lead_ids || "[]");
+      if (Array.isArray(list)) for (const id of list) if (typeof id === "string") out.add(id);
+    } catch {
+      // ignoré
+    }
+  }
+  return out;
+}
+
+scanRoutes.get("/api/admin/scans", requireUser("admin"), async (c) =>
+  c.json((await listScans(c.env.DB)).map((s) => ({ ...s, logs: undefined, mode_badge: jobModeBadge(s) }))),
+);
 
 scanRoutes.post("/api/admin/scans/:id/cancel", requireUser("admin"), async (c) => {
   await c.env.DB.prepare(
@@ -291,7 +339,10 @@ interface ProgressBody {
   total?: number;
   message?: string;
   log_entry?: string;
+  effective_mode?: string;
 }
+
+const EFFECTIVE_MODES = ["full_auto", "prep_only", "api_generation"];
 
 /** Progression ; la réponse indique au worker si l'admin a annulé. */
 scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
@@ -318,7 +369,8 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
          WHEN logs IS NULL OR logs = '' THEN ?5
          ELSE logs || '\n' || ?5
        END,
-       finished_at = CASE WHEN ?6 = 1 THEN ?7 ELSE finished_at END
+       finished_at = CASE WHEN ?6 = 1 THEN ?7 ELSE finished_at END,
+       effective_mode = COALESCE(?9, effective_mode)
      WHERE id = ?8`,
   )
     .bind(
@@ -330,6 +382,7 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
       finished ? 1 : 0,
       now.toISOString(),
       id,
+      b.effective_mode && EFFECTIVE_MODES.includes(b.effective_mode) ? b.effective_mode : null,
     )
     .run();
   return c.json({ cancel: false });
