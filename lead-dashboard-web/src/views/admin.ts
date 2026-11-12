@@ -11,6 +11,7 @@ import type { ScanJob, ScheduledScan } from "../routes/scans";
 import { modelPickerScript, renderFallbackPicker } from "./modelPicker";
 import type { GeminiQuotaRow, GeminiQuotaSummary } from "../services/geminiQuota";
 import { esc, icon, layout, navbar, type IconName } from "./layout";
+import { adminShell, type AdminNavGroup } from "./adminSidebar";
 import { formatStatusLabel, opportunityBadgeMeta, renderStatusPill as formatStatusPill } from "./components";
 import { COMPETITOR_BENCHMARKS } from "../data/benchmarks";
 
@@ -401,53 +402,51 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
     }
   };
 
-  const adminTabs: [string, IconName, string][] = [
-    ["overview", "chart", "Vue d'ensemble & KPIs"],
-    ["scanner", "target", `Scanner Local & Jobs${hasActive ? ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500 text-white font-extrabold animate-pulse">en cours</span>' : ""}`],
-    ["needs", "sliders", "Besoins"],
-    ["pending", "clock", `File CLI 0€${pendingCount > 0 ? ` <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-extrabold">${pendingCount}</span>` : ""}`],
-    ["models", "cpu", "Modèles IA par Action"],
-    [
-      "quotas",
-      "shield",
-      `Quotas & Coûts IA${
-        stats.quotas?.safetyStatus === "danger"
-          ? ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-extrabold animate-pulse">Alerte</span>'
-          : stats.quotas?.safetyStatus === "warning"
-            ? ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-extrabold">70%</span>'
-            : ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500 text-white font-extrabold">0€</span>'
-      }`,
-    ],
-    ["benchmarks", "sparkles", "Benchmarks Concurrents"],
-    ["team", "users", "Équipe & Closers"],
-    ["attribution", "layers", "Attribution des Leads"],
+  const quotaBadge =
+    stats.quotas?.safetyStatus === "danger"
+      ? { text: "Alerte", tone: "danger" as const, pulse: true }
+      : stats.quotas?.safetyStatus === "warning"
+        ? { text: "70 %", tone: "warn" as const }
+        : { text: "0 €", tone: "ok" as const };
+  const navGroups: AdminNavGroup[] = [
+    { id: "pilotage", label: "Pilotage", icon: "chart", items: [{ key: "overview", icon: "chart", label: "Vue d'ensemble" }] },
+    {
+      id: "prospection",
+      label: "Prospection",
+      icon: "target",
+      items: [
+        { key: "scanner", icon: "target", label: "Scanner et jobs", ...(hasActive ? { badge: { text: "en cours", tone: "info" as const, pulse: true } } : {}) },
+        { key: "needs", icon: "sliders", label: "Besoins" },
+        { key: "pending", icon: "clock", label: "File CLI 0 €", ...(pendingCount > 0 ? { badge: { text: String(pendingCount), tone: "warn" as const } } : {}) },
+      ],
+    },
+    {
+      id: "equipe",
+      label: "Équipe",
+      icon: "users",
+      items: [
+        { key: "team", icon: "users", label: "Équipe et closers" },
+        { key: "attribution", icon: "layers", label: "Attribution des leads" },
+      ],
+    },
+    {
+      id: "ia",
+      label: "IA et coûts",
+      icon: "cpu",
+      items: [
+        { key: "models", icon: "cpu", label: "Modèles IA par action" },
+        { key: "quotas", icon: "shield", label: "Quotas et coûts", badge: quotaBadge },
+      ],
+    },
+    { id: "ressources", label: "Ressources", icon: "sparkles", items: [{ key: "benchmarks", icon: "sparkles", label: "Benchmarks concurrents" }] },
   ];
 
-  const body = `<div class="w-full min-h-screen bg-zinc-100/70 pb-16 font-sans">
-
-  <!-- Sub-Navbar Navigation Admin -->
-  <div class="bg-white border-b border-zinc-200/80 shadow-sm sticky top-[49px] z-20">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3">
-      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-2.5 min-w-0">
-        ${adminTabs
-          .map(
-            ([k, ic, label]) =>
-              `<a href="/admin?tab=${k}" class="shrink-0 flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                tab === k
-                  ? "bg-zinc-900 text-white shadow-sm"
-                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
-              }">${icon(ic, `w-3.5 h-3.5 ${tab === k ? "text-indigo-400" : "text-zinc-500"}`)}<span>${label}</span></a>`,
-          )
-          .join("")}
-      </div>
-      <a href="/" class="shrink-0 hidden md:inline-flex items-center gap-1 text-xs text-zinc-700 font-semibold hover:text-indigo-600 px-2.5 py-1.5 rounded-lg hover:bg-zinc-50 transition-colors">
-        <span>Pipeline Closer</span>
-        ${icon("external", "w-3 h-3 text-zinc-400")}
-      </a>
-    </div>
-  </div>
-
-  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+  const body = `<div class="w-full min-h-screen bg-zinc-100/70 font-sans">
+${adminShell(
+  navGroups,
+  tab,
+  `
+  <main class="max-w-7xl mx-auto p-4 sm:p-6 pb-16 space-y-6">
 
   ${
     /* ========================================================================= */
@@ -1856,6 +1855,8 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
   }
 
   </main>
+`,
+)}
 </div>
 
 <script>
