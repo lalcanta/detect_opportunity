@@ -4,6 +4,7 @@ import { LEAD_STATUSES, parseAllowedOpportunities, type AppEnv, type Battlecard,
 import { requireUser } from "../auth";
 import { createPaymentLink } from "../services/stripe";
 import { syncLeadToGoogleCalendar } from "../services/googleCalendar";
+import { recordEmailSent } from "../services/emailOutbox";
 import { ACTIVITY_TEXT_MAX, cleanText, listActivities, logActivity, parseUserActivity, statusLabel } from "../services/activities";
 
 export const leadRoutes = new Hono<AppEnv>();
@@ -225,24 +226,13 @@ leadRoutes.post("/api/leads/:id/email-sent", requireUser("closer"), async (c) =>
     }
   }
 
-  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
-  const entry = `[${stamp}] ✉️ Email envoyé par ${user.name} à ${to} — « ${subject} »${b.template_id ? ` (modèle : ${b.template_id})` : ""}`;
-  const notes = (current.call_notes ? `${current.call_notes}\n${entry}` : entry).slice(-4000);
-  const email = current.email || to;
-
-  await c.env.DB.prepare(
-    "UPDATE leads SET call_notes = ?1, email = ?2, assigned_to = COALESCE(assigned_to, ?3) WHERE id = ?4",
-  )
-    .bind(notes, email, user.id, id)
-    .run();
-
-  await logActivity(c.env.DB, {
+  const notes = await recordEmailSent(c.env.DB, {
     leadId: id,
     userId: user.id,
-    kind: "email_sent",
-    channel: "email",
-    summary: `Email envoyé à ${to} — « ${subject} »`,
-    content: { to, subject, body: cleanText(b.body, ACTIVITY_TEXT_MAX), template_id: b.template_id ?? null },
+    to,
+    subject,
+    body: b.body ?? "",
+    templateId: b.template_id ?? null,
   });
 
   return c.json({ ok: true, call_notes: notes });

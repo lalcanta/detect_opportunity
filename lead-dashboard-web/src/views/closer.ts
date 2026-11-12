@@ -734,6 +734,11 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
             <textarea id="sp_email_body" rows="14" class="w-full font-mono text-xs bg-white p-3 rounded-lg border border-indigo-200 text-zinc-800 leading-relaxed"></textarea>
             <p id="sp_tpl_warning" class="hidden text-[11px] text-amber-700 font-semibold mt-1"></p>
           </div>
+          <div id="sp_send_row" class="hidden pt-1 space-y-1">
+            <button type="button" id="sp_send_now" class="w-full bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-3 rounded-lg text-xs transition-colors shadow-sm">Envoyer</button>
+            <p id="sp_send_info" class="text-[11px] text-zinc-500"></p>
+          </div>
+          <ul id="sp_outbox" class="hidden space-y-1 text-[11px]"></ul>
           <div class="pt-1 grid grid-cols-2 gap-2">
             <a id="sp_open_mailto" href="#" class="text-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 rounded-lg text-xs transition-colors shadow-sm">
               ✉️ Ouvrir dans mon client mail
@@ -2434,7 +2439,81 @@ function setupEmailComposer(lead, oppDef, aiEmail) {
   });
   $('sp_email_to').value = lead.email || '';
   if (sel.options.length) applyTemplate(sel.options[0].value);
+  loadOutbox(lead.id);
 }
+
+// Envoi par l'application (fournisseur choisi par EMAIL_PROVIDER) : toujours après relecture et clic du closer.
+var EMAIL_CFG = null;
+async function loadEmailConfig() {
+  try { var r = await fetch('/api/email/config'); EMAIL_CFG = r.ok ? await r.json() : null; } catch (e) { EMAIL_CFG = null; }
+  renderSendRow();
+}
+function renderSendRow() {
+  var row = $('sp_send_row');
+  if (!row) return;
+  if (!EMAIL_CFG || EMAIL_CFG.provider === 'manual') { row.classList.add('hidden'); return; }
+  row.classList.remove('hidden');
+  var btn = $('sp_send_now');
+  if (!EMAIL_CFG.enabled) {
+    btn.disabled = true; btn.textContent = 'Envoi non configuré';
+    $('sp_send_info').textContent = EMAIL_CFG.problem || '';
+    return;
+  }
+  btn.disabled = EMAIL_CFG.remaining_today <= 0;
+  btn.textContent = '➤ Envoyer via ' + EMAIL_CFG.label;
+  $('sp_send_info').textContent = 'Depuis ' + EMAIL_CFG.from + ' · ' + EMAIL_CFG.remaining_today + ' / ' + EMAIL_CFG.daily_limit + ' envois restants aujourd’hui'
+    + (EMAIL_CFG.via_worker ? ' · parti par le worker sous une minute' : '');
+}
+var OUTBOX_LABELS = { queued: '⏳ En file', sending: '⏳ Envoi en cours', sent: '✔ Parti', failed: '✖ Échec' };
+async function loadOutbox(leadId) {
+  var list = $('sp_outbox');
+  if (!list || !leadId) return;
+  list.innerHTML = '';
+  try {
+    var r = await fetch('/api/leads/' + leadId + '/emails');
+    var j = r.ok ? await r.json() : { emails: [] };
+    (j.emails || []).forEach(function (e) {
+      var li = document.createElement('li');
+      li.className = e.status === 'failed' ? 'text-rose-700' : e.status === 'sent' ? 'text-emerald-700' : 'text-amber-700';
+      li.textContent = (OUTBOX_LABELS[e.status] || e.status) + ' · ' + e.to_email + ' · « ' + e.subject + ' »'
+        + (e.status === 'failed' && e.error ? ' : ' + e.error : '');
+      list.appendChild(li);
+    });
+    list.classList.toggle('hidden', !(j.emails || []).length);
+    // Un email en file passe par le worker : on revient voir s'il est parti.
+    if ((j.emails || []).some(function (e) { return e.status === 'queued' || e.status === 'sending'; })) {
+      setTimeout(function () { if (activeLeadId === leadId) { loadOutbox(leadId); loadTimeline(leadId); } }, 15000);
+    }
+  } catch (err) { list.classList.add('hidden'); }
+}
+$('sp_send_now').onclick = async function () {
+  if (!activeLeadId || !EMAIL_CFG || !EMAIL_CFG.enabled) return;
+  var to = $('sp_email_to').value.trim();
+  var subject = $('sp_email_subject').value.trim();
+  if (!to || !subject) { alert('Renseignez un destinataire et un objet.'); return; }
+  if (!confirm('Envoyer cet email à ' + to + ' via ' + EMAIL_CFG.label + ' ? La mention « STOP » est ajoutée si elle manque.')) return;
+  var btn = this; btn.disabled = true;
+  var leadId = activeLeadId;
+  try {
+    var r = await fetch('/api/leads/' + leadId + '/email-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: to, subject: subject, body: $('sp_email_body').value, template_id: $('sp_tpl_select').value })
+    });
+    var j = await r.json();
+    if (r.ok && j.status === 'sent') {
+      copyFeedback('✔ Email envoyé');
+      loadTimeline(leadId);
+      if (LEADS_MAP[leadId]) { LEADS_MAP[leadId].call_notes = j.call_notes; LEADS_MAP[leadId].email = to; }
+      if ($('sp_call_notes') && j.call_notes) $('sp_call_notes').value = j.call_notes;
+    } else if (r.ok) {
+      copyFeedback('⏳ En file : le worker l’envoie sous une minute');
+    } else alert(j.message || 'Erreur');
+  } catch (err) { alert('Erreur réseau'); }
+  await loadEmailConfig();
+  loadOutbox(leadId);
+};
+loadEmailConfig();
 
 $('sp_tpl_select').addEventListener('change', function (e) { applyTemplate(e.target.value); });
 ['sp_email_to', 'sp_email_subject', 'sp_email_body'].forEach(function (id) {

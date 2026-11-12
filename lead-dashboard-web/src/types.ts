@@ -24,6 +24,16 @@ export interface Bindings {
   AI?: any;
   /** Bucket R2 des photos et logos des prospects (services/leadMedia.ts). */
   MEDIA?: R2Bucket;
+  /** Envoi des emails (services/emailOutbox.ts) : manual (défaut) | smtp | resend | brevo. */
+  EMAIL_PROVIDER?: string;
+  /** Expéditeur, « Nom <adresse@domaine-envoi.fr> ». */
+  EMAIL_FROM?: string;
+  /** Adresse de réponse (sinon l'expéditeur). */
+  EMAIL_REPLY_TO?: string;
+  /** Emails envoyés par l'application par jour (30 par défaut). */
+  EMAIL_DAILY_LIMIT?: string;
+  RESEND_API_KEY?: string;
+  BREVO_API_KEY?: string;
   SYNC_SECRET_TOKEN: string;
   PUBLIC_APP_URL?: string;
   GEMINI_API_KEY?: string;

@@ -5,6 +5,8 @@ import { runPrepScan } from "./prepScan";
 import { generateQueuedLeadsViaApi } from "./generateQueue";
 import { log, sleep } from "./utils/helpers";
 import { applyRemoteOpportunities } from "./opportunities/remote";
+import { runEmailLoop } from "./outreach/emailWorker";
+import { smtpSender, smtpSettingsFrom } from "./outreach/smtpSender";
 
 /**
  * Worker : interroge le dashboard toutes les POLL_MS ms, exécute les scans demandés depuis l'interface admin
@@ -552,6 +554,13 @@ async function main(): Promise<void> {
 
   // Synchronisation des modèles IA disponibles au démarrage
   await syncDiscoveredModels(cfg).catch(() => undefined);
+
+  // Envoi des emails mis en file par les closers (adapter SMTP), à côté des scans.
+  const smtp = smtpSettingsFrom(process.env);
+  if (smtp) {
+    log("worker", `✉️ Envoi SMTP actif (${smtp.host}:${smtp.port})`);
+    void runEmailLoop(<T>(path: string, body?: unknown) => api<T>(cfg, path, body), [smtpSender(smtp)]);
+  }
 
   let lastScheduleCheck = 0;
 

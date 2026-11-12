@@ -10,6 +10,7 @@ import { pageRoutes } from "./routes/pages";
 import { scanRoutes } from "./routes/scans";
 import { authGoogleRoutes } from "./routes/authGoogle";
 import { opportunityRoutes } from "./routes/opportunities";
+import { emailRoutes } from "./routes/emails";
 
 export const app = new Hono<AppEnv>();
 
@@ -43,6 +44,7 @@ app.route("/", leadRoutes);
 app.route("/", adminRoutes);
 app.route("/", scanRoutes);
 app.route("/", opportunityRoutes);
+app.route("/", emailRoutes);
 app.route("/", authGoogleRoutes);
 app.route("/", pageRoutes);
 
