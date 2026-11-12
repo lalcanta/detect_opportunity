@@ -22,10 +22,10 @@ Le code est en prod et `CF_ACCOUNT_ID` est posé. Il manque le jeton d'API.
 
 ## Ensuite
 
-- [ ] **Workflow des besoins, étape 2** : le worker exécute les nœuds du graphe (ordre déduit des dépendances,
-      parallèle quand c'est possible) au lieu de la suite codée en dur ; lance aussi « Dirigeant (SIRENE) » sans site.
-- [ ] **Scan de test réel** avec les nouveaux besoins (Création / Refonte), les critères de note et d'avis, les
-      points forts de la démo et le ton.
+- [x] **Workflow des besoins, étape 2** : le worker exécute les nœuds du graphe par vagues parallèles
+      (`lead-engine-cli/src/workflow/runner.ts`), SIRENE compris sans site ; trace dans `audit_data.workflow_trace`.
+      Reste : redémarrer le worker de prod pour qu'il prenne le nouveau code.
+- [x] **Scan de test réel** (dry-run, 1 lead) : Refonte (avec site) et Création (sans site) passent de bout en bout.
 - [ ] **Vérifier l'onglet Besoins en prod** (édition au clic, ajout et retrait de nœuds).
 - [ ] **Photos des prospects** : les copier ou passer par un proxy au lieu de les lier directement à leur site.
 - [ ] **Envoi des emails via Resend** (phase 4).

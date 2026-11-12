@@ -327,3 +327,38 @@ export function checkWorkflow(def: WorkflowFields): string[] {
   }
   return errors;
 }
+
+/**
+ * Ordre d'exécution : des vagues de nœuds, chacune ne dépendant que des vagues précédentes. Les nœuds d'une même vague
+ * sont indépendants et peuvent tourner en parallèle. Une dépendance est une clé lue (indispensable ou facultative) qu'un
+ * autre nœud du besoin écrit : un nœud qui utilise l'email s'il existe passe donc après celui qui le cherche.
+ */
+export function workflowWaves(nodeIds: readonly string[], website: WebsiteRequirement): string[][] {
+  const blocked = new Set(keysBlockedBy(website));
+  const nodes = nodeIds.map((id) => workflowNode(id)).filter((n): n is WorkflowNodeType => Boolean(n));
+  const writerOf = new Map<DataKey, string>();
+  for (const n of nodes) for (const k of n.writes) if (!blocked.has(k) && !writerOf.has(k)) writerOf.set(k, n.id);
+
+  const deps = new Map<string, Set<string>>();
+  for (const n of nodes) {
+    const d = new Set<string>();
+    for (const k of [...n.reads, ...(n.optionalReads ?? [])]) {
+      const w = writerOf.get(k);
+      if (w && w !== n.id) d.add(w);
+    }
+    deps.set(n.id, d);
+  }
+
+  const waves: string[][] = [];
+  const placed = new Set<string>();
+  let remaining = nodes.map((n) => n.id);
+  while (remaining.length > 0) {
+    const wave = remaining.filter((id) => [...deps.get(id)!].every((d) => placed.has(d)));
+    // Cycle (impossible avec le catalogue actuel) : le reste passe en dernier, dans l'ordre du catalogue.
+    const next = wave.length > 0 ? wave : remaining;
+    waves.push(next);
+    for (const id of next) placed.add(id);
+    remaining = remaining.filter((id) => !placed.has(id));
+  }
+  return waves;
+}

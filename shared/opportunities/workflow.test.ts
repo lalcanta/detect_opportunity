@@ -10,6 +10,7 @@ import {
   checkWorkflow,
   evaluateRequirements,
   workflowNodeIds,
+  workflowWaves,
   type OpportunityDefinition,
 } from "./index";
 
@@ -74,5 +75,45 @@ describe("critères de la fiche Maps", () => {
 
   it("n'écarte pas une fiche dont la note est inconnue", () => {
     assert.ok(evaluateRequirements(def, { phone: true, website: false, rating: null, reviewsCount: null }, "maps").qualified);
+  });
+});
+
+describe("ordre d'exécution", () => {
+  it("chaque nœud passe après ceux qui écrivent ce qu'il lit", () => {
+    for (const def of CODE_OPPORTUNITIES) {
+      const waves = workflowWaves(workflowNodeIds(def), def.requirements.website);
+      const waveOf = new Map<string, number>();
+      waves.forEach((w, i) => w.forEach((id) => waveOf.set(id, i)));
+      assert.equal(waveOf.size, workflowNodeIds(def).length, def.id);
+      for (const id of waveOf.keys()) {
+        const node = WORKFLOW_NODES.find((n) => n.id === id)!;
+        for (const k of [...node.reads, ...(node.optionalReads ?? [])]) {
+          for (const w of waveOf.keys()) {
+            const writer = WORKFLOW_NODES.find((n) => n.id === w)!;
+            if (w !== id && writer.writes.includes(k) && availableKeys([w], def.requirements.website).has(k)) {
+              assert.ok(waveOf.get(w)! < waveOf.get(id)!, `${def.id} : ${w} avant ${id}`);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("l'inspection du site et la recherche SIRENE tournent dans la même vague, puis la preuve et le flyer ensemble", () => {
+    const def = { ...byId("google_reviews"), flyer: true };
+    const waves = workflowWaves(workflowNodeIds(def), def.requirements.website);
+    const together = (a: string, b: string) => waves.some((w) => w.includes(a) && w.includes(b));
+    assert.ok(together("branding_visual", "dirigeant_sirene"));
+    assert.ok(together("demo_web", "flyer"));
+    assert.deepEqual(waves[0], ["maps_search"]);
+    assert.deepEqual(waves.at(-1), ["channel_phone"]);
+  });
+
+  it("un besoin sans site lance SIRENE dès le filtre Maps passé", () => {
+    const def = byId("website_creation");
+    const waves = workflowWaves(workflowNodeIds(def), def.requirements.website);
+    const idx = (id: string) => waves.findIndex((w) => w.includes(id));
+    assert.ok(idx("dirigeant_sirene") > idx("maps_filter"));
+    assert.equal(idx("dirigeant_sirene"), idx("maps_filter") + 1);
   });
 });

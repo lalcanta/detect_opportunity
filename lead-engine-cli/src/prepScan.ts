@@ -3,8 +3,6 @@ import { existsSync } from "node:fs";
 import { chromium, type Browser, type BrowserContext } from "playwright";
 import { loadConfig } from "./config";
 import { scrapeMaps } from "./collector/mapsScraper";
-import { inspectSite, lookupCompanySirene } from "./inspector/siteInspector";
-import { generateFlyerPdf } from "./generator/flyerGenerator";
 import {
   DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID,
   DEFAULT_OPPORTUNITY_ID,
@@ -19,7 +17,8 @@ import {
   resolveWebsiteFilter,
   type ChannelId,
 } from "../../shared/opportunities";
-import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection } from "./opportunities/qualify";
+import { buildLeadContacts, UnqualifiedLeadError } from "./opportunities/qualify";
+import { companyFacts, runLeadWorkflow, type Dossier } from "./workflow/runner";
 import { loadRemoteOpportunities } from "./opportunities/remote";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
@@ -203,50 +202,38 @@ export async function runPrepScan(
       await mkdir(leadDir, { recursive: true });
       log("prep", `[${i + 1}/${qualifiedLeads.length}] Extraction données & flyers pour ${lead.name}...`);
 
-      // 1. Inspection du site existant si disponible
-      let inspection = null;
-      if (lead.website) {
-        try {
-          inspection = await inspectSite(context, lead.website, {
-            opportunityType: oppType,
-            companyName: lead.name,
-            city: lead.city,
-            phone: lead.phone,
-          });
-          if (inspection.screenshot) {
-            await writeFile(`${leadDir}/screenshot.png`, inspection.screenshot);
-          }
-        } catch (err) {
-          log("inspect", `Impossible d'inspecter ${lead.website} : ${(err as Error).message}`);
-        }
-      }
-      // Vérification finale des prérequis (email, formulaire) : un lead non qualifié n'est ni préparé ni synchronisé.
-      const qualification = qualifyAfterInspection(def, lead, inspection);
-      if (!qualification.qualified || !qualification.primaryChannel) {
+      // 1. Workflow du besoin sans modèle de langage : inspection, SIRENE, qualification et flyer, par vagues parallèles.
+      let dossier: Dossier;
+      try {
+        dossier = await runLeadWorkflow(
+          { def, lead, leadId: id, demoUrl: `${cfg.REMOTE_APP_URL}/demos/${id}` },
+          { mode: "prep", context, remoteAppUrl: cfg.REMOTE_APP_URL },
+        );
+      } catch (err) {
+        if (!(err instanceof UnqualifiedLeadError)) throw err;
+        // Vérification finale des prérequis (email, formulaire) : un lead non qualifié n'est ni préparé ni synchronisé.
         rejected++;
-        log("prep", `[${i + 1}/${qualifiedLeads.length}] ⚪ ${lead.name} écarté : ${qualification.reasons.map(describeRejection).join(" ; ")}`);
+        log("prep", `[${i + 1}/${qualifiedLeads.length}] ⚪ ${lead.name} écarté : ${err.result.reasons.map(describeRejection).join(" ; ")}`);
         await rm(leadDir, { recursive: true, force: true });
         // Gardé dans le CRM en `unqualified` (hors Kanban), avec les raisons du rejet.
-        await pushLead(
-          cfg.REMOTE_APP_URL,
-          cfg.SYNC_SECRET_TOKEN,
-          buildUnqualifiedPayload({ id, lead, inspection, opportunityType: oppType, result: qualification }),
-        ).catch((e: Error) => log("prep", `⚠️ Sync du lead non qualifié échouée : ${e.message}`));
+        if (err.payload) {
+          await pushLead(cfg.REMOTE_APP_URL, cfg.SYNC_SECRET_TOKEN, err.payload).catch((e: Error) =>
+            log("prep", `⚠️ Sync du lead non qualifié échouée : ${e.message}`),
+          );
+        }
         await hooks.onProgress?.(preparedLeads.length, opts.limit, `⚪ ${lead.name} écarté après inspection (${rejected} écarté(s))`);
         continue;
       }
-      const primaryChannel = qualification.primaryChannel;
+      const inspection = dossier.inspection;
+      if (inspection?.screenshot) await writeFile(`${leadDir}/screenshot.png`, inspection.screenshot);
+      const primaryChannel = dossier.primaryChannel!;
       const contacts = buildLeadContacts(lead, inspection, primaryChannel);
       const pitchGenerator = pitchGeneratorFor(def, primaryChannel);
+      const facts = companyFacts(dossier);
 
-      const sireneFallback = !inspection ? await lookupCompanySirene(lead.name, lead.city) : null;
-
-      // 2. Génération flyer PDF
+      // 2. Flyer PDF (nœud « Flyer » du workflow)
       const brandColor = inspection?.dominantColors?.[0] || "#1e40af";
-      if (def.flyer) {
-        const flyerBuffer = await generateFlyerPdf(context, lead, inspection?.logoUrl ?? null, brandColor);
-        await writeFile(`${leadDir}/flyer.pdf`, flyerBuffer);
-      }
+      if (dossier.flyerPdf) await writeFile(`${leadDir}/flyer.pdf`, dossier.flyerPdf);
 
       // 3. Récupération des benchmarks sectoriels
       const benchmark = getCompetitorBenchmark(lead.activity);
@@ -275,14 +262,15 @@ export async function runPrepScan(
         site_images: inspection?.siteImages ?? [],
         email: inspection?.emails?.[0] ?? null,
         emails: inspection?.emails ?? [],
-        key_people: inspection?.keyPeople?.length ? inspection.keyPeople : (sireneFallback?.keyPeople ?? []),
+        key_people: facts.keyPeople,
         stack: inspection?.stack ?? [],
         trackers_found: inspection?.trackersFound ?? [],
         tracker_requests: inspection?.trackerRequests ?? [],
         cmp_detected: inspection?.cmpDetected ?? null,
         social_links: inspection?.socialLinks ?? { linkedin: [], facebook: [], instagram: [] },
-        siren: inspection?.siren ?? sireneFallback?.siren ?? null,
-        company_created_at: inspection?.companyCreatedAt ?? sireneFallback?.createdAt ?? null,
+        siren: facts.siren,
+        company_created_at: facts.createdAt,
+        workflow_trace: dossier.trace,
         benchmark: {
           categoryName: benchmark.categoryName,
           copywritingHooks: benchmark.copywritingHooks,

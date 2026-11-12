@@ -3,21 +3,12 @@ import { chromium, type Browser, type BrowserContext } from "playwright";
 import type { Config } from "./config";
 import type { ModelRouter } from "./llm/modelRouter";
 import { scrapeMaps } from "./collector/mapsScraper";
-import { inspectSite, lookupCompanySirene } from "./inspector/siteInspector";
-import { generateFlyerPdf } from "./generator/flyerGenerator";
-import { PITCH_GENERATORS, PROOF_GENERATORS, type GenerationContext } from "./opportunities/generators";
-import {
-  CHANNEL_LABELS,
-  getOpportunityOrDefault,
-  needsInspectionToQualify,
-  opportunityIdOf,
-  pitchGeneratorFor,
-  resolveWebsiteFilter,
-} from "../../shared/opportunities";
-import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection, UnqualifiedLeadError } from "./opportunities/qualify";
+import { getOpportunityOrDefault, needsInspectionToQualify, resolveWebsiteFilter } from "../../shared/opportunities";
+import { UnqualifiedLeadError } from "./opportunities/qualify";
+import { buildSyncPayload, runLeadWorkflow } from "./workflow/runner";
 import { pushLead } from "./sync/pushLead";
 import { leadId, log, parseDirectDomainLeads } from "./utils/helpers";
-import type { MapsLead, SyncPayload, TokenUsageRecord } from "./types";
+import type { MapsLead, SyncPayload } from "./types";
 
 export interface ScanOptions {
   query: string;
@@ -190,98 +181,14 @@ async function processLead(
   onSubStep?: (subStep: string) => Promise<boolean | void>,
   opportunityType?: string,
 ): Promise<SyncPayload> {
-  const usage: TokenUsageRecord[] = [];
   const id = leadId(lead.name, lead.phone ?? lead.mapsUrl);
-  const demoUrl = `${remoteAppUrl}/demos/${id}`;
-  log("lead", `→ ${lead.name} (${id}) [${opportunityIdOf(opportunityType)}]`);
-
-  if (lead.website) {
-    await onSubStep?.(`🔍 Inspection réseau & RGPD à froid (${lead.website.replace(/^https?:\/\//, "").slice(0, 30)})...`);
-  } else {
-    await onSubStep?.(`🔍 Aucun site actuel : préparation de l'audit stratégique...`);
-  }
-  const inspection = lead.website
-    ? await inspectSite(context, lead.website, { opportunityType, companyName: lead.name, city: lead.city, phone: lead.phone })
-    : null;
-  const sireneFallback = !inspection ? await lookupCompanySirene(lead.name, lead.city) : null;
-
   const def = getOpportunityOrDefault(opportunityType);
-  // Vérification finale des prérequis (email, formulaire) avant toute génération coûteuse.
-  const qualification = qualifyAfterInspection(def, lead, inspection);
-  if (!qualification.qualified || !qualification.primaryChannel) {
-    throw new UnqualifiedLeadError(
-      qualification,
-      buildUnqualifiedPayload({
-        id,
-        lead,
-        inspection,
-        opportunityType: opportunityIdOf(opportunityType),
-        result: qualification,
-        siren: sireneFallback?.siren ?? null,
-      }),
-    );
-  }
-  const primaryChannel = qualification.primaryChannel;
-  await onSubStep?.(`✅ Prérequis remplis : canal principal ${CHANNEL_LABELS[primaryChannel]}`);
-
-  const genCtx: GenerationContext = {
-    router, context, lead, leadId: id, inspection, remoteAppUrl, demoUrl, usage, onSubStep, def, primaryChannel,
-  };
-
-  const { audit, demoHtml } = await PROOF_GENERATORS[def.proof.generator](genCtx);
-
-  let flyerBase64: string | null = null;
-  if (def.flyer) {
-    await onSubStep?.(`📄 Création du Flyer PDF commercial (QR Code)...`);
-    const flyer = await generateFlyerPdf(context, lead, inspection?.logoUrl ?? null, inspection?.dominantColors[0] ?? "#1d4ed8");
-    flyerBase64 = flyer.toString("base64");
-  }
-
-  const battlecard = await PITCH_GENERATORS[pitchGeneratorFor(def, primaryChannel)](genCtx, audit);
-
-  return {
-    id,
-    company_name: lead.name,
-    activity: lead.activity,
-    city: lead.city,
-    phone: lead.phone,
-    email: inspection?.emails?.[0] ?? null,
-    website_url: lead.website,
-    google_rating: lead.rating,
-    google_reviews_count: lead.reviewsCount,
-    opportunity_type: opportunityIdOf(opportunityType),
-    scanned_at: new Date().toISOString(),
-    primary_channel: primaryChannel,
-    contacts: buildLeadContacts(lead, inspection, primaryChannel),
-    audit_data: {
-      ...audit,
-      logoUrl: inspection?.logoUrl ?? null,
-      site_images: inspection?.siteImages ?? [],
-      loadTimeMs: inspection?.loadTimeMs ?? null,
-      isResponsive: inspection?.isResponsive ?? null,
-      dominantColors: inspection?.dominantColors ?? [],
-      recentReviews: lead.recentReviews,
-      mapsUrl: lead.mapsUrl,
-      emails: inspection?.emails ?? [],
-      key_people: inspection?.keyPeople?.length ? inspection.keyPeople : (sireneFallback?.keyPeople ?? []),
-      stack: inspection?.stack ?? [],
-      trackers_found: inspection?.trackersFound ?? [],
-      tracker_requests: inspection?.trackerRequests ?? [],
-      cmp_detected: inspection?.cmpDetected ?? null,
-      social_links: inspection?.socialLinks ?? { linkedin: [], facebook: [], instagram: [] },
-      siren: inspection?.siren ?? sireneFallback?.siren ?? null,
-      company_created_at: inspection?.companyCreatedAt ?? sireneFallback?.createdAt ?? null,
-      paid_ads_detected: inspection?.paidAdsDetected ?? [],
-      is_https: inspection?.isHttps ?? null,
-      copyright_year: inspection?.copyrightYear ?? null,
-      obsolescence_signals: inspection?.obsolescenceSignals ?? [],
-      report_url: demoUrl,
-    },
-    demo_html: demoHtml,
-    flyer_pdf_base64: flyerBase64,
-    battlecard_data: battlecard,
-    token_usage: usage,
-  };
+  log("lead", `→ ${lead.name} (${id}) [${def.id}]`);
+  const dossier = await runLeadWorkflow(
+    { def, lead, leadId: id, demoUrl: `${remoteAppUrl}/demos/${id}` },
+    { mode: "full", context, remoteAppUrl, router, onSubStep },
+  );
+  return buildSyncPayload(dossier);
 }
 
 async function saveLocally(p: SyncPayload): Promise<void> {
