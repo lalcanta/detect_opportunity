@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { bearerMatches, requireUser } from "../auth";
 import { jobModeBadge } from "../views/jobMode";
+import { readStoredOpportunities } from "../services/opportunityStore";
 
 export const scanRoutes = new Hono<AppEnv>();
 
@@ -322,7 +323,15 @@ scanRoutes.post("/api/worker/claim", async (c) => {
     .bind(new Date().toISOString())
     .first<ScanJob>();
   const models = await c.env.DB.prepare("SELECT action_type, provider, model, thinking_budget, fallback_models FROM model_settings").all();
-  return c.json({ job: job ?? null, models: models.results });
+  // Définitions des besoins en vigueur : le worker les applique au job, qui garde la version utilisée.
+  const stored = await readStoredOpportunities(c.env.DB);
+  if (job) {
+    const used = stored.find((s) => s.def.id === opportunityIdOf(job.opportunity_type));
+    if (used) {
+      await c.env.DB.prepare("UPDATE scan_jobs SET opportunity_version = ? WHERE id = ?").bind(used.version, job.id).run();
+    }
+  }
+  return c.json({ job: job ?? null, models: models.results, opportunities: stored.map((s) => ({ ...s.def, version: s.version })) });
 });
 
 scanRoutes.get("/api/admin/scans/:id/logs", requireUser("admin"), async (c) => {

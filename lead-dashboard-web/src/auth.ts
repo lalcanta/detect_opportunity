@@ -1,5 +1,6 @@
 import { LEAD_ACTIVITIES_DDL } from "./services/activities";
 import { MODEL_QUOTAS_DDL } from "./services/geminiQuota";
+import { OPPORTUNITY_DEFINITIONS_DDL, OPPORTUNITY_HISTORY_DDL } from "./services/opportunityStore";
 import type { Context, MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 import type { AppEnv, Role, User } from "./types";
@@ -7,7 +8,7 @@ import type { AppEnv, Role, User } from "./types";
 const COOKIE = "lead_session";
 export const SESSION_COOKIE = COOKIE;
 
-const AUTH_SCHEMA_VERSION = 13;
+const AUTH_SCHEMA_VERSION = 14;
 let migrationChecked = 0;
 
 /** Assure que les colonnes Whitelist / Invitation / Password / Expiration démo, execution_mode et la table scheduled_scans existent. */
@@ -45,6 +46,7 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       "ALTER TABLE scan_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'scan'",
       "ALTER TABLE scan_jobs ADD COLUMN lead_ids TEXT",
       "ALTER TABLE scan_jobs ADD COLUMN effective_mode TEXT",
+      "ALTER TABLE scan_jobs ADD COLUMN opportunity_version INTEGER",
       "ALTER TABLE available_models ADD COLUMN is_flagship INTEGER NOT NULL DEFAULT 1",
       "ALTER TABLE available_models ADD COLUMN speed TEXT DEFAULT 'fast'",
       "ALTER TABLE available_models ADD COLUMN cost_tier TEXT DEFAULT 'eco'",
@@ -58,6 +60,8 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
     await db.prepare(LEAD_CONTACTS_DDL).run().catch(() => undefined);
     await db.prepare(LEAD_ACTIVITIES_DDL).run().catch(() => undefined);
     await db.prepare(MODEL_QUOTAS_DDL).run().catch(() => undefined);
+    await db.prepare(OPPORTUNITY_DEFINITIONS_DDL).run().catch(() => undefined);
+    await db.prepare(OPPORTUNITY_HISTORY_DDL).run().catch(() => undefined);
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_leads_siren ON leads(siren)").run().catch(() => undefined);
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_activities_lead ON lead_activities(lead_id, created_at)").run().catch(() => undefined);
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_contacts_lead ON lead_contacts(lead_id, kind)").run().catch(() => undefined);

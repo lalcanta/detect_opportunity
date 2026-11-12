@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
   job_type        TEXT NOT NULL DEFAULT 'scan',      -- 'scan' (Maps + inspection) ou 'generate' (génération API de leads préparés)
   lead_ids        TEXT,                              -- JSON des leads à générer (job 'generate')
   effective_mode  TEXT,                              -- mode réellement exécuté par le worker : full_auto | prep_only | api_generation
+  opportunity_version INTEGER,                       -- version de la définition du besoin utilisée par le worker
   status          TEXT NOT NULL DEFAULT 'queued'
                   CHECK (status IN ('queued','running','done','failed','cancelled')),
   requested_by    TEXT,
@@ -186,3 +187,24 @@ INSERT OR IGNORE INTO model_settings (action_type, provider, model, thinking_bud
   ('demo',       'gemini', 'gemini-3.1-pro-preview', 2048),
   ('audit',      'gemini', 'gemini-3-flash-preview', 0),
   ('battlecard', 'gemini', 'gemini-3-flash-preview', 0);
+
+-- Définitions des besoins (opportunités), éditables depuis l'onglet admin « Besoins ».
+-- Remplies au premier accès avec les définitions du code (shared/opportunities). Doit rester identique à
+-- services/opportunityStore.ts.
+CREATE TABLE IF NOT EXISTS opportunity_definitions (
+  id          TEXT PRIMARY KEY,
+  definition  TEXT NOT NULL,
+  position    INTEGER NOT NULL DEFAULT 0,
+  version     INTEGER NOT NULL DEFAULT 1,
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS opportunity_definition_history (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  opportunity_id  TEXT NOT NULL,
+  version         INTEGER NOT NULL,
+  definition      TEXT NOT NULL,
+  changed_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  changed_by      TEXT
+);

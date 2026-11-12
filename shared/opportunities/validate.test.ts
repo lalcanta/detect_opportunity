@@ -1,0 +1,122 @@
+/** Validation des besoins édités dans le dashboard et chargement dans le registre partagé. */
+import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+import {
+  ACTIVE_OPPORTUNITIES,
+  ALL_OPPORTUNITY_IDS,
+  CODE_OPPORTUNITIES,
+  OPPORTUNITIES,
+  findOpportunity,
+  getOpportunityOrDefault,
+  onOpportunitiesChange,
+  resetOpportunityDefinitions,
+  setOpportunityDefinitions,
+  validateOpportunityDefinition,
+  type OpportunityDefinition,
+} from "./index";
+
+const clone = (d: OpportunityDefinition): any => JSON.parse(JSON.stringify(d));
+const website = () => clone(CODE_OPPORTUNITIES.find((o) => o.id === "website")!);
+const audit = () => clone(CODE_OPPORTUNITIES.find((o) => o.id === "audit_qa_trackers")!);
+
+function errorsOf(raw: unknown): string[] {
+  const r = validateOpportunityDefinition(raw);
+  return r.ok ? [] : r.errors;
+}
+
+describe("validateOpportunityDefinition", () => {
+  it("accepte toutes les définitions du code, à l'identique", () => {
+    for (const def of CODE_OPPORTUNITIES) {
+      const r = validateOpportunityDefinition(clone(def));
+      assert.ok(r.ok, `${def.id} : ${r.ok ? "" : r.errors.join(" ; ")}`);
+      assert.deepEqual(r.def, clone(def));
+    }
+  });
+
+  it("refuse un identifiant mal formé", () => {
+    assert.ok(errorsOf({ ...website(), id: "Site Web" }).some((e) => e.startsWith("identifiant")));
+  });
+
+  it("refuse un canal sans message et un message sans canal", () => {
+    const noPitch = website();
+    delete noPitch.pitch.email;
+    assert.ok(errorsOf(noPitch).some((e) => e.includes("aucun message pour le canal email")));
+    const extra = website();
+    extra.pitch.contact_form = "llm_cold_email";
+    assert.ok(errorsOf(extra).some((e) => e.includes("n'est pas un canal du besoin")));
+  });
+
+  it("refuse un script d'appel pour l'email", () => {
+    const d = website();
+    d.pitch.email = "llm_phone_battlecard";
+    assert.ok(errorsOf(d).some((e) => e.includes("un message écrit est attendu")));
+  });
+
+  it("refuse un contact exigé qui n'est pas un canal", () => {
+    const d = website();
+    d.requirements.contacts = { allOf: ["contact_form"] };
+    assert.ok(errorsOf(d).some((e) => e.includes("doit faire partie des canaux")));
+  });
+
+  it("refuse un email exigé quand le site est interdit", () => {
+    const d = website();
+    d.requirements = { website: "forbidden", contacts: { allOf: ["email"] } };
+    assert.ok(errorsOf(d).some((e) => e.startsWith("sans site")));
+  });
+
+  it("exige la vérification qui trouve l'email", () => {
+    const d = website();
+    d.scanModules = d.scanModules.filter((m: string) => m !== "contacts_legal");
+    assert.ok(errorsOf(d).some((e) => e.includes("contacts et mentions légales")));
+  });
+
+  it("réserve le rapport d'audit et son email aux prospects avec site", () => {
+    const d = audit();
+    d.requirements.website = "optional";
+    assert.ok(errorsOf(d).some((e) => e.includes("rapport d'audit exige")));
+    const w = website();
+    w.pitch.email = "tracker_cold_email";
+    assert.ok(errorsOf(w).some((e) => e.includes("l'email d'audit")));
+  });
+
+  it("refuse un module, un statut ou une preuve inconnus", () => {
+    assert.ok(errorsOf({ ...website(), scanModules: ["inconnu"] }).some((e) => e.includes("valeur inconnue")));
+    assert.ok(errorsOf({ ...website(), status: "en_pause" }).length > 0);
+    assert.ok(errorsOf({ ...website(), proof: { kind: "pdf" } }).some((e) => e.includes("type de preuve inconnu")));
+  });
+});
+
+describe("setOpportunityDefinitions", () => {
+  afterEach(() => resetOpportunityDefinitions());
+
+  it("remplace les définitions sur place et prévient les abonnés", () => {
+    const ref = OPPORTUNITIES;
+    let calls = 0;
+    onOpportunitiesChange(() => calls++);
+    const custom = { ...website(), id: "refonte_site", label: "Refonte de site", requirements: { website: "required", contacts: { allOf: ["phone"] } } };
+    const draft = { ...audit(), status: "draft" };
+    const res = setOpportunityDefinitions([custom, draft]);
+    assert.equal(res.loaded, 2);
+    assert.equal(OPPORTUNITIES, ref);
+    assert.deepEqual(ALL_OPPORTUNITY_IDS, ["refonte_site", "audit_qa_trackers"]);
+    assert.deepEqual(ACTIVE_OPPORTUNITIES.map((o) => o.id), ["refonte_site"]);
+    assert.equal(findOpportunity("refonte_site")?.label, "Refonte de site");
+    assert.ok(calls >= 1);
+  });
+
+  it("ignore les définitions invalides ou en double et les signale", () => {
+    const res = setOpportunityDefinitions([website(), { ...website() }, { id: "cassé" }]);
+    assert.equal(res.loaded, 1);
+    assert.deepEqual(Object.keys(res.errors).sort(), ["cassé", "website"]);
+  });
+
+  it("garde les définitions du code si rien n'est valide", () => {
+    setOpportunityDefinitions([{ id: "x" }]);
+    assert.equal(OPPORTUNITIES.length, CODE_OPPORTUNITIES.length);
+  });
+
+  it("retombe sur la définition du code quand le besoin par défaut a disparu", () => {
+    setOpportunityDefinitions([audit()]);
+    assert.equal(getOpportunityOrDefault("inconnu").id, "website");
+  });
+});

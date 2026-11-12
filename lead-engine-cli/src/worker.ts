@@ -4,6 +4,7 @@ import { runScan } from "./scanRunner";
 import { runPrepScan } from "./prepScan";
 import { generateQueuedLeadsViaApi } from "./generateQueue";
 import { log, sleep } from "./utils/helpers";
+import { applyRemoteOpportunities } from "./opportunities/remote";
 
 /**
  * Worker : interroge le dashboard toutes les POLL_MS ms, exécute les scans demandés depuis l'interface admin
@@ -565,10 +566,13 @@ async function main(): Promise<void> {
       const res = await api<{
         job: RemoteJob | null;
         models?: { action_type: string; provider: string; model: string; thinking_budget?: number }[];
+        opportunities?: unknown[];
       }>(cfg, "/api/worker/claim");
       if (res.models && res.models.length > 0) {
         router.updateSettings(res.models);
       }
+      // Besoins édités dans le dashboard : appliqués avant de traiter le job.
+      applyRemoteOpportunities(res.opportunities);
       if (res.job) {
         await handleJob(cfg, router, res.job);
         continue; // enchaîne directement sur le job suivant

@@ -5,6 +5,7 @@ import { loadConfig } from "./config";
 import { pushLead } from "./sync/pushLead";
 import { stripDesignPlan } from "./generator/demoGenerator";
 import { log, stripCodeFences } from "./utils/helpers";
+import { loadRemoteOpportunities } from "./opportunities/remote";
 import type { Battlecard, LeadContact, SyncPayload, TokenUsageRecord } from "./types";
 
 interface RawBattlecardFile {
@@ -326,8 +327,10 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  syncQueue().catch((err) => {
-    console.error("Erreur syncQueue :", err);
-    process.exit(1);
-  });
+  loadRemoteOpportunities(loadConfig())
+    .then(() => syncQueue())
+    .catch((err) => {
+      console.error("Erreur syncQueue :", err);
+      process.exit(1);
+    });
 }

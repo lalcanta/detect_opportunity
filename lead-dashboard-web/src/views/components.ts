@@ -1,4 +1,4 @@
-import { CHANNEL_LABELS, isChannelId, opportunityIdOf } from "../../../shared/opportunities";
+import { CHANNEL_LABELS, isChannelId, onOpportunitiesChange, opportunityIdOf } from "../../../shared/opportunities";
 import { OPPORTUNITY_TYPES, type BadgeTone } from "../types";
 import type { LeadRow } from "../types";
 import { esc, icon, type IconName } from "./layout";
@@ -87,9 +87,14 @@ const BADGE_TONE_CLASSES: Record<BadgeTone, string> = {
 };
 
 /** Libellé et classes du badge de chaque opportunité, dérivés de shared/opportunities. */
-export const OPP_META: Record<string, { label: string; cls: string }> = Object.fromEntries(
-  OPPORTUNITY_TYPES.map((o) => [o.id, { label: o.badge, cls: BADGE_TONE_CLASSES[o.tone] }]),
-);
+export const OPP_META: Record<string, { label: string; cls: string }> = {};
+
+function refreshOppMeta(): void {
+  for (const k of Object.keys(OPP_META)) delete OPP_META[k];
+  for (const o of OPPORTUNITY_TYPES) OPP_META[o.id] = { label: o.badge, cls: BADGE_TONE_CLASSES[o.tone] };
+}
+refreshOppMeta();
+onOpportunitiesChange(refreshOppMeta);
 
 /** Badge d'une opportunité ; un identifiant inconnu est affiché tel quel en gris. */
 export function opportunityBadgeMeta(opportunityType?: string | null): { label: string; cls: string } {

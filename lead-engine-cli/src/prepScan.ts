@@ -18,6 +18,7 @@ import {
   type ChannelId,
 } from "../../shared/opportunities";
 import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection } from "./opportunities/qualify";
+import { loadRemoteOpportunities } from "./opportunities/remote";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
 import { pushLead } from "./sync/pushLead";
@@ -649,6 +650,7 @@ ${viaForm ? `Formulaire de contact du site (${p.contactFormUrl ?? "URL dans meta
 
 export async function prepScan(): Promise<void> {
   const opts = parseArgs();
+  await loadRemoteOpportunities(loadConfig());
   const res = await runPrepScan(opts);
 
   if (res.preparedLeads.length === 0) {

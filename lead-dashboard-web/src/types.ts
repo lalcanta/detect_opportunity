@@ -1,6 +1,7 @@
 import {
   ALL_OPPORTUNITY_IDS,
   OPPORTUNITIES,
+  onOpportunitiesChange,
   isOpportunityId,
   opportunityIdOf,
   pitchGeneratorFor,
@@ -95,7 +96,7 @@ export type { BusinessModel, BadgeTone } from "../../shared/opportunities";
 
 export interface OpportunityDefinition {
   id: string;
-  status: "active" | "draft";
+  status: "active" | "draft" | "archived";
   label: string;
   badge: string;
   tone: BadgeTone;
@@ -142,10 +143,16 @@ export function describeContactRequirement(def: Pick<SharedOpportunityDefinition
   return parts.join(", et ");
 }
 
-export const OPPORTUNITY_TYPES: readonly OpportunityDefinition[] = OPPORTUNITIES.map(toOpportunityView);
+/** Vue des définitions en vigueur ; mise à jour sur place à chaque chargement depuis la base (onOpportunitiesChange). */
+export const OPPORTUNITY_TYPES: OpportunityDefinition[] = OPPORTUNITIES.map(toOpportunityView);
 
-/** Opportunités proposées au lancement d'un scan (hors brouillons). */
-export const SCANNABLE_OPPORTUNITY_TYPES: readonly OpportunityDefinition[] = OPPORTUNITY_TYPES.filter((o) => o.status === "active");
+/** Opportunités proposées au lancement d'un scan (ni brouillon ni archivée). */
+export const SCANNABLE_OPPORTUNITY_TYPES: OpportunityDefinition[] = OPPORTUNITY_TYPES.filter((o) => o.status === "active");
+
+onOpportunitiesChange(() => {
+  OPPORTUNITY_TYPES.splice(0, OPPORTUNITY_TYPES.length, ...OPPORTUNITIES.map(toOpportunityView));
+  SCANNABLE_OPPORTUNITY_TYPES.splice(0, SCANNABLE_OPPORTUNITY_TYPES.length, ...OPPORTUNITY_TYPES.filter((o) => o.status === "active"));
+});
 
 export type OpportunityTypeId = OpportunityId;
 

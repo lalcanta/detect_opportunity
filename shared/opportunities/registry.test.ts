@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
   ALL_OPPORTUNITY_IDS,
+  CODE_OPPORTUNITIES,
   CHANNEL_IDS,
   DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID,
   DEFAULT_OPPORTUNITY_ID,
@@ -103,6 +104,6 @@ describe("Registre des opportunités", () => {
     const schema = readFileSync(new URL("../../lead-dashboard-web/schema.sql", import.meta.url), "utf8");
     const match = schema.match(/allowed_opportunities\s+TEXT NOT NULL DEFAULT '([^']+)'/);
     assert.ok(match, "colonne allowed_opportunities introuvable dans schema.sql");
-    assert.deepEqual(JSON.parse(match[1]!), ALL_OPPORTUNITY_IDS);
+    assert.deepEqual(JSON.parse(match[1]!), CODE_OPPORTUNITIES.map((o) => o.id));
   });
 });

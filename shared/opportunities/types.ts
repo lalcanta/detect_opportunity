@@ -102,10 +102,18 @@ export const PITCH_KIND_BY_GENERATOR: Record<PitchGeneratorId, PitchKind> = {
  */
 export type PitchByChannel = Partial<Record<ChannelId, PitchGeneratorId>>;
 
+export const OPPORTUNITY_STATUSES = ["active", "draft", "archived"] as const;
+export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
+
+export const BADGE_TONES = ["blue", "cyan", "amber", "emerald", "purple", "zinc"] as const;
+export const BUSINESS_MODELS = ["one_shot", "recurring", "both"] as const;
+export const DEMO_FOCUSES = ["showcase", "reviews", "seo_local", "ads_acquisition"] as const;
+export const WEBSITE_REQUIREMENTS = ["required", "forbidden", "optional"] as const;
+
 export interface OpportunityDefinition {
   id: string;
-  /** `draft` : définie mais non proposée au scan. */
-  status: "active" | "draft";
+  /** `draft` : définie mais non proposée au scan ; `archived` : retirée, conservée pour les anciens leads. */
+  status: OpportunityStatus;
   label: string;
   badge: { text: string; tone: BadgeTone };
   /** Nom d'icône (lucide). */
