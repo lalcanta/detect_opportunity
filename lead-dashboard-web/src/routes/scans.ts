@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { bearerMatches, requireUser } from "../auth";
 import { jobModeBadge } from "../views/jobMode";
+import { renderLiveScanCard } from "../views/liveScanCard";
 import { readStoredOpportunities } from "../services/opportunityStore";
 
 export const scanRoutes = new Hono<AppEnv>();
@@ -136,9 +137,13 @@ export async function busyGenerationLeadIds(db: D1Database): Promise<Set<string>
   return out;
 }
 
-scanRoutes.get("/api/admin/scans", requireUser("admin"), async (c) =>
-  c.json((await listScans(c.env.DB)).map((s) => ({ ...s, logs: undefined, mode_badge: jobModeBadge(s) }))),
-);
+scanRoutes.get("/api/admin/scans", requireUser("admin"), async (c) => {
+  const scans = await listScans(c.env.DB);
+  const list = scans.map((s) => ({ ...s, logs: undefined, mode_badge: jobModeBadge(s) }));
+  // `?card=1` : la carte « scan en direct » rendue côté serveur, pour l'actualiser sans recharger la page.
+  if (c.req.query("card") === "1") return c.json({ scans: list, card: renderLiveScanCard(scans) });
+  return c.json(list);
+});
 
 scanRoutes.post("/api/admin/scans/:id/cancel", requireUser("admin"), async (c) => {
   await c.env.DB.prepare(
