@@ -19,6 +19,7 @@ import { validateOpportunityDefinition } from "./validate";
 export * from "./types";
 export * from "./qualification";
 export * from "./validate";
+export * from "./catalog";
 
 /** Définitions livrées avec le code, dans l'ordre d'affichage : valeurs initiales de la base du dashboard. */
 export const CODE_OPPORTUNITIES: readonly OpportunityDefinition[] = [website, auditQaTrackers, googleReviews, seoLocal, adsAcquisition, custom];

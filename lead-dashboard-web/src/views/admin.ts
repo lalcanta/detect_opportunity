@@ -1,6 +1,7 @@
 import { jobModeBadge } from "./jobMode";
 import type { LeadRow, User } from "../types";
 import { CHANNEL_IDS, CHANNEL_LABELS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../../shared/opportunities";
+import { needsTab } from "./needs";
 import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedChannels, parseAllowedOpportunities } from "../types";
 import { tokenRowForDisplay, type AdminStats, type ModelSettingRow } from "../routes/admin";
 import type { ScanJob, ScheduledScan } from "../routes/scans";
@@ -400,6 +401,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
   const adminTabs: [string, IconName, string][] = [
     ["overview", "chart", "Vue d'ensemble & KPIs"],
     ["scanner", "target", `Scanner Local & Jobs${hasActive ? ' <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500 text-white font-extrabold animate-pulse">en cours</span>' : ""}`],
+    ["needs", "sliders", "Besoins"],
     ["pending", "clock", `File CLI 0€${pendingCount > 0 ? ` <span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-extrabold">${pendingCount}</span>` : ""}`],
     ["models", "cpu", "Modèles IA par Action"],
     [
@@ -1579,6 +1581,8 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
       : ""
   }
 
+  ${tab === "needs" ? needsTab() : ""}
+
   ${
     /* ========================================================================= */
     /* ONGLET : BASE DE CONNAISSANCES & BENCHMARKS CONCURRENTS                  */
@@ -1877,7 +1881,7 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
 var $ = function (id) { return document.getElementById(id); };
 function post(url, body) { return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); }
 
-${hasActive ? "setTimeout(function () { location.reload(); }, 8000);" : ""}
+${hasActive && tab !== "needs" ? "setTimeout(function () { location.reload(); }, 8000);" : ""}
 
 // Initialisation Carte Leaflet (si onglet scanner)
 function initLeafletMap() {

@@ -74,6 +74,9 @@ export function validateOpportunityDefinition(raw: unknown): ValidationResult {
     if (allOf.some((c) => c !== "phone") || (anyOf.length > 0 && !anyOf.includes("phone"))) {
       errors.push("sans site, seul le téléphone peut être exigé (l'email et le formulaire se trouvent sur le site)");
     }
+    if (channels.some((c) => c !== "phone")) {
+      errors.push("sans site, seul le téléphone peut servir de canal : l'email et le formulaire sont introuvables");
+    }
   } else {
     if (scanModules.length === 0) errors.push("au moins une vérification du site");
     if (channels.includes("email") && !scanModules.includes("contacts_legal")) {

@@ -241,7 +241,7 @@ pageRoutes.get("/", requireUser(undefined, "page"), async (c) => {
 
 pageRoutes.get("/admin", requireUser("admin", "page"), async (c) => {
   const user: User = c.get("user");
-  const tab = ["overview", "scanner", "models", "quotas", "benchmarks", "team", "attribution", "pending"].includes(c.req.query("tab") ?? "")
+  const tab = ["overview", "scanner", "needs", "models", "quotas", "benchmarks", "team", "attribution", "pending"].includes(c.req.query("tab") ?? "")
     ? (c.req.query("tab") as string)
     : "overview";
   const leads = await c.env.DB.prepare(`SELECT ${LEAD_COLUMNS} ${LEAD_JOINS} ORDER BY l.created_at DESC LIMIT 200`).all<LeadRow>();

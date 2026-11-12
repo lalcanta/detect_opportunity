@@ -58,10 +58,16 @@ describe("validateOpportunityDefinition", () => {
     assert.ok(errorsOf(d).some((e) => e.includes("doit faire partie des canaux")));
   });
 
-  it("refuse un email exigé quand le site est interdit", () => {
+  it("refuse un email exigé ou utilisé quand le site est interdit", () => {
     const d = website();
     d.requirements = { website: "forbidden", contacts: { allOf: ["email"] } };
-    assert.ok(errorsOf(d).some((e) => e.startsWith("sans site")));
+    assert.ok(errorsOf(d).some((e) => e.startsWith("sans site, seul le téléphone peut être exigé")));
+    const c = website();
+    c.requirements = { website: "forbidden", contacts: { allOf: ["phone"] } };
+    assert.ok(errorsOf(c).some((e) => e.includes("seul le téléphone peut servir de canal")));
+    c.channels = ["phone"];
+    c.pitch = { phone: "llm_phone_battlecard" };
+    assert.deepEqual(errorsOf(c), []);
   });
 
   it("exige la vérification qui trouve l'email", () => {
