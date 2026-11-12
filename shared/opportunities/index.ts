@@ -13,6 +13,8 @@ import { custom } from "./definitions/custom";
 import { googleReviews } from "./definitions/googleReviews";
 import { seoLocal } from "./definitions/seoLocal";
 import { website } from "./definitions/website";
+import { websiteCreation } from "./definitions/websiteCreation";
+import { websiteRedesign } from "./definitions/websiteRedesign";
 import { SCAN_MODULE_IDS, type OpportunityDefinition } from "./types";
 import { validateOpportunityDefinition } from "./validate";
 
@@ -22,7 +24,16 @@ export * from "./validate";
 export * from "./catalog";
 
 /** Définitions livrées avec le code, dans l'ordre d'affichage : valeurs initiales de la base du dashboard. */
-export const CODE_OPPORTUNITIES: readonly OpportunityDefinition[] = [website, auditQaTrackers, googleReviews, seoLocal, adsAcquisition, custom];
+export const CODE_OPPORTUNITIES: readonly OpportunityDefinition[] = [
+  websiteRedesign,
+  websiteCreation,
+  googleReviews,
+  auditQaTrackers,
+  seoLocal,
+  adsAcquisition,
+  website,
+  custom,
+];
 
 /** Définitions en vigueur (code, ou base du dashboard une fois chargée), dans l'ordre d'affichage. */
 export const OPPORTUNITIES: OpportunityDefinition[] = [...CODE_OPPORTUNITIES];
@@ -37,7 +48,7 @@ export const ALL_OPPORTUNITY_IDS: OpportunityId[] = OPPORTUNITIES.map((o) => o.i
 export const ACTIVE_OPPORTUNITIES: OpportunityDefinition[] = OPPORTUNITIES.filter((o) => o.status === "active");
 
 /** Opportunité d'un lead ou d'un scan qui n'en précise pas. */
-export const DEFAULT_OPPORTUNITY_ID: OpportunityId = website.id;
+export const DEFAULT_OPPORTUNITY_ID: OpportunityId = websiteRedesign.id;
 
 /** Opportunité par défaut d'un scan sur une liste de domaines (`domains:…`), sans passer par Maps. */
 export const DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID: OpportunityId = auditQaTrackers.id;
@@ -96,7 +107,7 @@ export function findOpportunity(id?: string | null): OpportunityDefinition | und
 
 /** Définition en vigueur, sinon celle de l'opportunité par défaut (ou celle du code en dernier recours). */
 export function getOpportunityOrDefault(id?: string | null): OpportunityDefinition {
-  return findOpportunity(id) ?? findOpportunity(DEFAULT_OPPORTUNITY_ID) ?? website;
+  return findOpportunity(id) ?? findOpportunity(DEFAULT_OPPORTUNITY_ID) ?? websiteRedesign;
 }
 
 /** Vérifications à lancer : celles de l'opportunité, ou toutes pour une opportunité inconnue ou absente. */

@@ -1,7 +1,7 @@
 import { jobModeBadge } from "./jobMode";
 import type { LeadRow, User } from "../types";
 import { CHANNEL_IDS, CHANNEL_LABELS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../../shared/opportunities";
-import { needsTab } from "./needs";
+import { needsTab, opportunityPicker } from "./needs";
 import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedChannels, parseAllowedOpportunities } from "../types";
 import { tokenRowForDisplay, type AdminStats, type ModelSettingRow } from "../routes/admin";
 import type { ScanJob, ScheduledScan } from "../routes/scans";
@@ -581,24 +581,10 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
         </div>
       </div>
 
-      <!-- Type d'opportunité & Filtre de présence Web -->
-      <div class="grid sm:grid-cols-2 gap-3 pt-1">
-        <div>
-          <label class="text-xs font-semibold text-zinc-700 block mb-1">Type de besoin ciblé / Opportunité</label>
-          <select id="opp_type" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
-            ${SCANNABLE_OPPORTUNITY_TYPES.map((ot) => `<option value="${ot.id}" ${ot.id === DEFAULT_OPPORTUNITY_ID ? "selected" : ""}>${esc(ot.badge)} — ${esc(ot.label)} (exige : ${esc(ot.contactRequirement)}${ot.websiteRequirement === "required" ? ", un site" : ""})</option>`).join("")}
-          </select>
-          <span class="text-[10px] text-zinc-500 mt-0.5 block">Oriente automatiquement l'argumentaire, la démo et le flyer</span>
-        </div>
-        <div>
-          <label class="text-xs font-semibold text-zinc-700 block mb-1">Filtre présence Site Web actuel</label>
-          <select id="web_filter" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 transition-all">
-            <option value="all" selected>Tous les prospects (avec ou sans site web)</option>
-            <option value="no_website">Sans site web uniquement (création 1er site clé en main)</option>
-            <option value="has_website">Avec site web existant uniquement (refonte &amp; modernisation)</option>
-          </select>
-          <span class="text-[10px] text-zinc-500 mt-0.5 block">Filtrage immédiat pendant la collecte Google Maps</span>
-        </div>
+      <!-- Besoin ciblé : il fixe aussi le filtre de site -->
+      <div class="pt-1">
+        <span class="text-xs font-semibold text-zinc-700 block mb-1.5">Besoin ciblé</span>
+        ${opportunityPicker("opp_type", DEFAULT_OPPORTUNITY_ID)}
       </div>
 
       <!-- Mode d'Exécution : Full Auto vs Préparation CLI 0€ -->
@@ -723,21 +709,9 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
           </div>
         </div>
 
-        <div class="grid sm:grid-cols-2 gap-3 pt-1">
-          <div>
-            <label class="text-xs font-semibold text-zinc-700 block mb-1">Type de besoin ciblé</label>
-            <select id="sched_opp" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
-              ${SCANNABLE_OPPORTUNITY_TYPES.map((ot) => `<option value="${ot.id}">${esc(ot.badge)} — ${esc(ot.label)}</option>`).join("")}
-            </select>
-          </div>
-          <div>
-            <label class="text-xs font-semibold text-zinc-700 block mb-1">Filtre présence Site Web</label>
-            <select id="sched_wf" class="w-full border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-medium">
-              <option value="all" selected>Tous les prospects</option>
-              <option value="no_website">Sans site web uniquement</option>
-              <option value="has_website">Avec site web existant uniquement</option>
-            </select>
-          </div>
+        <div class="pt-1">
+          <span class="text-xs font-semibold text-zinc-700 block mb-1.5">Besoin ciblé</span>
+          ${opportunityPicker("sched_opp", DEFAULT_OPPORTUNITY_ID)}
         </div>
 
         <div class="pt-1">
@@ -1879,6 +1853,9 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
 
 <script>
 var $ = function (id) { return document.getElementById(id); };
+document.querySelectorAll('[data-opp-pick]').forEach(function (r) {
+  r.addEventListener('change', function () { if (r.checked && $(r.dataset.oppPick)) $(r.dataset.oppPick).value = r.value; });
+});
 function post(url, body) { return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); }
 
 ${hasActive && tab !== "needs" ? "setTimeout(function () { location.reload(); }, 8000);" : ""}
@@ -1990,8 +1967,8 @@ function initLeafletMap() {
       b.className = 'preset-btn text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm';
       $('q').value = b.dataset.preset;
       if (b.dataset.opp && $('opp_type')) {
-        $('opp_type').value = b.dataset.opp;
-        if ($('web_filter')) $('web_filter').value = 'has_website';
+        var pick = document.querySelector('input[name="opp_type_pick"][value="' + b.dataset.opp + '"]');
+        if (pick) { pick.checked = true; $('opp_type').value = b.dataset.opp; }
       }
     };
   });
@@ -2177,7 +2154,7 @@ if ($('btn_save_schedule')) {
         city: $('sched_c').value,
         limit: Number($('sched_n').value) || 10,
         opportunity_type: $('sched_opp').value,
-        website_filter: $('sched_wf').value,
+        website_filter: 'all',
         execution_mode: schedExecMode,
         cdp: $('sched_cdp').checked,
         lat: $('lat') ? Number($('lat').value) : null,
@@ -2267,7 +2244,7 @@ if ($('launch')) {
         lng: $('lng') ? Number($('lng').value) : null,
         radius_km: $('radius_km') ? Number($('radius_km').value) : null,
         opportunity_type: $('opp_type') ? $('opp_type').value : ${JSON.stringify(DEFAULT_OPPORTUNITY_ID)},
-        website_filter: $('web_filter') ? $('web_filter').value : 'all',
+        website_filter: 'all',
         execution_mode: execMode
       });
       if (r.ok) {

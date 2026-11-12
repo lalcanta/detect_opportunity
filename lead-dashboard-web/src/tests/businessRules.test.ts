@@ -164,7 +164,7 @@ describe("RÈGLES MÉTIER : Dashboard Web & Pipeline Commercial (lead-dashboard-
   describe("Règle 11 : Catalogue d'Opportunités & Cohérence des Filtres", () => {
     it("doit exposer les types de besoins/opportunités supportés incluant audit_qa_trackers", () => {
       const ids = OPPORTUNITY_TYPES.map((o) => o.id);
-      assert.deepEqual(ids, ["website", "audit_qa_trackers", "google_reviews", "seo_local", "ads_acquisition", "custom"]);
+      assert.deepEqual(ids, ["website_redesign", "website_creation", "google_reviews", "audit_qa_trackers", "seo_local", "ads_acquisition", "website", "custom"]);
     });
 
     it("chaque type d'opportunité doit comporter un badge, un canal, un modèle et un focus pitch", () => {
@@ -201,7 +201,7 @@ describe("RÈGLES MÉTIER : Dashboard Web & Pipeline Commercial (lead-dashboard-
 
   describe("Règle 12 : Cloisonnement strict des Closers & Filtrage par Besoins Activés", () => {
     it("doit parser correctement les allowed_opportunities ou replier sur tous les types", () => {
-      const allExpected = ["website", "audit_qa_trackers", "google_reviews", "seo_local", "ads_acquisition", "custom"];
+      const allExpected = ["website_redesign", "website_creation", "google_reviews", "audit_qa_trackers", "seo_local", "ads_acquisition", "website", "custom"];
       assert.deepEqual(parseAllowedOpportunities(null), allExpected);
       assert.deepEqual(parseAllowedOpportunities(""), allExpected);
       assert.deepEqual(parseAllowedOpportunities(undefined), allExpected);

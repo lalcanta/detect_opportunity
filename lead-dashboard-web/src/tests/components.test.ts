@@ -85,8 +85,8 @@ describe("Reusable UI Components (lead-dashboard-web/src/views/components.ts)", 
     const statusHtml = renderStatusPill("hot_lead");
     assert.ok(statusHtml.includes("🔥 Lead Chaud"));
 
-    const oppHtml = renderOpportunityBadge("website");
-    assert.ok(oppHtml.includes("🌐 Site Web"));
+    const oppHtml = renderOpportunityBadge("website_redesign");
+    assert.ok(oppHtml.includes("Refonte de site"));
 
     const auditHtml = renderAuditScoreBadge(32, "https://example.com");
     assert.ok(auditHtml.includes("Score : 32/100"));

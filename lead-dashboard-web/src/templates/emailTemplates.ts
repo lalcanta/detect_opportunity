@@ -98,7 +98,7 @@ Si vous voulez le détail technique, dites-le-moi simplement par retour de mail.
   {
     id: "website_demo",
     label: "Site Web — Envoi de la démo interactive",
-    opportunities: ["website"],
+    opportunities: ["website_redesign", "website_creation", "website"],
     stage: "proof",
     subject: "Démo de votre futur site web pour {{company_name}}",
     body: `Bonjour,

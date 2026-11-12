@@ -99,7 +99,7 @@ describe("setOpportunityDefinitions", () => {
     const ref = OPPORTUNITIES;
     let calls = 0;
     onOpportunitiesChange(() => calls++);
-    const custom = { ...website(), id: "refonte_site", label: "Refonte de site", requirements: { website: "required", contacts: { allOf: ["phone"] } } };
+    const custom = { ...website(), id: "refonte_site", status: "active", label: "Refonte de site", requirements: { website: "required", contacts: { allOf: ["phone"] } } };
     const draft = { ...audit(), status: "draft" };
     const res = setOpportunityDefinitions([custom, draft]);
     assert.equal(res.loaded, 2);
@@ -123,6 +123,6 @@ describe("setOpportunityDefinitions", () => {
 
   it("retombe sur la définition du code quand le besoin par défaut a disparu", () => {
     setOpportunityDefinitions([audit()]);
-    assert.equal(getOpportunityOrDefault("inconnu").id, "website");
+    assert.equal(getOpportunityOrDefault("inconnu").id, "website_redesign");
   });
 });

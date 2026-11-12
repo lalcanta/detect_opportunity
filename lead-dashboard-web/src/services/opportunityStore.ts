@@ -54,16 +54,24 @@ export function invalidateOpportunityCache(): void {
   cache = null;
 }
 
+let seeded = false;
+
+/**
+ * Ajoute les définitions du code absentes de la base (premier accès, ou nouveau besoin livré avec le code).
+ * Une définition déjà en base n'est jamais écrasée : la base fait foi. Une fois par isolat.
+ */
 async function seedIfEmpty(db: D1Database): Promise<void> {
-  const count = await db.prepare("SELECT COUNT(*) AS n FROM opportunity_definitions").first<{ n: number }>();
-  if ((count?.n ?? 0) > 0) return;
+  if (seeded) return;
+  const pos = await db.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM opportunity_definitions").first<{ p: number }>();
+  const start = pos?.p ?? 0;
   await db.batch(
     CODE_OPPORTUNITIES.map((def, i) =>
       db
         .prepare("INSERT OR IGNORE INTO opportunity_definitions (id, definition, position, version, updated_by) VALUES (?, ?, ?, 1, 'code')")
-        .bind(def.id, JSON.stringify(def), i),
+        .bind(def.id, JSON.stringify(def), start + i),
     ),
   );
+  seeded = true;
 }
 
 /** Lit les définitions en base (remplies depuis le code au premier accès). Les lignes invalides sont écartées. */

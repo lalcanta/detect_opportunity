@@ -17,7 +17,9 @@ import {
   STATUS_CATALOG,
   WEBSITE_REQUIREMENT_CATALOG,
 } from "../../../shared/opportunities";
-import { icon, type IconName } from "./layout";
+import { SCANNABLE_OPPORTUNITY_TYPES } from "../types";
+import { opportunityBadgeMeta } from "./components";
+import { esc, icon, type IconName } from "./layout";
 
 /** Change à chaque modification de public/static/besoins.js, pour contourner le cache du CDN. */
 export const NEEDS_ASSET_VERSION = "20261112e";
@@ -48,4 +50,32 @@ export function needsTab(): string {
 </section>
 <script type="application/json" id="needs-catalog">${json}</script>
 <script src="/static/besoins.js?v=${NEEDS_ASSET_VERSION}" defer></script>`;
+}
+
+/**
+ * Choix du besoin au lancement d'un scan : une carte par besoin actif, avec ce qu'il exige. La valeur choisie est
+ * recopiée dans le champ caché `hiddenId` (lu par les scripts du Scanner). Le besoin fixe aussi le filtre de site.
+ */
+export function opportunityPicker(hiddenId: string, selectedId: string): string {
+  const types = SCANNABLE_OPPORTUNITY_TYPES;
+  const selected = types.some((t) => t.id === selectedId) ? selectedId : (types[0]?.id ?? "");
+  const siteLabel: Record<string, string> = { required: "Site exigé", forbidden: "Sans site", optional: "Site facultatif" };
+  const cards = types
+    .map((ot) => {
+      const meta = opportunityBadgeMeta(ot.id);
+      const checked = ot.id === selected;
+      return `<label class="relative flex gap-3 p-3 rounded-xl border cursor-pointer transition-all has-[:checked]:border-zinc-900 has-[:checked]:ring-1 has-[:checked]:ring-zinc-900 has-[:checked]:bg-white border-zinc-200 bg-zinc-50/60 hover:bg-white">
+        <input type="radio" name="${hiddenId}_pick" value="${esc(ot.id)}" ${checked ? "checked" : ""} class="sr-only" data-opp-pick="${hiddenId}">
+        <span class="w-8 h-8 p-1.5 rounded-lg border shrink-0 ${meta.cls}">${icon(ot.icon as IconName, "w-full h-full")}</span>
+        <span class="min-w-0">
+          <span class="block text-xs font-bold text-zinc-900">${esc(ot.label)}</span>
+          <span class="block text-[11px] text-zinc-600 mt-0.5">${esc(siteLabel[ot.websiteRequirement] ?? "")} · exige ${esc(ot.contactRequirement)}</span>
+          <span class="block text-[11px] text-zinc-500">${ot.proofType === "demo_web" ? "Démo de site" : "Rapport d'audit"} · ${ot.channel === "vocal_closer" ? "appel" : "message écrit"}</span>
+        </span>
+      </label>`;
+    })
+    .join("");
+  return `<input type="hidden" id="${hiddenId}" value="${esc(selected)}">
+  <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-2" role="radiogroup">${cards}</div>
+  <p class="text-[10px] text-zinc-500 mt-1">Le besoin fixe les prérequis (site, contacts), l'inspection, la démo et le message. <a href="/admin?tab=needs" class="font-semibold text-indigo-700 hover:underline">Voir ou modifier les besoins</a></p>`;
 }

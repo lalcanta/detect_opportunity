@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   google_calendar_id   TEXT DEFAULT 'primary',
   google_email         TEXT,
   -- Doit lister tous les identifiants de shared/opportunities (ALL_OPPORTUNITY_IDS) ; vérifié par un test.
-  allowed_opportunities TEXT NOT NULL DEFAULT '["website","audit_qa_trackers","google_reviews","seo_local","ads_acquisition","custom"]',
+  allowed_opportunities TEXT NOT NULL DEFAULT '["website_redesign","website_creation","google_reviews","audit_qa_trackers","seo_local","ads_acquisition","website","custom"]',
   -- Canaux que le closer traite ; l'attribution automatique en tient compte (phase 3)
   allowed_channels      TEXT NOT NULL DEFAULT '["phone","email","contact_form"]'
 );
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
   lat             REAL,
   lng             REAL,
   radius_km       REAL,
-  opportunity_type TEXT NOT NULL DEFAULT 'website',
+  opportunity_type TEXT NOT NULL DEFAULT 'website_redesign',
   website_filter  TEXT NOT NULL DEFAULT 'all',
   execution_mode  TEXT NOT NULL DEFAULT 'full_auto', -- 'full_auto' (cycle complet) ou 'prep_only' (dossier local + prompts pour Antigravity CLI)
   job_type        TEXT NOT NULL DEFAULT 'scan',      -- 'scan' (Maps + inspection) ou 'generate' (génération API de leads préparés)
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS scheduled_scans (
   lat             REAL,
   lng             REAL,
   radius_km       REAL,
-  opportunity_type TEXT NOT NULL DEFAULT 'website',
+  opportunity_type TEXT NOT NULL DEFAULT 'website_redesign',
   website_filter  TEXT NOT NULL DEFAULT 'all',
   execution_mode  TEXT NOT NULL DEFAULT 'full_auto', -- 'full_auto' ou 'prep_only'
   is_active       INTEGER NOT NULL DEFAULT 1,
