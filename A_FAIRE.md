@@ -1,24 +1,8 @@
 # À faire
 
-## Ce soir : activer le suivi Cloudflare (onglet Quotas & Coûts IA)
+## Fait : suivi Cloudflare actif
 
-Le code est en prod et `CF_ACCOUNT_ID` est posé. Il manque le jeton d'API.
-
-1. Tableau de bord Cloudflare → **My Profile → API Tokens → Create Token → Custom token**.
-   Droits, tous en **lecture** (Read) sur le compte :
-   - Account Analytics
-   - D1
-   - Cloudflare Pages
-   - Workers R2 Storage
-   - Billing (facultatif : sert à détecter le forfait)
-2. Dans `lead-dashboard-web` :
-   ```bash
-   npx wrangler pages secret put CF_API_TOKEN --project-name lead-dashboard
-   ```
-   puis coller le jeton.
-3. Redéployer pour que le secret soit pris en compte (un push sur main suffit, ou « Retry deployment » dans
-   Cloudflare Pages), puis ouvrir **Administration → Quotas & Coûts IA** : la section Cloudflare doit afficher
-   les chiffres au lieu des instructions.
+Jeton `CF_API_TOKEN` posé le 2026-11-12, la section Cloudflare de l'onglet Quotas & Coûts IA affiche les chiffres.
 
 ## Ensuite
 
