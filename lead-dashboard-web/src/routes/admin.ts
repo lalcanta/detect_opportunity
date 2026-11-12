@@ -4,6 +4,7 @@ import type { AppEnv } from "../types";
 import { requireUser, bearerMatches } from "../auth";
 import { loadGeminiQuotas, parseQuotaLimit, type GeminiQuotaSummary } from "../services/geminiQuota";
 import { assignRoundRobin } from "../services/assign";
+import { getCloudflareUsage } from "../services/cloudflareUsage";
 
 export const adminRoutes = new Hono<AppEnv>();
 
@@ -595,6 +596,12 @@ export async function loadStats(db: D1Database): Promise<AdminStats> {
 }
 
 adminRoutes.get("/api/admin/stats", requireUser("admin"), async (c) => c.json(await loadStats(c.env.DB)));
+
+/** GET /api/admin/cloudflare-usage — consommation du compte Cloudflare face aux plafonds gratuits (`?refresh=1` ignore le cache). */
+adminRoutes.get("/api/admin/cloudflare-usage", requireUser("admin"), async (c) => {
+  const data = await getCloudflareUsage(c.env, { refresh: c.req.query("refresh") === "1" });
+  return c.json(data);
+});
 
 /** POST /api/admin/model-quotas — limite gratuite par jour d'un modèle Gemini ; rpd vide = valeur par défaut. */
 adminRoutes.post("/api/admin/model-quotas", requireUser("admin"), async (c) => {

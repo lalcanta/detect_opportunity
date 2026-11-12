@@ -2,6 +2,9 @@ import { jobModeBadge } from "./jobMode";
 import type { LeadRow, User } from "../types";
 import { CHANNEL_IDS, CHANNEL_LABELS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../../shared/opportunities";
 import { needsTab, opportunityPicker } from "./needs";
+
+/** Change à chaque modification de public/static/cf-usage.js, pour contourner le cache du CDN. */
+const CF_USAGE_ASSET_VERSION = "20261112a";
 import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedChannels, parseAllowedOpportunities } from "../types";
 import { tokenRowForDisplay, type AdminStats, type ModelSettingRow } from "../routes/admin";
 import type { ScanJob, ScheduledScan } from "../routes/scans";
@@ -1348,6 +1351,10 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
     /* ========================================================================= */
     tab === "quotas"
       ? `<div class="space-y-6">
+      <section id="cf-usage" aria-live="polite" class="bg-white rounded-2xl p-6 shadow-sm border border-zinc-200/80">
+        <p class="text-sm text-zinc-500">Chargement de la consommation Cloudflare…</p>
+      </section>
+      <script src="/static/cf-usage.js?v=${CF_USAGE_ASSET_VERSION}" defer></script>
       <!-- 1. En-tête : Avertisseur de Sécurité & Statut Financier -->
       <div class="bg-white rounded-2xl p-6 shadow-sm border ${
         stats.quotas?.safetyStatus === "danger"

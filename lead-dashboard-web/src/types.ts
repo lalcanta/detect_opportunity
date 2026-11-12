@@ -38,6 +38,9 @@ export interface Bindings {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
+  /** Jeton d'API Cloudflare en lecture seule (analytique, D1, Pages, R2) pour la consommation du compte. */
+  CF_API_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
 }
 
 export interface AvailableModel {
