@@ -2,6 +2,7 @@ import { DEFAULT_OPPORTUNITY_ID, opportunityIdOf } from "../../../shared/opportu
 import { OPPORTUNITY_TYPES, parseAllowedOpportunities, type Battlecard, type LeadRow, type User } from "../types";
 import { EMAIL_TEMPLATES, buildTemplateVars } from "../templates/emailTemplates";
 import { esc, icon, layout, navbar, telHref, toWaNumber } from "./layout";
+import { activeNavLabel, sideNavShell, type SideNavGroup } from "./sideNav";
 import {
   LEAD_COLUMNS as COLUMNS,
   OPP_META,
@@ -500,62 +501,72 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
       ];
   const allowedOpps = parseAllowedOpportunities(user.allowed_opportunities);
 
-  const body = `<div class="w-full min-h-screen bg-zinc-100/70 pb-12">
-  <!-- Top Bar Toolbar -->
-  <div class="bg-white border-b border-zinc-200/80 px-4 sm:px-6 py-2.5 shadow-sm space-y-2.5">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <!-- Portefeuilles -->
-      <nav class="flex items-center gap-1.5 overflow-x-auto">
-        ${scopeTabs.map(([k, label]) => `<a href="/?scope=${k}&view=${view}&opp=${opp}" class="whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${scope === k ? "bg-zinc-900 text-white shadow-sm" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900"}">${label}</a>`).join("")}
-      </nav>
+  const href = (o: { scope?: string; view?: string; opp?: string }): string =>
+    `/?scope=${encodeURIComponent(o.scope ?? scope)}&view=${encodeURIComponent(o.view ?? view)}&opp=${encodeURIComponent(o.opp ?? opp)}`;
+  const oppChoices: [string, string][] = isAdmin
+    ? [["all", "Tous les besoins"], ...OPPORTUNITY_TYPES.map((o) => [o.id, o.badge] as [string, string])]
+    : [
+        ["all", `Tous mes besoins (${allowedOpps.length})`],
+        ...OPPORTUNITY_TYPES.filter((o) => (allowedOpps as string[]).includes(o.id)).map((o) => [o.id, o.badge] as [string, string]),
+      ];
+  const navGroups: SideNavGroup[] = [
+    {
+      id: "vues",
+      label: "Vues",
+      icon: "layers",
+      items: [
+        { href: href({ view: "backlog" }), active: view === "backlog", icon: "layers", label: "Backlog Kanban" },
+        { href: href({ view: "list" }), active: view === "list", icon: "file-text", label: "Liste" },
+        {
+          href: href({ view: "calendar" }),
+          active: view === "calendar",
+          icon: "calendar",
+          label: "Ma journée et agenda",
+          ...(scheduledCount ? { badge: { text: String(scheduledCount), tone: "info" as const } } : {}),
+        },
+      ],
+    },
+    {
+      id: "portefeuille",
+      label: "Portefeuille",
+      icon: "users",
+      items: scopeTabs.map(([k, label], i) => ({ href: href({ scope: k }), active: scope === k, filter: true, icon: (["inbox", "user", "users"] as const)[i] ?? "inbox", label })),
+    },
+    {
+      id: "besoins",
+      label: "Besoins",
+      icon: "target",
+      // Les badges des besoins commencent souvent par un emoji : l'icône du menu le remplace.
+      items: oppChoices.map(([k, label]) => ({
+        href: href({ opp: k }),
+        active: opp === k,
+        filter: true,
+        icon: k === "all" ? ("layers" as const) : ("target" as const),
+        label: label.replace(/^[^\p{L}\p{N}]+/u, ""),
+      })),
+    },
+  ];
 
-      <!-- Indicateurs & Sélecteur de Vue -->
-      <div class="flex flex-wrap items-center gap-2 text-xs max-w-full">
-        <span class="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap">
-          ${icon("flame", "w-3.5 h-3.5 text-rose-500")}
-          <span>${hotCount} chaud(s)</span>
-        </span>
-        <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap">
-          ${icon("check-circle", "w-3.5 h-3.5 text-emerald-600")}
-          <span>${wonCount} gagné(s)</span>
-        </span>
-        
-        <div class=" sm:border-l sm:border-zinc-200 sm:pl-2 sm:ml-1 flex flex-wrap items-center gap-1 bg-zinc-100 p-0.5 rounded-lg max-w-full">
-          <a href="/?scope=${scope}&view=backlog&opp=${opp}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-xs transition-all whitespace-nowrap ${view === "backlog" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"}">
-            ${icon("layers", "w-3.5 h-3.5 text-zinc-500")} Backlog Kanban
-          </a>
-          <a href="/?scope=${scope}&view=list&opp=${opp}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-xs transition-all whitespace-nowrap ${view === "list" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"}">
-            ${icon("file-text", "w-3.5 h-3.5 text-zinc-500")} Liste
-          </a>
-          <a href="/?scope=${scope}&view=calendar&opp=${opp}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-xs transition-all whitespace-nowrap ${view === "calendar" ? "bg-purple-700 text-white shadow-sm" : "text-zinc-600 hover:text-zinc-900"}">
-            ${icon("calendar", `w-3.5 h-3.5 ${view === "calendar" ? "text-white" : "text-purple-600"}`)}
-            <span>Ma Journée & Agenda</span>
-            ${scheduledCount ? `<span class="px-1.5 py-0.5 rounded-full text-[10px] ${view === "calendar" ? "bg-purple-900 text-white" : "bg-purple-100 text-purple-800"} font-bold">${scheduledCount}</span>` : ""}
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Barre de Filtre par Opportunité / Type de Besoin -->
-    <div class="flex items-center gap-1.5 pt-2 border-t border-zinc-100 overflow-x-auto text-xs">
-      <span class="text-[11px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1 mr-1">
-        ${icon("target", "w-3 h-3 text-zinc-500")} Besoin :
-      </span>
-      ${(isAdmin
-        ? [
-            ["all", "Tous les besoins"],
-            ...OPPORTUNITY_TYPES.map((o) => [o.id, o.badge] as [string, string]),
-          ]
-        : [
-            ["all", `Tous mes besoins (${allowedOpps.length})`],
-            ...OPPORTUNITY_TYPES.filter((o) => (allowedOpps as string[]).includes(o.id)).map((o) => [o.id, o.badge] as [string, string]),
-          ]
-      )
-        .map(([k, label]) => `<a href="/?scope=${scope}&view=${view}&opp=${k}" class="whitespace-nowrap px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${opp === k ? "bg-indigo-600 text-white shadow-sm" : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 border border-zinc-200/80"}">${label}</a>`)
-        .join("")}
-    </div>
+  const body = `<div class="w-full min-h-screen bg-zinc-100/70">
+${sideNavShell({
+  title: "Pipeline",
+  storageKey: "pipeline",
+  groups: navGroups,
+  ...(isAdmin ? { footer: { href: "/admin", label: "Administration", icon: "settings" as const } } : {}),
+  content: `
+  <!-- Indicateurs -->
+  <div class="bg-white border-b border-zinc-200/80 px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-2 text-xs">
+    <span class="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap">
+      ${icon("flame", "w-3.5 h-3.5 text-rose-500")}
+      <span>${hotCount} chaud(s)</span>
+    </span>
+    <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap">
+      ${icon("check-circle", "w-3.5 h-3.5 text-emerald-600")}
+      <span>${wonCount} gagné(s)</span>
+    </span>
+    <span class="text-zinc-500 font-medium truncate">${esc(activeNavLabel(navGroups, "Pipeline"))}</span>
   </div>
-
+<div class="pb-12">
   ${
     view === "backlog"
       ? `<!-- Vue Backlog Pipeline Kanban (Glisser-Déposer entre colonnes pour admin, boutons guidés pour closer) -->
@@ -594,6 +605,9 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
     ${leads.length ? leads.map((l) => backlogCard(l, user, origin)).join("") : `<p class="text-center text-zinc-500 py-16">Aucun lead trouvé.</p>`}
   </div>`
   }
+</div>
+`,
+})}
 
   <!-- ======================================================== -->
   <!-- PANNEAU LATÉRAL (SIDEPANEL DRAWER)                       -->

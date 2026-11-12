@@ -11,7 +11,7 @@ import type { ScanJob, ScheduledScan } from "../routes/scans";
 import { modelPickerScript, renderFallbackPicker } from "./modelPicker";
 import type { GeminiQuotaRow, GeminiQuotaSummary } from "../services/geminiQuota";
 import { esc, icon, layout, navbar, type IconName } from "./layout";
-import { adminShell, type AdminNavGroup } from "./adminSidebar";
+import { sideNavShell, type SideNavGroup } from "./sideNav";
 import { formatStatusLabel, opportunityBadgeMeta, renderStatusPill as formatStatusPill } from "./components";
 import { COMPETITOR_BENCHMARKS } from "../data/benchmarks";
 
@@ -408,16 +408,16 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
       : stats.quotas?.safetyStatus === "warning"
         ? { text: "70 %", tone: "warn" as const }
         : { text: "0 €", tone: "ok" as const };
-  const navGroups: AdminNavGroup[] = [
-    { id: "pilotage", label: "Pilotage", icon: "chart", items: [{ key: "overview", icon: "chart", label: "Vue d'ensemble" }] },
+  const navGroups: SideNavGroup[] = [
+    { id: "pilotage", label: "Pilotage", icon: "chart", items: [{ href: "/admin?tab=overview", active: tab === "overview", icon: "chart", label: "Vue d'ensemble" }] },
     {
       id: "prospection",
       label: "Prospection",
       icon: "target",
       items: [
-        { key: "scanner", icon: "target", label: "Scanner et jobs", ...(hasActive ? { badge: { text: "en cours", tone: "info" as const, pulse: true } } : {}) },
-        { key: "needs", icon: "sliders", label: "Besoins" },
-        { key: "pending", icon: "clock", label: "File CLI 0 €", ...(pendingCount > 0 ? { badge: { text: String(pendingCount), tone: "warn" as const } } : {}) },
+        { href: "/admin?tab=scanner", active: tab === "scanner", icon: "target", label: "Scanner et jobs", ...(hasActive ? { badge: { text: "en cours", tone: "info" as const, pulse: true } } : {}) },
+        { href: "/admin?tab=needs", active: tab === "needs", icon: "sliders", label: "Besoins" },
+        { href: "/admin?tab=pending", active: tab === "pending", icon: "clock", label: "File CLI 0 €", ...(pendingCount > 0 ? { badge: { text: String(pendingCount), tone: "warn" as const } } : {}) },
       ],
     },
     {
@@ -425,8 +425,8 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
       label: "Équipe",
       icon: "users",
       items: [
-        { key: "team", icon: "users", label: "Équipe et closers" },
-        { key: "attribution", icon: "layers", label: "Attribution des leads" },
+        { href: "/admin?tab=team", active: tab === "team", icon: "users", label: "Équipe et closers" },
+        { href: "/admin?tab=attribution", active: tab === "attribution", icon: "layers", label: "Attribution des leads" },
       ],
     },
     {
@@ -434,18 +434,20 @@ export function adminPage({ user, leads, users, stats, scans, scheduledScans = [
       label: "IA et coûts",
       icon: "cpu",
       items: [
-        { key: "models", icon: "cpu", label: "Modèles IA par action" },
-        { key: "quotas", icon: "shield", label: "Quotas et coûts", badge: quotaBadge },
+        { href: "/admin?tab=models", active: tab === "models", icon: "cpu", label: "Modèles IA par action" },
+        { href: "/admin?tab=quotas", active: tab === "quotas", icon: "shield", label: "Quotas et coûts", badge: quotaBadge },
       ],
     },
-    { id: "ressources", label: "Ressources", icon: "sparkles", items: [{ key: "benchmarks", icon: "sparkles", label: "Benchmarks concurrents" }] },
+    { id: "ressources", label: "Ressources", icon: "sparkles", items: [{ href: "/admin?tab=benchmarks", active: tab === "benchmarks", icon: "sparkles", label: "Benchmarks concurrents" }] },
   ];
 
   const body = `<div class="w-full min-h-screen bg-zinc-100/70 font-sans">
-${adminShell(
-  navGroups,
-  tab,
-  `
+${sideNavShell({
+  title: "Administration",
+  storageKey: "admin",
+  groups: navGroups,
+  footer: { href: "/", label: "Pipeline closer", icon: "phone" },
+  content: `
   <main class="max-w-7xl mx-auto p-4 sm:p-6 pb-16 space-y-6">
 
   ${
@@ -1877,7 +1879,7 @@ ${adminShell(
 
   </main>
 `,
-)}
+})}
 </div>
 
 <script>
