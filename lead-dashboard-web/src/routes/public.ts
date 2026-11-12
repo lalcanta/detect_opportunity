@@ -6,6 +6,7 @@ import { bearerMatches, ensureAuthSchema, generateRandomHex, getSessionUser, req
 import { assignRoundRobin } from "../services/assign";
 import { sendHotLeadAlert } from "../services/notify";
 import { esc } from "../views/layout";
+import { copyLeadMedia, getOrCopyMedia, mediaSources, rewriteMediaUrls } from "../services/leadMedia";
 import { renderAgencyLandingHtml } from "../views/landing";
 
 export const publicRoutes = new Hono<AppEnv>();
@@ -194,6 +195,11 @@ publicRoutes.post("/api/sync", async (c) => {
   if (!["pending_generation", "unqualified"].includes(finalStatus) && c.env.AUTO_ASSIGN === "true") {
     await assignRoundRobin(c.env.DB);
   }
+  // Copie des photos et du logo du prospect dans R2, après la réponse (la démo les sert depuis le bucket).
+  if (c.env.MEDIA && finalStatus !== "unqualified" && mediaSources(body.audit_data).length > 0) {
+    const bucket = c.env.MEDIA;
+    c.executionCtx.waitUntil(copyLeadMedia(bucket, body.id, body.audit_data).catch(() => 0));
+  }
   return c.json({ ok: true, id: body.id, status: finalStatus, duplicates: duplicates.map((d) => d.id) });
 });
 
@@ -334,6 +340,15 @@ publicRoutes.get("/demos/:id", async (c) => {
     }
   }
 
+  // Photos et logo du prospect servis depuis leur copie R2 (voir services/leadMedia.ts).
+  if (c.env.MEDIA && row.audit_data) {
+    try {
+      finalDemoHtml = rewriteMediaUrls(finalDemoHtml, id, mediaSources(JSON.parse(row.audit_data)));
+    } catch {
+      // audit illisible : liens d'origine conservés
+    }
+  }
+
   // Empêche le blocage hotlinking des images et logos externes par l'hôte tiers
   if (!finalDemoHtml.includes('name="referrer"')) {
     finalDemoHtml = finalDemoHtml.replace(/<head[^>]*>/i, '$&\n<meta name="referrer" content="no-referrer">');
@@ -369,6 +384,40 @@ publicRoutes.get("/demos/:id", async (c) => {
   return c.html(htmlWithBar, 200, {
     "Cache-Control": "no-store",
     "X-Robots-Tag": "noindex, nofollow",
+  });
+});
+
+/**
+ * GET /demos/:id/media/:key — photo ou logo du prospect copié dans R2 (copié au premier affichage s'il manque).
+ * Ne sert que les images listées dans l'audit du lead, et ne compte pas comme une vue de la démo.
+ */
+publicRoutes.get("/demos/:id/media/:key", async (c) => {
+  const id = c.req.param("id");
+  const key = c.req.param("key");
+  if (!/^[a-f0-9]{8,64}$/.test(id) || !/^(\d{1,2}|logo)$/.test(key)) return c.text("Introuvable", 404);
+  const row = await c.env.DB.prepare("SELECT demo_revoked, demo_expires_at, audit_data FROM leads WHERE id = ?")
+    .bind(id)
+    .first<{ demo_revoked?: number | null; demo_expires_at?: string | null; audit_data?: string | null }>();
+  if (!row) return c.text("Introuvable", 404);
+  if (isDemoExpiredOrRevoked(row)) return c.text("Démo expirée", 410, { "Cache-Control": "no-store" });
+  let audit: unknown = null;
+  try {
+    audit = row.audit_data ? JSON.parse(row.audit_data) : null;
+  } catch {
+    audit = null;
+  }
+  const source = mediaSources(audit).find((s) => s.key === key);
+  if (!source) return c.text("Introuvable", 404);
+  if (!c.env.MEDIA) return c.redirect(source.url, 302);
+  const media = await getOrCopyMedia(c.env.MEDIA, id, source);
+  if (!media) return c.redirect(source.url, 302);
+  return new Response(media.body, {
+    headers: {
+      "Content-Type": media.contentType,
+      "Cache-Control": "public, max-age=86400",
+      "X-Content-Type-Options": "nosniff",
+      "X-Robots-Tag": "noindex",
+    },
   });
 });
 

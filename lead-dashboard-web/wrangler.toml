@@ -9,3 +9,8 @@ database_id = "151e9f86-14f5-43dd-be22-4fa91f4ff880"
 
 [ai]
 binding = "AI"
+
+# Photos et logos des prospects copiés pour les démos (src/services/leadMedia.ts)
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "lead-media"

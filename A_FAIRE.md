@@ -27,7 +27,8 @@ Le code est en prod et `CF_ACCOUNT_ID` est posé. Il manque le jeton d'API.
       Reste : redémarrer le worker de prod pour qu'il prenne le nouveau code.
 - [x] **Scan de test réel** (dry-run, 1 lead) : Refonte (avec site) et Création (sans site) passent de bout en bout.
 - [ ] **Vérifier l'onglet Besoins en prod** (édition au clic, ajout et retrait de nœuds).
-- [ ] **Photos des prospects** : les copier ou passer par un proxy au lieu de les lier directement à leur site.
+- [x] **Photos des prospects** : copiées dans le bucket R2 `lead-media` à la synchronisation (ou au premier affichage),
+      servies par `/demos/:id/media/:n` ; la démo est réécrite à l'affichage, anciennes démos comprises.
 - [ ] **Envoi des emails via Resend** (phase 4).
 - [ ] **Générateurs dédiés** pour Référencement local et Publicité (en brouillon tant que la démo n'est qu'un angle).
 - [ ] **Vérification par captures** à ajouter au skill `leadengine`.

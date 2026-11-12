@@ -22,6 +22,8 @@ export type LeadStatus = (typeof LEAD_STATUSES)[number] | "pending_generation" |
 export interface Bindings {
   DB: D1Database;
   AI?: any;
+  /** Bucket R2 des photos et logos des prospects (services/leadMedia.ts). */
+  MEDIA?: R2Bucket;
   SYNC_SECRET_TOKEN: string;
   PUBLIC_APP_URL?: string;
   GEMINI_API_KEY?: string;
