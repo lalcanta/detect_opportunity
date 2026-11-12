@@ -8,14 +8,17 @@ import {
   BUSINESS_MODELS,
   CHANNEL_IDS,
   DEMO_FOCUSES,
+  DEMO_HIGHLIGHTS,
+  MESSAGE_TONES,
   OPPORTUNITY_STATUSES,
   PITCH_GENERATOR_IDS,
-  PITCH_KIND_BY_GENERATOR,
   SCAN_MODULE_IDS,
   WEBSITE_REQUIREMENTS,
   type ChannelId,
+  type ListingCriteria,
   type OpportunityDefinition,
 } from "./types";
+import { checkWorkflow } from "./workflow";
 
 export type ValidationResult = { ok: true; def: OpportunityDefinition } | { ok: false; errors: string[] };
 
@@ -37,6 +40,31 @@ function stringList<T extends string>(list: readonly T[], v: unknown, field: str
     else out.push(item);
   }
   return out;
+}
+
+const RATING_RANGE = [1, 5] as const;
+
+/** Critères de la fiche Maps : nombres positifs, minimum ≤ maximum ; `undefined` si aucun critère. */
+function listingCriteria(v: unknown, errors: string[]): ListingCriteria | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (!isObj(v)) {
+    errors.push("critères de la fiche Maps mal formés");
+    return undefined;
+  }
+  const out: ListingCriteria = {};
+  const num = (key: keyof ListingCriteria, label: string, [min, max]: readonly [number, number]) => {
+    const x = v[key];
+    if (x === undefined || x === null) return;
+    if (typeof x !== "number" || !Number.isFinite(x) || x < min || x > max) errors.push(`${label} : entre ${min} et ${max}`);
+    else out[key] = x;
+  };
+  num("minRating", "note minimale", RATING_RANGE);
+  num("maxRating", "note maximale", RATING_RANGE);
+  num("minReviews", "nombre d'avis minimal", [0, 100000]);
+  num("maxReviews", "nombre d'avis maximal", [0, 100000]);
+  if (out.minRating !== undefined && out.maxRating !== undefined && out.minRating > out.maxRating) errors.push("note : le minimum dépasse le maximum");
+  if (out.minReviews !== undefined && out.maxReviews !== undefined && out.minReviews > out.maxReviews) errors.push("avis : le minimum dépasse le maximum");
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Vérifie la forme et la cohérence d'une définition ; renvoie une copie normalisée si elle est valide. */
@@ -70,22 +98,7 @@ export function validateOpportunityDefinition(raw: unknown): ValidationResult {
   }
 
   const scanModules = stringList(SCAN_MODULE_IDS, raw.scanModules, "vérifications du site", errors);
-  if (req.website === "forbidden") {
-    if (allOf.some((c) => c !== "phone") || (anyOf.length > 0 && !anyOf.includes("phone"))) {
-      errors.push("sans site, seul le téléphone peut être exigé (l'email et le formulaire se trouvent sur le site)");
-    }
-    if (channels.some((c) => c !== "phone")) {
-      errors.push("sans site, seul le téléphone peut servir de canal : l'email et le formulaire sont introuvables");
-    }
-  } else {
-    if (scanModules.length === 0) errors.push("au moins une vérification du site");
-    if (channels.includes("email") && !scanModules.includes("contacts_legal")) {
-      errors.push("le canal email exige la vérification « contacts et mentions légales » (c'est elle qui trouve l'email)");
-    }
-    if (channels.includes("contact_form") && !scanModules.includes("contact_form")) {
-      errors.push("le canal formulaire exige la vérification « formulaire de contact »");
-    }
-  }
+  const listing = listingCriteria(req.listing, errors);
 
   const proof = isObj(raw.proof) ? raw.proof : {};
   let proofDef: OpportunityDefinition["proof"] | null = null;
@@ -93,11 +106,14 @@ export function validateOpportunityDefinition(raw: unknown): ValidationResult {
   if (proof.kind === "demo_web") {
     if (proof.generator !== "llm_demo") errors.push("une démo de site utilise le générateur llm_demo");
     if (!oneOf(DEMO_FOCUSES, proof.focus)) errors.push("angle de la démo inconnu");
-    else proofDef = { kind: "demo_web", generator: "llm_demo", focus: proof.focus, interestCta: String(proof.interestCta ?? "") };
+    else {
+      const highlights = proof.highlights === undefined ? [] : stringList(DEMO_HIGHLIGHTS, proof.highlights, "points forts de la démo", errors);
+      proofDef = { kind: "demo_web", generator: "llm_demo", focus: proof.focus, interestCta: String(proof.interestCta ?? "").trim() };
+      if (highlights.length) proofDef.highlights = highlights;
+    }
   } else if (proof.kind === "audit_report") {
     if (proof.generator !== "tracker_report") errors.push("un rapport d'audit utilise le générateur tracker_report");
-    if (req.website !== "required") errors.push("un rapport d'audit exige que le prospect ait un site");
-    proofDef = { kind: "audit_report", generator: "tracker_report", interestCta: String(proof.interestCta ?? "") };
+    proofDef = { kind: "audit_report", generator: "tracker_report", interestCta: String(proof.interestCta ?? "").trim() };
   } else {
     errors.push("type de preuve inconnu (démo de site ou rapport d'audit)");
   }
@@ -117,24 +133,27 @@ export function validateOpportunityDefinition(raw: unknown): ValidationResult {
       errors.push(`message ${CHANNEL_NAMES[channel]} : générateur inconnu`);
       continue;
     }
-    const expected = channel === "phone" ? "phone_battlecard" : "cold_email";
-    if (PITCH_KIND_BY_GENERATOR[generator] !== expected) {
-      errors.push(`message ${CHANNEL_NAMES[channel]} : ${channel === "phone" ? "un script d'appel" : "un message écrit"} est attendu`);
-      continue;
-    }
-    if (generator === "tracker_cold_email" && proof.generator !== "tracker_report") {
-      errors.push("l'email d'audit cite le rapport traceurs : il exige la preuve « rapport d'audit »");
-      continue;
-    }
     pitch[channel] = generator;
   }
   for (const c of channels) if (!pitch[c] && pitchRaw[c] === undefined) errors.push(`aucun message pour le canal ${CHANNEL_NAMES[c]}`);
 
   const commercial = isObj(raw.commercial) ? raw.commercial : {};
   if (!oneOf(BUSINESS_MODELS, commercial.businessModel)) errors.push("modèle commercial inconnu");
-  if (!isStr(commercial.pitchFocus)) errors.push("angle commercial manquant");
+  if (commercial.pitchFocus !== undefined && typeof commercial.pitchFocus !== "string") errors.push("angle commercial : texte attendu");
+  if (commercial.tone !== undefined && !oneOf(MESSAGE_TONES, commercial.tone)) errors.push("ton des messages inconnu");
 
   if (errors.length > 0 || !proofDef) return { ok: false, errors };
+
+  // Cohérence du workflow : chaque nœud trouve les données dont il a besoin (voir workflow.ts).
+  const wfErrors = checkWorkflow({
+    requirements: { website: req.website as OpportunityDefinition["requirements"]["website"], contacts: { allOf, anyOf } },
+    channels,
+    scanModules,
+    proof: proofDef,
+    pitch,
+    flyer: raw.flyer === true,
+  });
+  if (wfErrors.length > 0) return { ok: false, errors: wfErrors };
 
   const contactReq: OpportunityDefinition["requirements"]["contacts"] = {};
   if (allOf.length) contactReq.allOf = allOf;
@@ -147,7 +166,11 @@ export function validateOpportunityDefinition(raw: unknown): ValidationResult {
       label: String(raw.label).trim(),
       badge: { text: String(badge.text).trim(), tone: badge.tone as OpportunityDefinition["badge"]["tone"] },
       icon: String(raw.icon).trim(),
-      requirements: { website: req.website as OpportunityDefinition["requirements"]["website"], contacts: contactReq },
+      requirements: {
+        website: req.website as OpportunityDefinition["requirements"]["website"],
+        contacts: contactReq,
+        ...(listing ? { listing } : {}),
+      },
       channels,
       scanModules,
       proof: proofDef,
@@ -155,7 +178,8 @@ export function validateOpportunityDefinition(raw: unknown): ValidationResult {
       flyer: raw.flyer === true,
       commercial: {
         businessModel: commercial.businessModel as OpportunityDefinition["commercial"]["businessModel"],
-        pitchFocus: String(commercial.pitchFocus).trim(),
+        pitchFocus: (typeof commercial.pitchFocus === "string" && commercial.pitchFocus.trim()) || String(raw.label).trim(),
+        ...(oneOf(MESSAGE_TONES, commercial.tone) ? { tone: commercial.tone } : {}),
       },
     },
   };

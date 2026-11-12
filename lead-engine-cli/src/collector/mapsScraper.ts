@@ -89,7 +89,11 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
         const lead = await scrapePlace(page, url, opts);
         if (lead) {
           // Prérequis de l'opportunité connus sur la fiche (téléphone, site) ; email et formulaire seront vérifiés après inspection.
-          const check = evaluateRequirements(def, { phone: Boolean(lead.phone), website: Boolean(lead.website) }, "maps");
+          const check = evaluateRequirements(
+            def,
+            { phone: Boolean(lead.phone), website: Boolean(lead.website), rating: lead.rating, reviewsCount: lead.reviewsCount },
+            "maps",
+          );
           if (!check.qualified) {
             await opts.onProgress?.(
               `⚪ Fiche écartée (${check.reasons.map(describeRejection).join(" ; ")}) : "${lead.name}" (${qualifiedLeads.length}/${targetQualified} qualifiés · ${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,

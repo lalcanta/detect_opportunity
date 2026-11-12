@@ -1,4 +1,4 @@
-import type { ChannelId, OpportunityDefinition } from "../../../shared/opportunities";
+import { messageToneInstruction, type ChannelId, type OpportunityDefinition } from "../../../shared/opportunities";
 import type { ModelRouter } from "../llm/modelRouter";
 import type { Battlecard, MapsLead, SiteAudit, TokenUsageRecord } from "../types";
 import { extractJson, log } from "../utils/helpers";
@@ -26,7 +26,8 @@ Constat sur sa présence actuelle : ${audit.summary}. Points faibles : ${audit.w
 Note Google : ${lead.rating ?? "n/a"}/5 (${lead.reviewsCount ?? "n/a"} avis).${best ? ` Avis réel à citer : "${best.text}" (${best.author}).` : ""}
 Lien de la démo déjà préparée pour lui : ${demoUrl}
 
-Règles : vouvoiement, ton chaleureux et professionnel, un seul constat précis, le lien de la démo, une question simple
+${messageToneInstruction(def.commercial.tone)}
+Règles : vouvoiement, ${def.commercial.tone ? "" : "ton chaleureux et professionnel, "}un seul constat précis, le lien de la démo, une question simple
 pour obtenir une réponse écrite. Pas de promesse chiffrée, pas de jargon. Le message se termine par
 « Pour ne plus recevoir de message de notre part, répondez simplement STOP. »
 

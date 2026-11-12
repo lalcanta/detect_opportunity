@@ -3,7 +3,7 @@
  * `Record<…Id, …>` garantit à la compilation que chaque générateur déclaré dans le registre existe ici.
  */
 import type { BrowserContext } from "playwright";
-import type { ChannelId, OpportunityDefinition, PitchGeneratorId, ProofGeneratorId } from "../../../shared/opportunities";
+import { messageToneInstruction, type ChannelId, type OpportunityDefinition, type PitchGeneratorId, type ProofGeneratorId } from "../../../shared/opportunities";
 import { generateBattlecard } from "../copywriter/battlecard";
 import { generateColdEmailPitch } from "../copywriter/coldEmail";
 import { generateDemoHtml } from "../generator/demoGenerator";
@@ -66,6 +66,7 @@ export const PROOF_GENERATORS: Record<ProofGeneratorId, ProofGenerator> = {
         audit,
         remoteAppUrl: ctx.remoteAppUrl,
         focus: ctx.def.proof.kind === "demo_web" ? ctx.def.proof.focus : undefined,
+        highlights: ctx.def.proof.kind === "demo_web" ? ctx.def.proof.highlights : undefined,
       },
       ctx.usage,
     );
@@ -83,7 +84,7 @@ export const PROOF_GENERATORS: Record<ProofGeneratorId, ProofGenerator> = {
 export const PITCH_GENERATORS: Record<PitchGeneratorId, PitchGenerator> = {
   llm_phone_battlecard: async (ctx, audit) => {
     await ctx.onSubStep?.(`🎯 Synthèse Battlecard IA (script d'appel & objections)...`);
-    return generateBattlecard(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage);
+    return generateBattlecard(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage, messageToneInstruction(ctx.def.commercial.tone));
   },
   llm_cold_email: async (ctx, audit) => {
     await ctx.onSubStep?.(`✉️ Rédaction IA du message écrit (${ctx.primaryChannel === "contact_form" ? "formulaire de contact" : "email"})...`);

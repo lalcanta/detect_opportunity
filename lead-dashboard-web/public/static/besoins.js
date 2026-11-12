@@ -1,7 +1,13 @@
 /*
- * Onglet admin « Besoins » : liste, fiche, graphe du workflow de collecte et édition des besoins.
+ * Onglet admin « Besoins » : liste, fiche, graphe du workflow et édition au clic.
+ *
+ * Le workflow d'un besoin est un graphe de nœuds qui complètent un dossier partagé (catalogue C.nodes, miroir de
+ * shared/opportunities/workflow.ts). Chaque nœud déclare les clés qu'il lit et écrit : ajouter un nœud ajoute ses
+ * prérequis, en retirer un retire ce qui en dépend. Les nœuds se déduisent des champs du besoin (scanModules,
+ * channels, pitch, proof, flyer) et y sont réécrits : la validation du serveur reste la référence.
+ *
  * Données : GET /api/admin/opportunities ; validation en direct : POST /api/admin/opportunities/validate ;
- * enregistrement : POST /api/admin/opportunities. Catalogue des briques : <script id="needs-catalog">.
+ * enregistrement : POST /api/admin/opportunities. Catalogue : <script id="needs-catalog">.
  */
 (function () {
   "use strict";
@@ -23,7 +29,20 @@
     draft: "bg-amber-50 text-amber-800 border-amber-200",
     archived: "bg-zinc-100 text-zinc-500 border-zinc-200",
   };
-  var DEFAULT_PITCH = { phone: "llm_phone_battlecard", email: "llm_cold_email", contact_form: "llm_cold_email" };
+  var STAGE_COLOR = {
+    source: "#6366f1",
+    filter: "#6366f1",
+    inspect: "#0891b2",
+    qualify: "#d97706",
+    produce: "#059669",
+    message: "#059669",
+    handoff: "#7c3aed",
+    channel: "#db2777",
+  };
+  var DEFAULT_PROOF = {
+    demo_web: { kind: "demo_web", generator: "llm_demo", focus: "showcase", interestCta: "Ce site me plaît, on en discute" },
+    audit_report: { kind: "audit_report", generator: "tracker_report", interestCta: "Ce rapport m'intéresse" },
+  };
 
   var state = {
     items: [],
@@ -34,8 +53,12 @@
     errors: [],
     saving: false,
     message: null,
-    node: null,
+    node: null, // nœud sélectionné dans le graphe
+    palette: null, // étape dont on affiche les nœuds à ajouter
+    confirm: null, // { text, apply } : changement qui retire d'autres nœuds
+    notice: null, // { tone, text } : ce qu'un clic a ajouté ou retiré
     history: null,
+    proofStash: {},
   };
 
   /* ---------- utilitaires ---------- */
@@ -49,29 +72,28 @@
     return JSON.parse(JSON.stringify(o));
   }
   function ic(name, cls) {
-    return '<span class="inline-block ' + (cls || "w-4 h-4") + '">' + (C.icons[name] || "") + "</span>";
+    return '<span class="inline-block shrink-0 ' + (cls || "w-4 h-4") + '">' + (C.icons[name] || "") + "</span>";
+  }
+  function find(arr, fn) {
+    for (var i = 0; i < arr.length; i++) if (fn(arr[i])) return arr[i];
+    return null;
+  }
+  function has(arr, v) {
+    return arr.indexOf(v) >= 0;
   }
   function channelLabel(id) {
-    var c = C.channels.find(function (x) { return x.id === id; });
+    var c = find(C.channels, function (x) { return x.id === id; });
     return c ? c.label : id;
   }
-  function moduleEntry(id) {
-    return C.modules.find(function (x) { return x.id === id; }) || { label: id, description: "" };
+  function keyLabel(k) {
+    return C.keys[k] ? C.keys[k].label : k;
   }
-  function pitchEntry(id) {
-    return C.pitch.find(function (x) { return x.id === id; }) || { label: id, description: "" };
-  }
-  function current() {
-    if (state.mode !== "view" && state.draft) return state.draft;
-    var it = state.items.find(function (x) { return x.def.id === state.selectedId; });
-    return it ? it.def : null;
-  }
-  function currentItem() {
-    return state.items.find(function (x) { return x.def.id === state.selectedId; }) || null;
-  }
-  function list(arr) {
+  function list(arr, word) {
     if (arr.length <= 1) return arr.join("");
-    return arr.slice(0, -1).join(", ") + " ou " + arr[arr.length - 1];
+    return arr.slice(0, -1).join(", ") + " " + (word || "ou") + " " + arr[arr.length - 1];
+  }
+  function quoted(ids) {
+    return list(ids.map(function (id) { return "« " + nodeOf(id).label + " »"; }), "et");
   }
   function slug(s) {
     return String(s || "")
@@ -89,34 +111,279 @@
     if (isNaN(d.getTime())) return s;
     return d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
   }
-
-  /** Prérequis d'un besoin, en phrases simples, avec l'étape où ils sont vérifiés. */
-  function requirementLines(def) {
-    var out = [];
-    var w = C.website[def.requirements.website];
-    out.push({ text: w.label, detail: w.description, stage: "Filtre Maps" });
-    var allOf = def.requirements.contacts.allOf || [];
-    var anyOf = def.requirements.contacts.anyOf || [];
-    allOf.forEach(function (c) {
-      out.push({ text: channelLabel(c) + " obligatoire", detail: "", stage: c === "phone" ? "Filtre Maps" : "Après inspection du site" });
-    });
-    if (anyOf.length) {
-      var onlyPhone = anyOf.every(function (c) { return c === "phone"; });
-      out.push({
-        text: "Au moins un contact parmi : " + anyOf.map(channelLabel).join(", ").toLowerCase(),
-        detail: "",
-        stage: onlyPhone ? "Filtre Maps" : "Après inspection du site",
-      });
-    }
-    return out;
+  function fmtNum(n) {
+    return String(n).replace(".", ",");
   }
-  function summaryLine(def) {
-    var parts = [C.website[def.requirements.website].label];
-    var allOf = def.requirements.contacts.allOf || [];
-    var anyOf = def.requirements.contacts.anyOf || [];
-    if (allOf.length) parts.push(allOf.map(channelLabel).join(" + "));
-    if (anyOf.length) parts.push(list(anyOf.map(channelLabel)));
-    return parts.join(" · ");
+  function current() {
+    if (state.mode !== "view" && state.draft) return state.draft;
+    var it = currentItem();
+    return it ? it.def : null;
+  }
+  function currentItem() {
+    return find(state.items, function (x) { return x.def.id === state.selectedId; });
+  }
+
+  /* ---------- modèle du workflow (miroir de shared/opportunities/workflow.ts) ---------- */
+
+  var NODE = {};
+  C.nodes.forEach(function (n) { NODE[n.id] = n; });
+  var STAGE_INDEX = {};
+  C.stages.forEach(function (s, i) { STAGE_INDEX[s.id] = i; });
+
+  function nodeOf(id) {
+    return NODE[id] || { id: id, label: id, description: "", reads: [], writes: [], stage: "inspect", binding: { kind: "fixed" }, icon: "layers" };
+  }
+  function isFixed(id) {
+    return nodeOf(id).binding.kind === "fixed";
+  }
+  function channelNode(c) {
+    return "channel_" + c;
+  }
+
+  /** Nœuds d'un besoin : même ordre que workflowNodeIds côté serveur. */
+  function nodeIdsOf(d) {
+    var ids = ["maps_search", "maps_filter"];
+    C.modules.forEach(function (m) { if (has(d.scanModules, m.id)) ids.push(m.id); });
+    ids.push("qualify", d.proof.kind);
+    if (d.flyer) ids.push("flyer");
+    var gens = d.channels.map(function (c) { return d.pitch[c]; });
+    C.pitch.forEach(function (p) { if (has(gens, p.id)) ids.push(p.id); });
+    ids.push("crm_handoff");
+    d.channels.forEach(function (c) { ids.push(channelNode(c)); });
+    return ids;
+  }
+  function blockedKeys(website) {
+    if (website === "forbidden") return ["site", "site_garanti"];
+    if (website === "optional") return ["site_garanti"];
+    return [];
+  }
+  function availKeys(ids, website) {
+    var blocked = blockedKeys(website);
+    var keys = {};
+    ids.forEach(function (id) {
+      nodeOf(id).writes.forEach(function (k) { if (!has(blocked, k)) keys[k] = true; });
+    });
+    return keys;
+  }
+  function missingOf(id, ids, website) {
+    var av = availKeys(ids, website);
+    return nodeOf(id).reads.filter(function (k) { return !av[k]; });
+  }
+  function writerOf(ids, key) {
+    return find(ids, function (id) { return has(nodeOf(id).writes, key); });
+  }
+  function providers(key) {
+    return C.nodes.filter(function (n) { return has(n.writes, key) && n.binding.kind !== "fixed"; });
+  }
+  /** La clé peut-elle être obtenue, au besoin en ajoutant des nœuds ? */
+  function canProvide(key, ids, website, banned, seen) {
+    if (availKeys(ids, website)[key]) return true;
+    if (has(blockedKeys(website), key)) return false;
+    return providers(key).some(function (p) {
+      if (has(banned, p.id) || has(ids, p.id) || has(seen, p.id)) return false;
+      var next = seen.concat([p.id]);
+      return p.reads.every(function (k) { return canProvide(k, ids, website, banned, next); });
+    });
+  }
+  /** Meilleur fournisseur d'une clé : celui qui n'exige rien de plus, puis celui qui s'appuie sur le plus de clés présentes. */
+  function pickProvider(key, ids, website, banned) {
+    var av = availKeys(ids, website);
+    var best = null, bestScore = -1;
+    providers(key).forEach(function (p) {
+      if (has(banned, p.id) || has(ids, p.id)) return;
+      if (!p.reads.every(function (k) { return canProvide(k, ids, website, banned, [p.id]); })) return;
+      var present = p.reads.filter(function (k) { return av[k]; }).length;
+      var score = (present === p.reads.length ? 100 : 0) + present;
+      if (score > bestScore) { best = p.id; bestScore = score; }
+    });
+    return best;
+  }
+  /** Autre nœud du même rôle (même clé principale), utilisable à la place d'un nœud bloqué. */
+  function variantsOf(id) {
+    var main = nodeOf(id).writes[0];
+    if (!main) return [];
+    return C.nodes.filter(function (n) { return n.id !== id && n.writes[0] === main && n.binding.kind !== "fixed"; });
+  }
+  function usable(n, ids, website, banned) {
+    return n.reads.every(function (k) { return canProvide(k, ids, website, banned, [n.id]); });
+  }
+  function insert(ids, id, removed) {
+    // Un nœud qui écrit une clé déjà écrite remplace son auteur actuel.
+    nodeOf(id).writes.forEach(function (k) {
+      var w = writerOf(ids, k);
+      if (w && w !== id && !isFixed(w)) {
+        ids.splice(ids.indexOf(w), 1);
+        removed.push(w);
+      }
+    });
+    ids.push(id);
+  }
+
+  /**
+   * Complète ou élague un ensemble de nœuds jusqu'à ce que chaque nœud trouve ses clés : ajoute les fournisseurs
+   * manquants, remplace un nœud bloqué par une variante, retire sinon ce qui ne peut plus tourner.
+   */
+  function resolve(start, website, banned) {
+    var ids = start.slice();
+    var added = [], removed = [], blocked = [];
+    for (var iter = 0; iter < 40; iter++) {
+      var changed = false;
+      for (var i = 0; i < ids.length && !changed; i++) {
+        var id = ids[i];
+        var miss = missingOf(id, ids, website);
+        if (!miss.length) continue;
+        for (var j = 0; j < miss.length && !changed; j++) {
+          var p = pickProvider(miss[j], ids, website, banned);
+          if (p) {
+            insert(ids, p, removed);
+            added.push(p);
+            changed = true;
+          }
+        }
+        if (changed) break;
+        var v = find(variantsOf(id), function (n) { return !has(banned, n.id) && !has(ids, n.id) && usable(n, ids, website, banned); });
+        if (v) {
+          ids.splice(i, 1);
+          removed.push(id);
+          insert(ids, v.id, removed);
+          added.push(v.id);
+          changed = true;
+        } else if (isFixed(id)) {
+          if (!has(blocked, id)) blocked.push(id);
+        } else {
+          ids.splice(i, 1);
+          removed.push(id);
+          changed = true;
+        }
+      }
+      if (!changed) {
+        // Un message que plus aucun canal ne lit est retiré.
+        var orphan = find(ids, function (id) {
+          if (nodeOf(id).binding.kind !== "pitch") return false;
+          var key = nodeOf(id).writes[0];
+          return !ids.some(function (o) { return o !== id && has(nodeOf(o).reads, key); });
+        });
+        if (orphan) {
+          ids.splice(ids.indexOf(orphan), 1);
+          removed.push(orphan);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    return {
+      ids: ids,
+      added: added.filter(function (x, k) { return has(ids, x) && added.indexOf(x) === k; }),
+      removed: removed.filter(function (x, k) { return !has(ids, x) && removed.indexOf(x) === k; }),
+      blocked: blocked,
+    };
+  }
+
+  /** Réécrit les champs du besoin à partir d'un ensemble de nœuds. */
+  function applyIds(d, ids, website) {
+    d.requirements.website = website;
+    d.scanModules = C.modules.map(function (m) { return m.id; }).filter(function (m) { return has(ids, m); });
+    var proofKind = has(ids, "audit_report") ? "audit_report" : "demo_web";
+    if (d.proof.kind !== proofKind) {
+      state.proofStash[d.proof.kind] = clone(d.proof);
+      d.proof = clone(state.proofStash[proofKind] || DEFAULT_PROOF[proofKind]);
+    }
+    d.flyer = has(ids, "flyer");
+    var chans = d.channels.filter(function (c) { return has(ids, channelNode(c)); });
+    C.channels.forEach(function (c) { if (has(ids, channelNode(c.id)) && !has(chans, c.id)) chans.push(c.id); });
+    d.channels = chans;
+    var pitch = {};
+    chans.forEach(function (c) {
+      var key = c === "phone" ? "script_appel" : "message_ecrit";
+      var w = writerOf(ids, key);
+      if (w) pitch[c] = w;
+    });
+    d.pitch = pitch;
+    var allOf = (d.requirements.contacts.allOf || []).filter(function (c) { return has(chans, c); });
+    var anyOf = (d.requirements.contacts.anyOf || []).filter(function (c) { return has(chans, c); });
+    if (!allOf.length && !anyOf.length && chans.length) allOf = [chans[0]];
+    var contacts = {};
+    if (allOf.length) contacts.allOf = allOf;
+    if (anyOf.length) contacts.anyOf = anyOf;
+    d.requirements.contacts = contacts;
+  }
+
+  function planAdd(d, id) {
+    var ids = nodeIdsOf(d);
+    var removed = [];
+    insert(ids, id, removed);
+    var res = resolve(ids, d.requirements.website, removed);
+    res.removed = removed.concat(res.removed).filter(function (x, k, a) { return a.indexOf(x) === k && !has(res.ids, x); });
+    res.ok = has(res.ids, id) && !res.blocked.length;
+    return res;
+  }
+  function planRemove(d, id) {
+    var ids = nodeIdsOf(d).filter(function (x) { return x !== id; });
+    var res = resolve(ids, d.requirements.website, [id]);
+    res.removed = [id].concat(res.removed.filter(function (x) { return x !== id; }));
+    res.ok = !res.blocked.length && res.ids.some(function (x) { return nodeOf(x).binding.kind === "channel"; });
+    return res;
+  }
+  function planReplace(d, id, by) {
+    var ids = nodeIdsOf(d).filter(function (x) { return x !== id; });
+    var removed = [id];
+    insert(ids, by, removed);
+    var res = resolve(ids, d.requirements.website, removed);
+    res.removed = removed.concat(res.removed).filter(function (x, k, a) { return a.indexOf(x) === k && !has(res.ids, x); });
+    res.ok = has(res.ids, by) && !res.blocked.length;
+    return res;
+  }
+  function planWebsite(d, website) {
+    var res = resolve(nodeIdsOf(d), website, []);
+    res.ok = !res.blocked.length && res.ids.some(function (x) { return nodeOf(x).binding.kind === "channel"; });
+    return res;
+  }
+
+  /** Raison lisible pour laquelle un nœud ne peut pas être ajouté. */
+  function whyNot(d, id) {
+    var website = d.requirements.website;
+    var ids = nodeIdsOf(d);
+    var n = nodeOf(id);
+    var bad = n.reads.filter(function (k) { return !canProvide(k, ids, website, [], [id]); });
+    if (!bad.length) return "";
+    if (has(bad, "site")) return "introuvable sans site";
+    if (has(bad, "site_garanti")) return "exige « Site exigé » au filtre Maps";
+    return "manque : " + bad.map(keyLabel).join(", ").toLowerCase();
+  }
+
+  /** Applique un plan, ou demande confirmation s'il retire d'autres nœuds. */
+  function commit(d, plan, website, words, skipConfirm) {
+    if (!plan.ok) {
+      state.notice = {
+        tone: "err",
+        text: plan.blocked.length
+          ? "Impossible : « " + nodeOf(plan.blocked[0]).label + " » n'aurait plus ce dont il a besoin."
+          : "Impossible : il faut garder au moins un canal de premier contact.",
+      };
+      renderAll();
+      return;
+    }
+    var subjects = plan.subjects || [];
+    var addedOthers = plan.added.filter(function (x) { return !has(subjects, x); });
+    var removedOthers = plan.removed.filter(function (x) { return !has(subjects, x); });
+    var apply = function () {
+      applyIds(d, plan.ids, website);
+      var text = words.done;
+      if (addedOthers.length) text += " · ajoute aussi " + quoted(addedOthers);
+      if (removedOthers.length) text += " · retire aussi " + quoted(removedOthers);
+      state.notice = addedOthers.length || removedOthers.length ? { tone: "ok", text: text } : null;
+      state.confirm = null;
+      if (state.node && !has(plan.ids, state.node)) state.node = null;
+      renderAll();
+      scheduleValidation();
+    };
+    if (removedOthers.length && !skipConfirm) {
+      state.confirm = { text: words.ask + " retire aussi " + quoted(removedOthers) + (addedOthers.length ? " et ajoute " + quoted(addedOthers) : "") + ".", apply: apply };
+      state.notice = null;
+      renderAll();
+      return;
+    }
+    apply();
   }
 
   /* ---------- données ---------- */
@@ -136,6 +403,12 @@
   }
 
   var validateTimer = null;
+  function payload() {
+    var d = clone(state.draft);
+    delete d._idTouched;
+    delete d._badgeTouched;
+    return d;
+  }
   function scheduleValidation() {
     clearTimeout(validateTimer);
     validateTimer = setTimeout(function () {
@@ -143,7 +416,7 @@
       fetch("/api/admin/opportunities/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ definition: state.draft }),
+        body: JSON.stringify({ definition: payload() }),
       })
         .then(function (r) { return r.json(); })
         .then(function (res) {
@@ -163,18 +436,14 @@
     fetch("/api/admin/opportunities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ definition: state.draft, version: version }),
+      body: JSON.stringify({ definition: payload(), version: version }),
     })
       .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
       .then(function (res) {
         state.saving = false;
         if (res.body && res.body.ok) {
           var id = state.draft.id;
-          state.mode = "view";
-          state.draft = null;
-          state.errors = [];
-          state.history = null;
-          state.node = null;
+          resetEditing();
           state.message = { tone: "ok", text: "Besoin enregistré (version " + res.body.version + "). Le worker l'appliquera au prochain job." };
           load(id);
         } else {
@@ -191,15 +460,25 @@
 
   /* ---------- actions ---------- */
 
+  function resetEditing() {
+    state.mode = "view";
+    state.draft = null;
+    state.errors = [];
+    state.history = null;
+    state.node = null;
+    state.palette = null;
+    state.confirm = null;
+    state.notice = null;
+    state.proofStash = {};
+  }
   function startEdit() {
     var it = currentItem();
     if (!it) return;
+    resetEditing();
     state.mode = "edit";
     state.draft = clone(it.def);
     state.baseVersion = it.version;
-    state.errors = [];
     state.message = null;
-    if (!state.node) state.node = "identity";
     render();
   }
   function startCreate(from) {
@@ -214,7 +493,7 @@
           requirements: { website: "optional", contacts: { allOf: ["phone"] } },
           channels: ["phone"],
           scanModules: ["branding_visual", "contacts_legal", "dirigeant_sirene"],
-          proof: { kind: "demo_web", generator: "llm_demo", focus: "showcase", interestCta: "Ce site me plaît, on en discute" },
+          proof: clone(DEFAULT_PROOF.demo_web),
           pitch: { phone: "llm_phone_battlecard" },
           flyer: false,
           commercial: { businessModel: "one_shot", pitchFocus: "" },
@@ -223,427 +502,423 @@
       base.id = (from.id + "_copie").slice(0, 41);
       base.label = from.label + " (copie)";
       base.status = "draft";
+      base._badgeTouched = true;
     }
+    resetEditing();
     state.mode = "create";
     state.draft = base;
     state.baseVersion = 0;
-    state.errors = [];
     state.message = null;
     state.node = "identity";
     render();
     scheduleValidation();
+    var input = document.getElementById("nd-label");
+    if (input && !from) input.focus();
   }
   function cancelEdit() {
     if (state.mode === "create" && !state.selectedId && state.items.length) state.selectedId = state.items[0].def.id;
-    state.mode = "view";
-    state.node = null;
-    state.draft = null;
-    state.errors = [];
+    resetEditing();
     render();
-  }
-  function changed() {
-    renderGraph();
-    renderPrereq();
-    scheduleValidation();
   }
 
   /* ---------- graphe ---------- */
 
-  var NW = 176, NH = 92, GX = 34, PAD = 18;
-  var LANE1 = 46, LANE2 = 214;
-
-  function graphModel(def) {
-    var forbidden = def.requirements.website === "forbidden";
-    var allOf = def.requirements.contacts.allOf || [];
-    var anyOf = def.requirements.contacts.anyOf || [];
-    var needsInspection = allOf.concat(anyOf).some(function (c) { return c !== "phone"; });
-    var phoneReq = allOf.indexOf("phone") >= 0;
-    var filterLines = [C.website[def.requirements.website].label];
-    if (phoneReq) filterLines.push("Téléphone obligatoire");
-    else if (anyOf.length && anyOf.every(function (c) { return c === "phone"; })) filterLines.push("Téléphone obligatoire");
-    else filterLines.push("Pas de contact exigé ici");
-    var qualLines = [];
-    allOf.filter(function (c) { return c !== "phone"; }).forEach(function (c) { qualLines.push(channelLabel(c) + " obligatoire"); });
-    if (anyOf.length && !anyOf.every(function (c) { return c === "phone"; })) qualLines.push("Au moins : " + list(anyOf.map(channelLabel)).toLowerCase());
-    var proofLines =
-      def.proof.kind === "demo_web"
-        ? [C.proof.demo_web.label, "Angle : " + (C.focus[def.proof.focus] ? C.focus[def.proof.focus].label : def.proof.focus)]
-        : [C.proof.audit_report.label, "Sans modèle de langage"];
-    if (def.flyer) proofLines.push("Flyer PDF joint");
-
-    var nodes = [
-      { id: "maps", col: 0, lane: 1, icon: "search", title: "Recherche Maps", lines: ["Requête et zone du scan", "Fiches Google Maps"], group: "collect" },
-      { id: "filter", col: 1, lane: 1, icon: "sliders", title: "Filtre Maps", lines: filterLines, group: "collect" },
-      {
-        id: "inspect", col: 2, lane: 1, icon: "eye", title: "Inspection du site",
-        lines: forbidden ? ["Ignorée : prospects sans site"] : [def.scanModules.length + " vérification" + (def.scanModules.length > 1 ? "s" : ""), def.scanModules.slice(0, 2).map(function (m) { return moduleEntry(m).label; }).join(", ")],
-        off: forbidden, group: "collect",
-      },
-      {
-        id: "qualify", col: 3, lane: 1, icon: "check-circle", title: "Qualification finale",
-        lines: needsInspection ? qualLines : ["Rien de plus à vérifier", "Décidé dès le filtre Maps"],
-        off: !needsInspection, group: "qualify",
-      },
-      {
-        id: "channel", col: 4, lane: 1, icon: "arrow-right", title: "Canal principal",
-        lines: def.channels.map(function (c, i) { return (i + 1) + ". " + channelLabel(c); }), group: "qualify",
-      },
-      { id: "proof", col: 4, lane: 2, icon: def.proof.kind === "demo_web" ? "sparkles" : "file-text", title: "Preuve", lines: proofLines, group: "produce" },
-    ];
-    var msgs = def.channels.map(function (c, i) {
-      return {
-        id: "pitch_" + c, col: 3, lane: 2, stackIndex: i, stackSize: def.channels.length,
-        icon: c === "phone" ? "phone" : c === "email" ? "mail" : "message",
-        title: channelLabel(c), lines: [def.pitch[c] ? pitchEntry(def.pitch[c]).label : "Aucun message"], group: "produce", small: true, section: "pitch",
-      };
-    });
-    nodes = nodes.concat(msgs);
-    nodes.push({ id: "crm", col: 2, lane: 2, icon: "inbox", title: "Synchro CRM", lines: ["Lead « démo prête »", "Suivi des ouvertures"], group: "deliver" });
-    nodes.push({
-      id: "closer", col: 1, lane: 2, icon: "user", title: "Closer",
-      lines: ["Attribué si le besoin et", "le canal lui sont ouverts"], group: "deliver",
-    });
-
-    // Ligne de collecte : arêtes estompées vers les étapes ignorées, et le flux réel passe par-dessus.
-    var chain = ["maps", "filter", "inspect", "qualify", "channel"];
-    var offIds = {};
-    nodes.forEach(function (n) { if (n.off) offIds[n.id] = true; });
-    var edges = [];
-    for (var k = 0; k < chain.length - 1; k++) {
-      if (offIds[chain[k]] || offIds[chain[k + 1]]) edges.push([chain[k], chain[k + 1], "off"]);
-    }
-    var active = chain.filter(function (id) { return !offIds[id]; });
-    for (var a2 = 0; a2 < active.length - 1; a2++) {
-      var adjacent = chain.indexOf(active[a2 + 1]) - chain.indexOf(active[a2]) === 1;
-      edges.push([active[a2], active[a2 + 1], adjacent ? "" : "skip"]);
-    }
-    edges.push(["channel", "proof"]);
-    msgs.forEach(function (m) { edges.push(["proof", m.id]); edges.push([m.id, "crm"]); });
-    if (!msgs.length) edges.push(["proof", "crm"]);
-    edges.push(["crm", "closer"]);
-    return { nodes: nodes, edges: edges };
-  }
-
-  function layout(nodes) {
-    nodes.forEach(function (n) {
-      n.x = PAD + n.col * (NW + GX);
-      if (n.small) {
-        var h = 58, gap = 10;
-        var total = n.stackSize * h + (n.stackSize - 1) * gap;
-        n.h = h;
-        n.y = LANE2 + NH / 2 - total / 2 + n.stackIndex * (h + gap);
-      } else {
-        n.h = NH;
-        n.y = n.lane === 1 ? LANE1 : LANE2;
-      }
-      n.w = NW;
-    });
-  }
-
-  var GROUP_COLOR = { collect: "#6366f1", qualify: "#d97706", produce: "#059669", deliver: "#0891b2" };
-
-  function edgePath(a, b) {
-    var ax, ay, bx, by;
-    if (a.lane === b.lane) {
-      var rightward = b.x > a.x;
-      ax = rightward ? a.x + a.w : a.x;
-      bx = rightward ? b.x : b.x + b.w;
-      ay = a.y + a.h / 2;
-      by = b.y + b.h / 2;
-      var dx = (bx - ax) / 2;
-      return "M" + ax + "," + ay + " C" + (ax + dx) + "," + ay + " " + (bx - dx) + "," + by + " " + bx + "," + by;
-    }
-    // Passage de la ligne de collecte à la ligne de production (même colonne) : vers le bas.
-    ax = a.x + a.w / 2;
-    ay = a.y + a.h;
-    bx = b.x + b.w / 2;
-    by = b.y;
-    return "M" + ax + "," + ay + " C" + ax + "," + (ay + 40) + " " + bx + "," + (by - 40) + " " + bx + "," + by;
-  }
-  function skipPath(a, b) {
-    var ax = a.x + a.w / 2, ay = a.y, bx = b.x + b.w / 2, by = b.y;
-    return "M" + ax + "," + ay + " C" + ax + "," + (ay - 34) + " " + bx + "," + (by - 34) + " " + bx + "," + by;
-  }
-
-  function graphSvg(def) {
-    var m = graphModel(def);
-    layout(m.nodes);
-    var byId = {};
-    m.nodes.forEach(function (n) { byId[n.id] = n; });
-    var W = PAD * 2 + 5 * NW + 4 * GX;
-    var H = LANE2 + NH + 28;
-    var s = [];
-    s.push('<svg viewBox="0 0 ' + W + " " + H + '" width="100%" style="min-width:760px;max-width:' + W + 'px" class="block mx-auto" role="img" aria-label="Workflow de collecte du besoin ' + esc(def.label) + '">');
-    s.push(
-      "<defs>" +
-        '<marker id="nd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a1a1aa"/></marker>' +
-        '<marker id="nd-arrow-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6366f1"/></marker>' +
-        '<filter id="nd-shadow" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#18181b" flood-opacity=".08"/></filter>' +
-        "</defs>",
-    );
-    s.push('<text x="' + PAD + '" y="24" class="nd-lane">Collecte et qualification</text>');
-    s.push('<text x="' + PAD + '" y="' + (LANE2 - 18) + '" class="nd-lane">Production et remise au closer</text>');
-
-    m.edges.forEach(function (e) {
-      var a = byId[e[0]], b = byId[e[1]];
-      if (!a || !b) return;
-      var skip = e[2] === "skip";
-      var off = e[2] === "off";
-      var d = skip ? skipPath(a, b) : edgePath(a, b);
-      var sel = state.node && (state.node === a.id || state.node === b.id || state.node === (a.section || a.id) || state.node === (b.section || b.id));
-      s.push(
-        '<path d="' + d + '" fill="none" class="' + (off ? "nd-edge-off" : sel ? "nd-edge nd-edge-sel" : "nd-edge") + '" marker-end="url(#' + (sel && !off ? "nd-arrow-on" : "nd-arrow") + ')"/>',
-      );
-    });
-
-    m.nodes.forEach(function (n) {
-      var section = n.section || n.id;
-      var selected = state.node === section || state.node === n.id;
-      var color = GROUP_COLOR[n.group];
-      s.push(
-        '<g class="nd-node' + (n.off ? " nd-off" : "") + (selected ? " nd-sel" : "") + '" data-node="' + section + '" tabindex="0" role="button" aria-label="' + esc(n.title + " : " + n.lines.join(", ")) + '">',
-      );
-      s.push('<rect x="' + n.x + '" y="' + n.y + '" width="' + n.w + '" height="' + n.h + '" rx="14" class="nd-box" filter="url(#nd-shadow)"/>');
-      s.push('<rect x="' + n.x + '" y="' + (n.y + 12) + '" width="3" height="' + (n.h - 24) + '" rx="1.5" fill="' + (n.off ? "#d4d4d8" : color) + '"/>');
-      s.push(
-        '<foreignObject x="' + (n.x + 12) + '" y="' + (n.y + 8) + '" width="' + (n.w - 20) + '" height="' + (n.h - 14) + '">' +
-          '<div xmlns="http://www.w3.org/1999/xhtml" class="nd-body">' +
-          '<div class="nd-title"><span class="nd-icon" style="color:' + (n.off ? "#a1a1aa" : color) + '">' + (C.icons[n.icon] || "") + "</span><span>" + esc(n.title) + "</span></div>" +
-          n.lines.slice(0, n.small ? 1 : 3).map(function (l) { return '<div class="nd-line" title="' + esc(l) + '">' + esc(l) + "</div>"; }).join("") +
-          "</div></foreignObject>",
-      );
-      s.push("</g>");
-    });
-    s.push("</svg>");
-    return s.join("");
-  }
-
-  /* ---------- détails d'une étape (lecture) ---------- */
-
-  function nodeDetails(def, node) {
-    var forbidden = def.requirements.website === "forbidden";
-    switch (node) {
-      case "maps":
-        return detail("Recherche Maps", "Le scan interroge Google Maps avec la requête et la zone choisies au lancement, puis lit chaque fiche (nom, téléphone, site, note, avis).", []);
-      case "filter":
-        return detail("Filtre Maps", "Premier tri, avant toute visite du site : seuls le téléphone et la présence d'un site sont connus à ce stade.", requirementLines(def).filter(function (r) { return r.stage === "Filtre Maps"; }).map(function (r) { return r.text + (r.detail ? " : " + r.detail.toLowerCase() : ""); }));
-      case "inspect":
-        if (forbidden) return detail("Inspection du site", "Ignorée : ce besoin ne retient que des prospects sans site.", []);
-        return detail("Inspection du site", "Vérifications lancées sur le site du prospect, dans un navigateur sans historique.", def.scanModules.map(function (m) { var e = moduleEntry(m); return "<b>" + esc(e.label) + "</b> : " + esc(e.description); }), true);
-      case "qualify":
-        var later = requirementLines(def).filter(function (r) { return r.stage !== "Filtre Maps"; });
-        return detail("Qualification finale", later.length ? "Après l'inspection, le lead est rejeté s'il manque :" : "Aucun contact écrit n'est exigé : la décision est prise dès le filtre Maps.", later.map(function (r) { return r.text; }));
+  /** Résumé d'un nœud pour sa carte, d'après les réglages du besoin. */
+  function nodeSummary(d, id) {
+    var n = nodeOf(id);
+    switch (n.binding.kind) {
+      case "module":
+        return "→ " + n.writes.map(keyLabel).join(", ");
       case "channel":
-        return detail("Canal principal", "Le premier canal disponible, dans cet ordre, devient le canal du premier contact.", def.channels.map(function (c, i) { return (i + 1) + ". " + channelLabel(c); }));
-      case "proof":
-        var p = def.proof.kind === "demo_web"
-          ? [C.proof.demo_web.description, "Angle : " + C.focus[def.proof.focus].label + " (" + C.focus[def.proof.focus].description.toLowerCase() + ")", "Bouton d'intérêt : « " + def.proof.interestCta + " »"]
-          : [C.proof.audit_report.description, "Bouton d'intérêt : « " + def.proof.interestCta + " »"];
-        if (def.flyer) p.push("Flyer PDF avec QR code vers les avis Google");
-        return detail("Preuve envoyée au prospect", "", p);
+        var c = n.binding.channel;
+        var rank = d.channels.indexOf(c) + 1;
+        var need = has(d.requirements.contacts.allOf || [], c) ? "obligatoire" : has(d.requirements.contacts.anyOf || [], c) ? "au moins un" : "si trouvé";
+        return (rank === 1 ? "1er choix" : rank + "e choix") + " · " + need;
       case "pitch":
-        return detail("Message par canal", "Le message produit est celui du canal principal du lead.", def.channels.map(function (c) { var e = pitchEntry(def.pitch[c]); return "<b>" + esc(channelLabel(c)) + "</b> : " + esc(e.label) + " (" + esc(e.description.toLowerCase()) + ")"; }), true);
-      case "crm":
-        return detail("Synchro CRM", "Le lead complet (démo ou rapport, et message) part dans le CRM au statut « démo prête ». Une ouverture de la démo le fait passer en lead chaud.", []);
-      case "closer":
-        return detail("Closer", "Le lead est attribué à un closer à qui ce besoin et ce canal sont ouverts (onglet Équipe).", []);
-      default:
-        return "";
+        return d.commercial.tone ? "Ton " + toneLabel(d.commercial.tone).toLowerCase() : "Ton par défaut";
+      case "proof":
+        if (id === "demo_web") {
+          var hl = (d.proof.highlights || []).length;
+          return (C.focus[d.proof.focus] ? C.focus[d.proof.focus].label : "") + (hl ? " · " + hl + " point" + (hl > 1 ? "s" : "") + " fort" + (hl > 1 ? "s" : "") : "");
+        }
+        return "Sans modèle de langage";
+      case "flyer":
+        return "QR code avis Google";
     }
+    if (id === "maps_search") return "Requête et zone du scan";
+    if (id === "maps_filter") {
+      var parts = [C.website[d.requirements.website].label];
+      var l = d.requirements.listing || {};
+      if (l.minRating != null) parts.push("note ≥ " + fmtNum(l.minRating));
+      if (l.maxRating != null) parts.push("note ≤ " + fmtNum(l.maxRating));
+      if (l.minReviews != null) parts.push("≥ " + l.minReviews + " avis");
+      if (l.maxReviews != null) parts.push("≤ " + l.maxReviews + " avis");
+      return parts.join(" · ");
+    }
+    if (id === "qualify") {
+      var req = (d.requirements.contacts.allOf || []).map(channelLabel);
+      var any = d.requirements.contacts.anyOf || [];
+      if (any.length) req.push(list(any.map(channelLabel)));
+      return req.length ? "Exige : " + req.join(" + ").toLowerCase() : "Aucun contact exigé";
+    }
+    if (id === "crm_handoff") return "Statut « démo prête »";
+    return "";
   }
-  function detail(title, intro, items, html) {
+  function toneLabel(t) {
+    var x = find(C.messageTones, function (m) { return m.id === t; });
+    return x ? x.label : t;
+  }
+
+  /** Nœuds reliés au nœud sélectionné (lecteurs et auteurs de ses clés). */
+  function relatedTo(ids, sel) {
+    var out = {};
+    if (!sel || !NODE[sel]) return out;
+    var n = nodeOf(sel);
+    var reads = n.reads.concat(n.optionalReads || []);
+    ids.forEach(function (id) {
+      var o = nodeOf(id);
+      if (reads.some(function (k) { return has(o.writes, k); })) out[id] = true;
+      if (n.writes.some(function (k) { return has(o.reads, k) || has(o.optionalReads || [], k); })) out[id] = true;
+    });
+    return out;
+  }
+
+  function addableFor(d, stage, ids) {
+    return C.nodes.filter(function (n) {
+      if (n.stage !== stage || n.binding.kind === "fixed" || has(ids, n.id)) return false;
+      if (n.binding.kind === "pitch" || n.binding.kind === "proof") return false; // remplacés depuis leur fiche
+      return true;
+    });
+  }
+
+  function graphHtml(d) {
+    var edit = state.mode !== "view";
+    var ids = nodeIdsOf(d);
+    var website = d.requirements.website;
+    var rel = relatedTo(ids, state.node);
+    var rows = C.stages.map(function (s) {
+      var stageIds = ids.filter(function (id) { return nodeOf(id).stage === s.id; });
+      if (s.id === "channel") stageIds = d.channels.map(channelNode);
+      var addable = edit ? addableFor(d, s.id, ids) : [];
+      if (!stageIds.length && !addable.length) {
+        if (s.id !== "inspect") return "";
+        return rowHtml(s, '<div class="text-[11px] text-zinc-400 italic py-3">' + (website === "forbidden" ? "Aucune : prospects sans site" : "Aucune vérification") + "</div>");
+      }
+      var cards = stageIds.map(function (id) {
+        var n = nodeOf(id);
+        var miss = missingOf(id, ids, website);
+        var sel = state.node === id;
+        var dim = state.node && NODE[state.node] && !sel && !rel[id];
+        var removable = edit && !isFixed(id) && n.binding.kind !== "proof" && n.binding.kind !== "pitch";
+        var color = STAGE_COLOR[n.stage];
+        return (
+          '<div class="nd-card' + (sel ? " nd-sel" : "") + (rel[id] ? " nd-rel" : "") + (dim ? " nd-dim" : "") + (miss.length ? " nd-miss" : "") + '" data-node="' + id + '" data-card="' + id + '" tabindex="0" role="button" aria-pressed="' + sel + '" aria-label="' + esc(n.label + " : " + nodeSummary(d, id)) + '">' +
+          '<span class="nd-bar" style="background:' + color + '"></span>' +
+          '<span class="nd-title"><span class="nd-icon" style="color:' + color + '">' + (C.icons[n.icon] || "") + "</span><span class=\"nd-label\">" + esc(n.label) + "</span></span>" +
+          '<span class="nd-sub">' + esc(miss.length ? "Manque : " + miss.map(keyLabel).join(", ").toLowerCase() : nodeSummary(d, id)) + "</span>" +
+          (removable ? '<button type="button" class="nd-x" data-remove="' + id + '" aria-label="Retirer ' + esc(n.label) + '" title="Retirer">' + (C.icons.x || "×") + "</button>" : "") +
+          "</div>"
+        );
+      }).join("");
+      if (addable.length) {
+        var open = state.palette === s.id;
+        cards += '<button type="button" class="nd-add' + (open ? " nd-add-open" : "") + '" data-palette="' + s.id + '" aria-expanded="' + open + '">' + (open ? "Fermer" : "+ Ajouter") + "</button>";
+      }
+      var row = rowHtml(s, cards);
+      if (state.palette === s.id && addable.length) row += paletteHtml(d, addable);
+      return row;
+    }).join("");
+    return '<div class="relative" id="nd-graph-inner"><svg id="nd-edges" class="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></svg>' + rows + "</div>";
+  }
+  function rowHtml(s, inner) {
     return (
-      '<div class="space-y-2"><h4 class="text-sm font-bold text-zinc-900">' + esc(title) + "</h4>" +
-      (intro ? '<p class="text-xs text-zinc-600 leading-relaxed max-w-prose">' + esc(intro) + "</p>" : "") +
-      (items.length ? '<ul class="text-xs text-zinc-700 space-y-1.5">' + items.map(function (i) { return '<li class="flex gap-2"><span class="mt-1.5 w-1 h-1 rounded-full bg-zinc-400 shrink-0"></span><span>' + (html ? i : esc(i)) + "</span></li>"; }).join("") + "</ul>" : "") +
+      '<div class="nd-row" data-stage="' + s.id + '">' +
+      '<div class="nd-stage">' + esc(s.label) + "</div>" +
+      '<div class="nd-cards">' + inner + "</div></div>"
+    );
+  }
+  function paletteHtml(d, addable) {
+    return (
+      '<div class="nd-palette">' +
+      addable.map(function (n) {
+        var why = whyNot(d, n.id);
+        var plan = why ? null : planAdd(d, n.id);
+        var extra = plan && plan.added.filter(function (x) { return x !== n.id; });
+        var gone = plan && plan.removed;
+        var hint = why || (extra && extra.length ? "Ajoute aussi " + quoted(extra) : "") + (gone && gone.length ? (extra && extra.length ? " · " : "") + "Remplace " + quoted(gone) : "");
+        return (
+          '<button type="button" data-add="' + n.id + '"' + (why ? " disabled" : "") + ' class="nd-pal-item">' +
+          '<span class="nd-icon" style="color:' + STAGE_COLOR[n.stage] + '">' + (C.icons[n.icon] || "") + "</span>" +
+          '<span class="min-w-0"><span class="block text-xs font-bold text-zinc-900">' + esc(n.label) + "</span>" +
+          '<span class="block text-[11px] text-zinc-500 leading-snug">' + esc(n.description) + "</span>" +
+          (hint ? '<span class="block text-[11px] mt-0.5 ' + (why ? "text-rose-600" : "text-indigo-700") + '">' + esc(hint) + "</span>" : "") +
+          "</span></button>"
+        );
+      }).join("") +
       "</div>"
     );
   }
 
-  /* ---------- formulaire d'édition ---------- */
-
-  var SECTIONS = [
-    { id: "identity", title: "Identité", nodes: ["identity"] },
-    { id: "filter", title: "Prérequis du prospect", nodes: ["maps", "filter", "qualify"] },
-    { id: "inspect", title: "Inspection du site", nodes: ["inspect"] },
-    { id: "channel", title: "Canaux de contact", nodes: ["channel"] },
-    { id: "proof", title: "Preuve", nodes: ["proof"] },
-    { id: "pitch", title: "Messages", nodes: ["pitch", "crm", "closer"] },
-    { id: "commercial", title: "Angle commercial", nodes: [] },
-  ];
-  function sectionFor(node) {
-    var s = SECTIONS.find(function (x) { return x.id === node || x.nodes.indexOf(node) >= 0; });
-    return s ? s.id : "identity";
+  /** Liaisons entre auteurs et lecteurs des clés, dessinées par-dessus la grille une fois les cartes placées. */
+  function drawEdges() {
+    var svg = document.getElementById("nd-edges");
+    var box = document.getElementById("nd-graph-inner");
+    var d = current();
+    if (!svg || !box || !d) return;
+    var origin = box.getBoundingClientRect();
+    var pos = {};
+    box.querySelectorAll("[data-card]").forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      pos[el.dataset.card] = { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
+    });
+    var ids = nodeIdsOf(d);
+    var sel = state.node;
+    var out = [];
+    ids.forEach(function (id) {
+      var n = nodeOf(id);
+      var b = pos[id];
+      if (!b) return;
+      var seen = {};
+      [[n.reads, false], [n.optionalReads || [], true]].forEach(function (pair) {
+        pair[0].forEach(function (k) {
+          var w = writerOf(ids, k);
+          if (!w || w === id || seen[w] || !pos[w]) return;
+          var a = pos[w];
+          var touches = sel === id || sel === w;
+          var span = STAGE_INDEX[n.stage] - STAGE_INDEX[nodeOf(w).stage];
+          if (pair[1] && !touches) return; // optionnelles : seulement pour le nœud sélectionné
+          if (!touches && span > 2) return; // longues liaisons : seulement pour le nœud sélectionné
+          if (sel && NODE[sel] && !touches && span > 1) return;
+          seen[w] = true;
+          var ax = a.x + a.w / 2, ay = a.y + a.h, bx = b.x + b.w / 2, by = b.y;
+          if (by <= ay) return;
+          var dy = Math.max(18, (by - ay) / 2);
+          out.push(
+            '<path d="M' + ax + "," + ay + " C" + ax + "," + (ay + dy) + " " + bx + "," + (by - dy) + " " + bx + "," + by + '" class="' +
+              (touches ? "nd-edge nd-edge-sel" : "nd-edge") + (pair[1] ? " nd-edge-opt" : "") + '"/>',
+          );
+        });
+      });
+    });
+    svg.setAttribute("viewBox", "0 0 " + origin.width + " " + origin.height);
+    svg.innerHTML = out.join("");
   }
 
-  var inputCls = "w-full border border-zinc-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500";
-  var labelCls = "block text-xs font-semibold text-zinc-700 mb-1";
+  /* ---------- fiche d'un nœud ---------- */
 
-  function radio(name, value, checked, label, desc, disabled) {
+  function keyList(keys, ids, d, optional) {
+    if (!keys.length) return "";
+    var av = availKeys(ids, d.requirements.website);
+    return keys.map(function (k) {
+      var w = writerOf(ids, k);
+      var ok = av[k];
+      return (
+        '<li class="flex items-start gap-2"><span class="mt-0.5 w-3.5 h-3.5 shrink-0 ' + (ok ? "text-emerald-600" : optional ? "text-zinc-300" : "text-rose-600") + '">' + (C.icons[ok ? "check" : optional ? "x" : "alert-circle"] || "") + "</span>" +
+        "<span><b class=\"text-zinc-900\">" + esc(keyLabel(k)) + "</b>" + (w && ok ? ' <span class="text-zinc-500">· ' + esc(nodeOf(w).label) + "</span>" : !ok && !optional ? ' <span class="text-rose-700">· manquant</span>' : !ok ? ' <span class="text-zinc-400">· absent de ce besoin</span>' : "") + "</span></li>"
+      );
+    }).join("");
+  }
+
+  function nodePanel(d, id) {
+    var n = nodeOf(id);
+    var ids = nodeIdsOf(d);
+    var edit = state.mode !== "view";
+    var h = [];
+    h.push('<div class="flex items-start gap-3"><span class="w-9 h-9 p-2 rounded-xl shrink-0" style="background:' + STAGE_COLOR[n.stage] + "1a;color:" + STAGE_COLOR[n.stage] + '">' + (C.icons[n.icon] || "") + "</span>");
+    h.push('<div class="min-w-0"><h4 class="text-sm font-bold text-zinc-900">' + esc(n.label) + '</h4><p class="text-xs text-zinc-600 leading-relaxed">' + esc(n.description) + "</p></div></div>");
+    var params = edit ? nodeParams(d, id) : nodeFacts(d, id);
+    if (params) h.push('<div class="mt-4 space-y-4">' + params + "</div>");
+    var reads = keyList(n.reads, ids, d, false);
+    var opt = keyList(n.optionalReads || [], ids, d, true);
+    var writes = n.writes.filter(function (k) { return !has(blockedKeys(d.requirements.website), k); });
+    h.push('<div class="mt-4 pt-3 border-t border-zinc-100 grid sm:grid-cols-3 gap-4 text-xs">');
+    h.push('<div><div class="nd-h">A besoin de</div><ul class="space-y-1">' + (reads || '<li class="text-zinc-500">Rien : point de départ</li>') + "</ul></div>");
+    h.push('<div><div class="nd-h">Utilise s\'il existe</div><ul class="space-y-1">' + (opt || '<li class="text-zinc-500">—</li>') + "</ul></div>");
+    h.push('<div><div class="nd-h">Ajoute au dossier</div><ul class="space-y-1">' + (writes.length ? writes.map(function (k) { return '<li><b class="text-zinc-900">' + esc(keyLabel(k)) + '</b> <span class="text-zinc-500">· ' + esc(C.keys[k].description) + "</span></li>"; }).join("") : '<li class="text-zinc-500">Rien : dernière étape</li>') + "</ul></div>");
+    h.push("</div>");
+    if (edit) {
+      var variants = variantsOf(id).filter(function (v) { return v.binding.kind === n.binding.kind; });
+      if (variants.length) {
+        h.push('<div class="mt-4 pt-3 border-t border-zinc-100"><div class="nd-h">Remplacer par</div><div class="flex flex-wrap gap-2">' +
+          variants.map(function (v) {
+            var why = whyNot(d, v.id);
+            return '<button type="button" data-replace="' + id + '" data-by="' + v.id + '"' + (why ? " disabled" : "") + ' class="nd-btn" title="' + esc(why || v.description) + '">' + ic(v.icon, "w-3.5 h-3.5") + " " + esc(v.label) + (why ? ' <span class="text-[10px] text-rose-600 font-normal">(' + esc(why) + ")</span>" : "") + "</button>";
+          }).join("") + "</div></div>");
+      }
+    }
+    return h.join("");
+  }
+
+  function seg(attr, value, options, current, extra) {
     return (
-      '<label class="flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-colors ' + (checked ? "border-indigo-300 bg-indigo-50/60" : "border-zinc-200 hover:bg-zinc-50") + (disabled ? " opacity-50 pointer-events-none" : "") + '">' +
-      '<input type="radio" name="' + name + '" value="' + value + '"' + (checked ? " checked" : "") + (disabled ? " disabled" : "") + ' class="mt-0.5 text-indigo-600 focus:ring-indigo-500">' +
-      '<span><span class="block text-sm font-semibold text-zinc-900">' + esc(label) + "</span>" + (desc ? '<span class="block text-xs text-zinc-500">' + esc(desc) + "</span>" : "") + "</span></label>"
+      '<div class="inline-flex flex-wrap rounded-lg border border-zinc-200 overflow-hidden text-xs font-semibold">' +
+      options.map(function (o) {
+        var on = String(current) === String(o[0]);
+        return '<button type="button" ' + attr + '="' + esc(value) + '" data-v="' + esc(o[0]) + '"' + (extra || "") + ' class="px-2.5 py-1.5 border-r border-zinc-200 last:border-r-0 ' + (on ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50") + '" aria-pressed="' + on + '">' + esc(o[1]) + "</button>";
+      }).join("") +
+      "</div>"
+    );
+  }
+  function field(label, html, hint) {
+    return '<div><div class="nd-h">' + esc(label) + "</div>" + html + (hint ? '<p class="text-[11px] text-zinc-500 mt-1">' + esc(hint) + "</p>" : "") + "</div>";
+  }
+  function stepOptions(steps, none) {
+    return [["", none]].concat(steps.map(function (s) { return [String(s), fmtNum(s)]; }));
+  }
+  function contactSeg(d, c) {
+    var v = has(d.requirements.contacts.allOf || [], c) ? "all" : has(d.requirements.contacts.anyOf || [], c) ? "any" : "none";
+    return seg("data-contact", c, [["all", "Obligatoire"], ["any", "Au moins un"], ["none", "Si trouvé"]], v);
+  }
+
+  function nodeParams(d, id) {
+    var n = nodeOf(id);
+    if (id === "maps_filter") {
+      var l = d.requirements.listing || {};
+      return (
+        field("Site du prospect", seg("data-website", "w", [["optional", "Facultatif"], ["required", "Exigé"], ["forbidden", "Sans site"]], d.requirements.website), C.website[d.requirements.website].description) +
+        '<div class="grid sm:grid-cols-2 gap-4">' +
+        field("Note minimale", seg("data-listing", "minRating", stepOptions(C.listingSteps.rating, "Aucune"), l.minRating == null ? "" : l.minRating)) +
+        field("Note maximale", seg("data-listing", "maxRating", stepOptions(C.listingSteps.rating, "Aucune"), l.maxRating == null ? "" : l.maxRating)) +
+        field("Avis minimum", seg("data-listing", "minReviews", stepOptions(C.listingSteps.reviews, "Aucun"), l.minReviews == null ? "" : l.minReviews)) +
+        field("Avis maximum", seg("data-listing", "maxReviews", [["", "Aucun"], ["0", "Sans avis"]].concat(C.listingSteps.reviews.map(function (s) { return [String(s), String(s)]; })), l.maxReviews == null ? "" : l.maxReviews), "Une fiche dont la note ou les avis sont inconnus n'est pas écartée.") +
+        "</div>"
+      );
+    }
+    if (id === "qualify") {
+      if (!d.channels.length) return "";
+      return field(
+        "Contacts exigés",
+        '<div class="space-y-2">' + d.channels.map(function (c) {
+          return '<div class="flex flex-wrap items-center justify-between gap-2"><span class="text-xs font-semibold text-zinc-800">' + esc(channelLabel(c)) + "</span>" + contactSeg(d, c) + "</div>";
+        }).join("") + "</div>",
+        "« Obligatoire » : écarté sans ce contact. « Au moins un » : il en faut un parmi ceux marqués ainsi. « Si trouvé » : utilisé s'il existe.",
+      );
+    }
+    if (n.binding.kind === "channel") {
+      var c = n.binding.channel;
+      var i = d.channels.indexOf(c);
+      return (
+        field("Exigé pour garder le lead", contactSeg(d, c)) +
+        field(
+          "Ordre de préférence",
+          '<div class="flex items-center gap-2"><span class="text-xs font-bold text-zinc-900">' + (i + 1) + "e sur " + d.channels.length + "</span>" +
+            '<button type="button" class="nd-btn" data-move="' + c + '" data-dir="-1"' + (i === 0 ? " disabled" : "") + ">Monter</button>" +
+            '<button type="button" class="nd-btn" data-move="' + c + '" data-dir="1"' + (i === d.channels.length - 1 ? " disabled" : "") + ">Descendre</button></div>",
+          "Le premier canal disponible pour un prospect devient son canal principal ; seul son message est rédigé.",
+        )
+      );
+    }
+    if (id === "demo_web") {
+      var hl = d.proof.highlights || [];
+      return (
+        field("Angle", seg("data-set", "proof.focus", Object.keys(C.focus).map(function (k) { return [k, C.focus[k].label]; }), d.proof.focus), C.focus[d.proof.focus] ? C.focus[d.proof.focus].description : "") +
+        field(
+          "À mettre en avant",
+          '<div class="flex flex-wrap gap-1.5">' + C.highlights.map(function (x) {
+            var on = has(hl, x.id);
+            return '<button type="button" data-hl="' + x.id + '" title="' + esc(x.description) + '" aria-pressed="' + on + '" class="nd-chip' + (on ? " nd-chip-on" : "") + '">' + (on ? "✓ " : "") + esc(x.label) + "</button>";
+          }).join("") + "</div>",
+          "Ajouté tel quel à la consigne de la démo.",
+        ) +
+        ctaField(d)
+      );
+    }
+    if (id === "audit_report") return ctaField(d);
+    if (n.binding.kind === "pitch") {
+      return (
+        field("Ton des messages", seg("data-set", "commercial.tone", [["", "Par défaut"]].concat(C.messageTones.map(function (t) { return [t.id, t.label]; })), d.commercial.tone || ""), d.commercial.tone ? find(C.messageTones, function (t) { return t.id === d.commercial.tone; }).description : "Chaleureux et professionnel.") +
+        field("Angle commercial (facultatif)", '<textarea id="nd-focusc" data-f="commercial.pitchFocus" rows="2" class="nd-input" placeholder="' + esc(d.label || "Repris du nom du besoin") + '">' + esc(d.commercial.pitchFocus === d.label ? "" : d.commercial.pitchFocus) + "</textarea>", "Vide : le nom du besoin sert d'angle.")
+      );
+    }
+    if (id === "maps_search") return '<p class="text-xs text-zinc-600">La requête (métier) et la zone se choisissent au lancement du scan, dans l\'onglet Scanner.</p>';
+    return "";
+  }
+  function ctaField(d) {
+    var presets = C.ctaPresets;
+    var custom = !has(presets, d.proof.interestCta);
+    return field(
+      "Bouton d'intérêt montré au prospect",
+      '<div class="flex flex-wrap gap-1.5">' + presets.map(function (p) {
+        var on = d.proof.interestCta === p;
+        return '<button type="button" data-cta="' + esc(p) + '" aria-pressed="' + on + '" class="nd-chip' + (on ? " nd-chip-on" : "") + '">' + esc(p) + "</button>";
+      }).join("") +
+        '<button type="button" data-cta="__custom" aria-pressed="' + custom + '" class="nd-chip' + (custom ? " nd-chip-on" : "") + '">Autre…</button></div>' +
+        (custom ? '<input id="nd-cta" data-f="proof.interestCta" class="nd-input mt-2" value="' + esc(d.proof.interestCta) + '" placeholder="Texte du bouton">' : ""),
     );
   }
 
-  function sectionBody(id, d) {
-    var forbidden = d.requirements.website === "forbidden";
-    if (id === "identity") {
-      return (
-        '<div class="grid sm:grid-cols-2 gap-3">' +
-        '<div class="sm:col-span-2"><label class="' + labelCls + '" for="nd-label">Nom du besoin</label><input id="nd-label" data-f="label" class="' + inputCls + '" value="' + esc(d.label) + '" placeholder="Ex. Refonte de site"></div>' +
-        '<div><label class="' + labelCls + '" for="nd-id">Identifiant technique</label><input id="nd-id" data-f="id" class="' + inputCls + ' font-mono" value="' + esc(d.id) + '"' + (state.mode === "create" ? "" : " disabled") + ' placeholder="refonte_site"><span class="block text-[11px] text-zinc-500 mt-1">' + (state.mode === "create" ? "Stocké sur chaque lead ; non modifiable ensuite." : "Non modifiable : les leads existants le portent.") + "</span></div>" +
-        '<div><label class="' + labelCls + '" for="nd-status">Statut</label><select id="nd-status" data-f="status" class="' + inputCls + '">' +
-        Object.keys(C.status).map(function (k) { return '<option value="' + k + '"' + (d.status === k ? " selected" : "") + ">" + esc(C.status[k].label + " : " + C.status[k].description) + "</option>"; }).join("") +
-        "</select></div>" +
-        '<div><label class="' + labelCls + '" for="nd-badge">Texte du badge</label><input id="nd-badge" data-f="badge.text" class="' + inputCls + '" value="' + esc(d.badge.text) + '" placeholder="Refonte"></div>' +
-        '<div><span class="' + labelCls + '">Couleur du badge</span><div class="flex flex-wrap gap-1.5">' +
-        Object.keys(TONES).map(function (t) {
-          return '<button type="button" data-tone="' + t + '" class="px-2.5 py-1 rounded-full border text-xs font-semibold ' + TONES[t].chip + (d.badge.tone === t ? " ring-2 ring-offset-1 ring-indigo-500" : "") + '">' + esc(C.tones[t].label) + "</button>";
-        }).join("") +
-        "</div></div>" +
-        '<div class="sm:col-span-2"><span class="' + labelCls + '">Icône</span><div class="flex flex-wrap gap-1.5">' +
-        C.needIcons.map(function (n) {
-          return '<button type="button" data-icon="' + n + '" title="' + n + '" class="w-9 h-9 p-2 rounded-lg border ' + (d.icon === n ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-zinc-200 text-zinc-600 hover:bg-zinc-50") + '">' + (C.icons[n] || "") + "</button>";
-        }).join("") +
-        "</div></div></div>"
-      );
+  /** Réglages d'un nœud en lecture seule. */
+  function nodeFacts(d, id) {
+    var n = nodeOf(id);
+    var lines = [];
+    if (id === "maps_filter" || id === "qualify" || n.binding.kind === "channel" || n.binding.kind === "proof" || n.binding.kind === "pitch") lines.push(nodeSummary(d, id));
+    if (id === "demo_web") {
+      (d.proof.highlights || []).forEach(function (h) { var x = find(C.highlights, function (e) { return e.id === h; }); if (x) lines.push("Met en avant : " + x.label); });
+      lines.push("Bouton d'intérêt : « " + d.proof.interestCta + " »");
     }
-    if (id === "filter") {
-      var allOf = d.requirements.contacts.allOf || [];
-      var anyOf = d.requirements.contacts.anyOf || [];
-      return (
-        '<div class="space-y-4"><div><span class="' + labelCls + '">Site du prospect</span><div class="grid sm:grid-cols-3 gap-2">' +
-        ["optional", "required", "forbidden"].map(function (k) { return radio("nd-website", k, d.requirements.website === k, C.website[k].label, C.website[k].description); }).join("") +
-        "</div></div>" +
-        '<div><span class="' + labelCls + '">Contacts exigés</span><p class="text-[11px] text-zinc-500 mb-2">« Obligatoire » : le lead est rejeté sans ce contact. « Au moins un » : il en faut un parmi ceux marqués ainsi. Seuls les canaux utilisés sont proposés.</p>' +
-        '<div class="divide-y divide-zinc-100 border border-zinc-200 rounded-xl">' +
-        C.channels.map(function (c) {
-          var used = d.channels.indexOf(c.id) >= 0;
-          var v = allOf.indexOf(c.id) >= 0 ? "all" : anyOf.indexOf(c.id) >= 0 ? "any" : "none";
-          var blocked = forbidden && c.id !== "phone";
-          return (
-            '<div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5' + (used ? "" : " opacity-50") + '"><span class="text-sm font-medium text-zinc-800">' + esc(c.label) + (used ? "" : ' <span class="text-[11px] text-zinc-500 font-normal">(canal non utilisé)</span>') + (blocked ? ' <span class="text-[11px] text-zinc-500 font-normal">(introuvable sans site)</span>' : "") + "</span>" +
-            '<div class="inline-flex rounded-lg border border-zinc-200 overflow-hidden text-xs font-semibold">' +
-            [["none", "Non exigé"], ["all", "Obligatoire"], ["any", "Au moins un"]].map(function (o) {
-              var dis = !used || (blocked && o[0] !== "none");
-              return '<button type="button" data-contact="' + c.id + '" data-v="' + o[0] + '"' + (dis ? " disabled" : "") + ' class="px-2.5 py-1.5 ' + (v === o[0] ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50") + (dis ? " cursor-not-allowed" : "") + '">' + o[1] + "</button>";
-            }).join("") +
-            "</div></div>"
-          );
-        }).join("") +
-        "</div></div></div>"
-      );
-    }
-    if (id === "inspect") {
-      if (forbidden) return '<p class="text-sm text-zinc-600">Pas d\'inspection : ce besoin ne retient que des prospects sans site. Les vérifications choisies restent enregistrées mais ne sont pas lancées.</p>';
-      return (
-        '<div class="grid sm:grid-cols-2 gap-2">' +
-        C.modules.map(function (m) {
-          var on = d.scanModules.indexOf(m.id) >= 0;
-          return (
-            '<label class="flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer ' + (on ? "border-indigo-300 bg-indigo-50/60" : "border-zinc-200 hover:bg-zinc-50") + '"><input type="checkbox" data-module="' + m.id + '"' + (on ? " checked" : "") + ' class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">' +
-            '<span><span class="block text-sm font-semibold text-zinc-900">' + esc(m.label) + '</span><span class="block text-xs text-zinc-500">' + esc(m.description) + "</span></span></label>"
-          );
-        }).join("") +
-        "</div>"
-      );
-    }
-    if (id === "channel") {
-      var order = d.channels.concat(C.channels.map(function (c) { return c.id; }).filter(function (c) { return d.channels.indexOf(c) < 0; }));
-      return (
-        '<p class="text-[11px] text-zinc-500 mb-2">Le premier canal disponible pour un prospect devient son canal principal. Chaque canal utilisé reçoit un message (section Messages).</p>' +
-        '<ol class="space-y-2">' +
-        order.map(function (cid) {
-          var used = d.channels.indexOf(cid) >= 0;
-          var idx = d.channels.indexOf(cid);
-          var c = C.channels.find(function (x) { return x.id === cid; });
-          return (
-            '<li class="flex items-center gap-3 p-2.5 rounded-xl border ' + (used ? "border-zinc-200 bg-white" : "border-dashed border-zinc-200 bg-zinc-50") + '">' +
-            '<span class="w-6 text-center text-sm font-bold ' + (used ? "text-zinc-900" : "text-zinc-300") + '">' + (used ? idx + 1 : "") + "</span>" +
-            '<label class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"><input type="checkbox" data-channel="' + cid + '"' + (used ? " checked" : "") + ' class="rounded text-indigo-600 focus:ring-indigo-500"><span class="min-w-0"><span class="block text-sm font-semibold text-zinc-900">' + esc(c.label) + '</span><span class="block text-xs text-zinc-500 truncate">' + esc(c.description) + "</span></span></label>" +
-            (used
-              ? '<span class="flex gap-1"><button type="button" data-move="' + cid + '" data-dir="-1"' + (idx === 0 ? " disabled" : "") + ' class="w-8 h-8 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30" aria-label="Monter">↑</button><button type="button" data-move="' + cid + '" data-dir="1"' + (idx === d.channels.length - 1 ? " disabled" : "") + ' class="w-8 h-8 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30" aria-label="Descendre">↓</button></span>'
-              : "") +
-            "</li>"
-          );
-        }).join("") +
-        "</ol>"
-      );
-    }
-    if (id === "proof") {
-      var demo = d.proof.kind === "demo_web";
-      var auditOk = d.requirements.website === "required";
-      return (
-        '<div class="space-y-4"><div class="grid sm:grid-cols-2 gap-2">' +
-        radio("nd-proof", "demo_web", demo, C.proof.demo_web.label, C.proof.demo_web.description) +
-        radio("nd-proof", "audit_report", !demo, C.proof.audit_report.label, auditOk ? C.proof.audit_report.description : "Exige « Site exigé » dans les prérequis.", !auditOk && demo) +
-        "</div>" +
-        (demo
-          ? '<div><span class="' + labelCls + '">Angle de la démo</span><div class="grid sm:grid-cols-2 gap-2">' + Object.keys(C.focus).map(function (k) { return radio("nd-focus", k, d.proof.focus === k, C.focus[k].label, C.focus[k].description); }).join("") + "</div></div>"
-          : "") +
-        '<div><label class="' + labelCls + '" for="nd-cta">Bouton d\'intérêt montré au prospect</label><input id="nd-cta" data-f="proof.interestCta" class="' + inputCls + '" value="' + esc(d.proof.interestCta) + '"></div>' +
-        '<label class="flex items-center gap-2 text-sm text-zinc-800"><input type="checkbox" data-f-bool="flyer"' + (d.flyer ? " checked" : "") + ' class="rounded text-indigo-600 focus:ring-indigo-500"> Joindre le flyer PDF (QR code vers les avis Google)</label></div>'
-      );
-    }
-    if (id === "pitch") {
-      if (!d.channels.length) return '<p class="text-sm text-zinc-600">Choisissez d\'abord au moins un canal.</p>';
-      return (
-        '<div class="space-y-3">' +
-        d.channels.map(function (cid) {
-          var kind = cid === "phone" ? "phone_battlecard" : "cold_email";
-          var options = C.pitch.filter(function (p) { return p.kind === kind && (p.id !== "tracker_cold_email" || d.proof.kind === "audit_report"); });
-          return (
-            '<div><span class="' + labelCls + '">' + esc(channelLabel(cid)) + '</span><div class="grid sm:grid-cols-2 gap-2">' +
-            options.map(function (p) { return radio("nd-pitch-" + cid, p.id, d.pitch[cid] === p.id, p.label, p.description); }).join("") +
-            "</div></div>"
-          );
-        }).join("") +
-        "</div>"
-      );
-    }
-    if (id === "commercial") {
-      return (
-        '<div class="space-y-3"><div><span class="' + labelCls + '">Modèle commercial</span><div class="grid sm:grid-cols-3 gap-2">' +
-        Object.keys(C.businessModel).map(function (k) { return radio("nd-bm", k, d.commercial.businessModel === k, C.businessModel[k].label, C.businessModel[k].description); }).join("") +
-        "</div></div>" +
-        '<div><label class="' + labelCls + '" for="nd-focusc">Angle commercial (repris dans la consigne du message)</label><textarea id="nd-focusc" data-f="commercial.pitchFocus" rows="2" class="' + inputCls + '">' + esc(d.commercial.pitchFocus) + "</textarea></div></div>"
-      );
-    }
-    return "";
+    if (id === "audit_report") lines.push("Bouton d'intérêt : « " + d.proof.interestCta + " »");
+    if (n.binding.kind === "pitch" && d.commercial.pitchFocus) lines.push("Angle : " + d.commercial.pitchFocus);
+    if (!lines.length) return "";
+    return '<ul class="text-xs text-zinc-700 space-y-1">' + lines.map(function (l) { return '<li class="flex gap-2"><span class="mt-1.5 w-1 h-1 rounded-full bg-zinc-400 shrink-0"></span><span>' + esc(l) + "</span></li>"; }).join("") + "</ul>";
   }
 
-  function setPath(obj, path, value) {
-    var parts = path.split(".");
-    var o = obj;
-    for (var i = 0; i < parts.length - 1; i++) o = o[parts[i]];
-    o[parts[parts.length - 1]] = value;
+  /* ---------- identité ---------- */
+
+  function identityPanel(d) {
+    return (
+      '<div class="space-y-4">' +
+      '<div><label class="nd-h" for="nd-label">Nom du besoin</label><input id="nd-label" data-f="label" class="nd-input" value="' + esc(d.label) + '" placeholder="Ex. Menu en ligne pour restaurants"></div>' +
+      field("Statut", seg("data-set", "status", Object.keys(C.status).map(function (k) { return [k, C.status[k].label]; }), d.status), C.status[d.status] ? C.status[d.status].description : "") +
+      field("Couleur", '<div class="flex flex-wrap gap-1.5">' + Object.keys(TONES).map(function (t) {
+        return '<button type="button" data-tone="' + t + '" aria-pressed="' + (d.badge.tone === t) + '" class="px-2.5 py-1 rounded-full border text-xs font-semibold ' + TONES[t].chip + (d.badge.tone === t ? " ring-2 ring-offset-1 ring-indigo-500" : "") + '">' + esc(C.tones[t].label) + "</button>";
+      }).join("") + "</div>") +
+      field("Icône", '<div class="flex flex-wrap gap-1.5">' + C.needIcons.map(function (n) {
+        return '<button type="button" data-icon="' + n + '" title="' + n + '" aria-pressed="' + (d.icon === n) + '" class="w-8 h-8 p-1.5 rounded-lg border ' + (d.icon === n ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-zinc-200 text-zinc-600 hover:bg-zinc-50") + '">' + (C.icons[n] || "") + "</button>";
+      }).join("") + "</div>") +
+      field("Modèle commercial", seg("data-set", "commercial.businessModel", Object.keys(C.businessModel).map(function (k) { return [k, C.businessModel[k].label]; }), d.commercial.businessModel)) +
+      '<details class="text-xs"' + (state.mode === "create" && d._idTouched ? " open" : "") + '><summary class="cursor-pointer font-semibold text-zinc-500">Avancé : identifiant et badge</summary><div class="grid sm:grid-cols-2 gap-3 mt-2">' +
+      '<div><label class="nd-h" for="nd-id">Identifiant</label><input id="nd-id" data-f="id" class="nd-input font-mono" value="' + esc(d.id) + '"' + (state.mode === "create" ? "" : " disabled") + '><span class="block text-[11px] text-zinc-500 mt-1">' + (state.mode === "create" ? "Déduit du nom ; non modifiable ensuite." : "Non modifiable : les leads le portent.") + "</span></div>" +
+      '<div><label class="nd-h" for="nd-badge">Texte du badge</label><input id="nd-badge" data-f="badge.text" class="nd-input" value="' + esc(d.badge.text) + '"><span class="block text-[11px] text-zinc-500 mt-1">Repris du nom tant qu\'il n\'est pas modifié.</span></div>' +
+      "</div></details></div>"
+    );
   }
 
-  function setContact(d, channel, v) {
-    var allOf = (d.requirements.contacts.allOf || []).filter(function (c) { return c !== channel; });
-    var anyOf = (d.requirements.contacts.anyOf || []).filter(function (c) { return c !== channel; });
-    if (v === "all") allOf.push(channel);
-    if (v === "any") anyOf.push(channel);
-    var contacts = {};
-    if (allOf.length) contacts.allOf = allOf;
-    if (anyOf.length) contacts.anyOf = anyOf;
-    d.requirements.contacts = contacts;
-  }
+  /* ---------- résumé des prérequis ---------- */
 
-  function toggleChannel(d, cid, on) {
-    if (on && d.channels.indexOf(cid) < 0) {
-      d.channels.push(cid);
-      if (!d.pitch[cid]) d.pitch[cid] = DEFAULT_PITCH[cid];
-      if (cid === "email" && d.scanModules.indexOf("contacts_legal") < 0) d.scanModules.push("contacts_legal");
-      if (cid === "contact_form" && d.scanModules.indexOf("contact_form") < 0) d.scanModules.push("contact_form");
-    }
-    if (!on) {
-      d.channels = d.channels.filter(function (c) { return c !== cid; });
-      delete d.pitch[cid];
-      setContact(d, cid, "none");
-    }
+  function prereqLines(d) {
+    var out = [];
+    var w = C.website[d.requirements.website];
+    out.push([w.label, "Filtre Maps"]);
+    var l = d.requirements.listing || {};
+    if (l.minRating != null || l.maxRating != null) out.push(["Note " + (l.minRating != null ? "≥ " + fmtNum(l.minRating) : "") + (l.minRating != null && l.maxRating != null ? " et " : "") + (l.maxRating != null ? "≤ " + fmtNum(l.maxRating) : ""), "Filtre Maps"]);
+    if (l.minReviews != null || l.maxReviews != null) out.push([(l.maxReviews === 0 ? "Aucun avis" : "Avis " + (l.minReviews != null ? "≥ " + l.minReviews : "") + (l.minReviews != null && l.maxReviews != null ? " et " : "") + (l.maxReviews != null ? "≤ " + l.maxReviews : "")), "Filtre Maps"]);
+    (d.requirements.contacts.allOf || []).forEach(function (c) { out.push([channelLabel(c) + " obligatoire", c === "phone" ? "Filtre Maps" : "Qualification"]); });
+    var any = d.requirements.contacts.anyOf || [];
+    if (any.length) out.push(["Au moins : " + list(any.map(channelLabel)).toLowerCase(), "Qualification"]);
+    return out;
+  }
+  function prereqHtml(d) {
+    var hl = d.proof.kind === "demo_web" ? (d.proof.highlights || []).map(function (h) { var x = find(C.highlights, function (e) { return e.id === h; }); return x ? x.label : h; }) : [];
+    return (
+      '<h3 class="text-sm font-bold text-zinc-900 mb-3">Ce que ce besoin exige</h3><ul class="space-y-2">' +
+      prereqLines(d).map(function (l) { return '<li class="text-xs"><span class="block font-semibold text-zinc-900">' + esc(l[0]) + '</span><span class="block text-zinc-500">' + esc(l[1]) + "</span></li>"; }).join("") +
+      "</ul>" +
+      '<div class="mt-4 pt-3 border-t border-zinc-100 text-xs text-zinc-600 space-y-1">' +
+      '<p><b class="text-zinc-900">Premier contact :</b> ' + esc(d.channels.map(channelLabel).join(", puis ") || "aucun canal") + "</p>" +
+      '<p><b class="text-zinc-900">Preuve :</b> ' + esc(d.proof.kind === "demo_web" ? C.proof.demo_web.label + " (" + C.focus[d.proof.focus].label.toLowerCase() + ")" : C.proof.audit_report.label) + "</p>" +
+      (hl.length ? '<p><b class="text-zinc-900">Met en avant :</b> ' + esc(hl.join(", ").toLowerCase()) + "</p>" : "") +
+      '<p><b class="text-zinc-900">Ton :</b> ' + esc(d.commercial.tone ? toneLabel(d.commercial.tone) : "par défaut") + "</p>" +
+      '<p><b class="text-zinc-900">Modèle :</b> ' + esc(C.businessModel[d.commercial.businessModel].label) + "</p>" +
+      "</div>"
+    );
+  }
+  function summaryLine(def) {
+    var parts = [C.website[def.requirements.website].label];
+    var allOf = def.requirements.contacts.allOf || [];
+    var anyOf = def.requirements.contacts.anyOf || [];
+    if (allOf.length) parts.push(allOf.map(channelLabel).join(" + "));
+    if (anyOf.length) parts.push(list(anyOf.map(channelLabel)));
+    return parts.join(" · ");
   }
 
   /* ---------- rendu ---------- */
@@ -651,7 +926,7 @@
   function render() {
     var def = current();
     root.innerHTML =
-      '<div class="grid lg:grid-cols-[17rem_minmax(0,1fr)] gap-5 items-start">' +
+      '<div class="grid lg:grid-cols-[16rem_minmax(0,1fr)] gap-5 items-start">' +
       '<aside class="space-y-3">' +
       '<div class="flex items-center justify-between"><h2 class="text-sm font-bold text-zinc-900">Besoins</h2>' +
       '<button type="button" data-act="new" class="text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg px-3 py-1.5">Nouveau besoin</button></div>' +
@@ -660,21 +935,25 @@
       (def
         ? '<div id="nd-header" class="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-5"></div>' +
           '<div id="nd-errors"></div>' +
-          '<div class="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-4 min-w-0"><div class="flex flex-wrap items-center justify-between gap-2 mb-2"><h3 class="text-sm font-bold text-zinc-900">Workflow de collecte</h3><span class="text-[11px] text-zinc-500">Cliquez une étape pour ' + (state.mode === "view" ? "la détailler" : "la régler") + "</span></div>" +
-          '<div id="nd-graph" class="overflow-x-auto -mx-1 px-1"></div></div>' +
-          '<div class="grid xl:grid-cols-[18rem_minmax(0,1fr)] gap-4 items-start">' +
-          '<div id="nd-prereq" class="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-4"></div>' +
-          '<div id="nd-panel" class="min-w-0"></div></div>'
+          '<div class="grid 2xl:grid-cols-[minmax(0,1fr)_24rem] gap-4 items-start">' +
+          '<div class="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-4 min-w-0">' +
+          '<div class="flex flex-wrap items-center justify-between gap-2 mb-1"><h3 class="text-sm font-bold text-zinc-900">Workflow</h3><span class="text-[11px] text-zinc-500">' +
+          (state.mode === "view" ? "Cliquez un nœud pour voir ce qu'il lit et ajoute au dossier" : "Cliquez un nœud pour le régler · « + Ajouter » complète une étape, ses prérequis suivent") + "</span></div>" +
+          '<div id="nd-notice"></div><div id="nd-graph" class="overflow-x-auto"></div></div>' +
+          '<div class="space-y-4 min-w-0"><div id="nd-panel"></div><div id="nd-prereq" class="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-4"></div></div>' +
+          "</div>"
         : '<div class="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-8 text-sm text-zinc-500">Aucun besoin. Créez-en un.</div>') +
       "</div></div>";
     renderList();
-    if (def) {
-      renderHeader();
-      renderErrors();
-      renderGraph();
-      renderPrereq();
-      renderPanel();
-    }
+    if (def) renderAll();
+  }
+  function renderAll() {
+    renderHeader();
+    renderErrors();
+    renderNotice();
+    renderGraph();
+    renderPanel();
+    renderPrereq();
   }
 
   function renderList() {
@@ -716,7 +995,8 @@
         ? '<button type="button" data-act="edit" class="text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg px-3 py-2">Modifier</button>' +
           '<button type="button" data-act="duplicate" class="text-xs font-semibold border border-zinc-200 hover:bg-zinc-50 text-zinc-800 rounded-lg px-3 py-2">Dupliquer</button>' +
           '<button type="button" data-act="history" class="text-xs font-semibold border border-zinc-200 hover:bg-zinc-50 text-zinc-800 rounded-lg px-3 py-2">Historique</button>'
-        : '<button type="button" data-act="save"' + (state.errors.length || state.saving ? " disabled" : "") + ' class="text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white rounded-lg px-3 py-2">' + (state.saving ? "Enregistrement…" : state.mode === "create" ? "Créer le besoin" : "Enregistrer") + "</button>" +
+        : '<button type="button" data-node="identity" class="text-xs font-semibold border ' + (state.node === "identity" ? "border-indigo-300 bg-indigo-50 text-indigo-800" : "border-zinc-200 hover:bg-zinc-50 text-zinc-800") + ' rounded-lg px-3 py-2">Nom, statut, couleur</button>' +
+          '<button type="button" data-act="save"' + (state.errors.length || state.saving ? " disabled" : "") + ' class="text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white rounded-lg px-3 py-2">' + (state.saving ? "Enregistrement…" : state.mode === "create" ? "Créer le besoin" : "Enregistrer") + "</button>" +
           '<button type="button" data-act="cancel" class="text-xs font-semibold border border-zinc-200 hover:bg-zinc-50 text-zinc-800 rounded-lg px-3 py-2">Annuler</button>';
     el.innerHTML =
       '<div class="flex flex-wrap items-start justify-between gap-3"><div class="flex items-start gap-3 min-w-0">' +
@@ -766,89 +1046,104 @@
     if (btn) btn.disabled = !!(state.errors.length || state.saving);
   }
 
+  function renderNotice() {
+    var el = document.getElementById("nd-notice");
+    if (!el) return;
+    if (state.confirm) {
+      el.innerHTML =
+        '<div class="my-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert"><span>' + esc(state.confirm.text) + "</span>" +
+        '<span class="flex gap-2"><button type="button" data-act="confirm" class="font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-2.5 py-1">Confirmer</button><button type="button" data-act="dismiss" class="font-semibold border border-amber-300 rounded-lg px-2.5 py-1 hover:bg-amber-100">Annuler</button></span></div>';
+      return;
+    }
+    el.innerHTML = state.notice
+      ? '<div class="my-2 flex items-start justify-between gap-2 rounded-xl border px-3 py-2 text-xs ' + (state.notice.tone === "ok" ? "border-indigo-200 bg-indigo-50 text-indigo-900" : "border-rose-200 bg-rose-50 text-rose-800") + '" role="status"><span>' + esc(state.notice.text) + '</span><button type="button" data-act="dismiss" class="text-current opacity-60 hover:opacity-100" aria-label="Fermer">×</button></div>'
+      : "";
+  }
+
+  var resizeObs = null;
   function renderGraph() {
     var el = document.getElementById("nd-graph");
-    if (el) el.innerHTML = graphSvg(current());
+    if (!el) return;
+    el.innerHTML = graphHtml(current());
+    drawEdges();
+    if (window.ResizeObserver) {
+      if (resizeObs) resizeObs.disconnect();
+      resizeObs = new ResizeObserver(function () { drawEdges(); });
+      var inner = document.getElementById("nd-graph-inner");
+      if (inner) resizeObs.observe(inner);
+    }
   }
 
   function renderPrereq() {
     var el = document.getElementById("nd-prereq");
-    if (!el) return;
-    var d = current();
-    var lines = requirementLines(d);
-    el.innerHTML =
-      '<h3 class="text-sm font-bold text-zinc-900 mb-3">Ce que ce besoin exige</h3><ul class="space-y-2.5">' +
-      lines.map(function (l) {
-        return '<li class="text-xs"><span class="block font-semibold text-zinc-900">' + esc(l.text) + '</span><span class="block text-zinc-500">Vérifié : ' + esc(l.stage.toLowerCase()) + "</span></li>";
-      }).join("") +
-      "</ul>" +
-      '<div class="mt-4 pt-3 border-t border-zinc-100 text-xs text-zinc-600 space-y-1">' +
-      "<p><b class=\"text-zinc-900\">Premier contact :</b> " + esc(d.channels.map(channelLabel).join(", puis ") || "aucun canal") + "</p>" +
-      "<p><b class=\"text-zinc-900\">Preuve :</b> " + esc(d.proof.kind === "demo_web" ? C.proof.demo_web.label + " (" + C.focus[d.proof.focus].label.toLowerCase() + ")" : C.proof.audit_report.label) + "</p>" +
-      "<p><b class=\"text-zinc-900\">Modèle :</b> " + esc(C.businessModel[d.commercial.businessModel].label) + "</p>" +
-      (d.commercial.pitchFocus ? '<p class="text-zinc-500">' + esc(d.commercial.pitchFocus) + "</p>" : "") +
-      "</div>";
+    if (el) el.innerHTML = prereqHtml(current());
   }
 
   function renderPanel() {
     var el = document.getElementById("nd-panel");
     if (!el) return;
     var d = current();
-    if (state.mode === "view") {
-      el.innerHTML =
-        '<div class="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-5">' +
-        ((state.node && nodeDetails(d, state.node)) || '<p class="text-xs text-zinc-500">Cliquez une étape du workflow pour voir ce qu\'elle fait pour ce besoin.</p>') +
-        "</div>";
-      return;
-    }
-    var open = state.node ? sectionFor(state.node) : null;
-    el.innerHTML =
-      '<div class="space-y-3">' +
-      SECTIONS.map(function (s) {
-        var isOpen = s.id === open;
-        return (
-          '<div class="bg-white rounded-2xl border ' + (isOpen ? "border-indigo-200 shadow-sm" : "border-zinc-200/80") + '" data-section="' + s.id + '">' +
-          '<button type="button" data-open="' + s.id + '" class="w-full flex items-center justify-between px-5 py-3.5 text-left" aria-expanded="' + isOpen + '"><span class="text-sm font-bold text-zinc-900">' + esc(s.title) + '</span><span class="text-zinc-400 text-xs">' + (isOpen ? "Masquer" : "Afficher") + "</span></button>" +
-          (isOpen ? '<div class="px-5 pb-5">' + sectionBody(s.id, d) + "</div>" : "") +
-          "</div>"
-        );
-      }).join("") +
-      "</div>";
-  }
-
-  function rerenderEditor() {
-    renderHeader();
-    renderGraph();
-    renderPrereq();
-    renderPanel();
-    scheduleValidation();
+    var body;
+    if (state.node === "identity" && state.mode !== "view") body = '<h4 class="text-sm font-bold text-zinc-900 mb-3">Nom, statut et couleur</h4>' + identityPanel(d);
+    else if (state.node && NODE[state.node] && has(nodeIdsOf(d), state.node)) body = nodePanel(d, state.node);
+    else body = '<p class="text-xs text-zinc-500">' + (state.mode === "view" ? "Cliquez un nœud du workflow pour voir ce qu'il fait, ce dont il a besoin et ce qu'il ajoute au dossier du prospect." : "Cliquez un nœud pour le régler, ou « Nom, statut, couleur » pour la fiche du besoin.") + "</p>";
+    el.innerHTML = '<div class="bg-white rounded-2xl border ' + (state.node ? "border-indigo-200" : "border-zinc-200/80") + ' shadow-sm p-5">' + body + "</div>";
   }
 
   /* ---------- événements ---------- */
 
+  function setPath(obj, path, value) {
+    var parts = path.split(".");
+    var o = obj;
+    for (var i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+    if (value === undefined) delete o[parts[parts.length - 1]];
+    else o[parts[parts.length - 1]] = value;
+  }
+  function setContact(d, channel, v) {
+    var allOf = (d.requirements.contacts.allOf || []).filter(function (c) { return c !== channel; });
+    var anyOf = (d.requirements.contacts.anyOf || []).filter(function (c) { return c !== channel; });
+    if (v === "all") allOf.push(channel);
+    if (v === "any") anyOf.push(channel);
+    var contacts = {};
+    if (allOf.length) contacts.allOf = allOf;
+    if (anyOf.length) contacts.anyOf = anyOf;
+    d.requirements.contacts = contacts;
+  }
+  function changed() {
+    renderAll();
+    renderList();
+    scheduleValidation();
+  }
+  function selectNode(id) {
+    state.node = state.node === id ? null : id;
+    state.palette = null;
+    renderAll();
+    var panel = document.getElementById("nd-panel");
+    if (panel && state.node && window.innerWidth < 1536) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   root.addEventListener("click", function (e) {
     var t = e.target.closest("button, [data-node]");
-    if (!t || !root.contains(t)) return;
+    if (!t || !root.contains(t) || t.disabled) return;
     var d = state.draft;
 
     if (t.dataset.select) {
       if (state.mode !== "view" && !confirm("Abandonner les modifications en cours ?")) return;
-      state.mode = "view";
-      state.draft = null;
-      state.errors = [];
-      state.history = null;
+      resetEditing();
       state.message = null;
-      state.node = null;
       state.selectedId = t.dataset.select;
       render();
       return;
     }
+    if (d && t.dataset.remove) {
+      var plan = planRemove(d, t.dataset.remove);
+      plan.subjects = [t.dataset.remove];
+      var rl = nodeOf(t.dataset.remove).label;
+      commit(d, plan, d.requirements.website, { ask: "Retirer « " + rl + " »", done: "« " + rl + " » retiré" });
+      return;
+    }
     if (t.dataset.node) {
-      state.node = state.node === t.dataset.node && state.mode === "view" ? null : t.dataset.node;
-      renderGraph();
-      renderPanel();
-      var panel = document.getElementById("nd-panel");
-      if (panel && state.node && window.innerWidth < 1280) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      selectNode(t.dataset.node);
       return;
     }
     switch (t.dataset.act) {
@@ -868,6 +1163,14 @@
       case "save":
         save();
         return;
+      case "confirm":
+        if (state.confirm) state.confirm.apply();
+        return;
+      case "dismiss":
+        state.confirm = null;
+        state.notice = null;
+        renderNotice();
+        return;
       case "history":
         if (state.history) {
           state.history = null;
@@ -886,39 +1189,90 @@
       var h = state.history[Number(t.dataset.restore)];
       var it = currentItem();
       if (!h || !h.definition || !it) return;
+      resetEditing();
       state.mode = "edit";
       state.draft = clone(h.definition);
       state.draft.id = it.def.id;
       state.baseVersion = it.version;
-      state.history = null;
       state.message = { tone: "ok", text: "Version " + h.version + " chargée : vérifiez puis enregistrez pour la rétablir." };
       render();
       scheduleValidation();
       return;
     }
-    if (t.dataset.open) {
-      var sec = SECTIONS.find(function (s) { return s.id === t.dataset.open; });
-      var wasOpen = !!state.node && sectionFor(state.node) === sec.id;
-      state.node = wasOpen ? null : sec.id;
-      renderPanel();
+    if (!d) return;
+    if (t.dataset.palette) {
+      state.palette = state.palette === t.dataset.palette ? null : t.dataset.palette;
       renderGraph();
       return;
     }
-    if (!d) return;
+    if (t.dataset.add) {
+      var add = planAdd(d, t.dataset.add);
+      add.subjects = [t.dataset.add];
+      state.palette = null;
+      state.node = t.dataset.add;
+      commit(d, add, d.requirements.website, { ask: "", done: "« " + nodeOf(t.dataset.add).label + " » ajouté" }, true);
+      return;
+    }
+    if (t.dataset.replace) {
+      var rep = planReplace(d, t.dataset.replace, t.dataset.by);
+      rep.subjects = [t.dataset.replace, t.dataset.by];
+      state.node = t.dataset.by;
+      commit(d, rep, d.requirements.website, { ask: "", done: "« " + nodeOf(t.dataset.by).label + " » remplace « " + nodeOf(t.dataset.replace).label + " »" }, true);
+      return;
+    }
+    if (t.dataset.website) {
+      var w = t.dataset.v;
+      if (w === d.requirements.website) return;
+      var pw = planWebsite(d, w);
+      commit(d, pw, w, { ask: "Passer à « " + C.website[w].label + " »", done: "Site : " + C.website[w].label.toLowerCase() });
+      return;
+    }
+    if (t.dataset.listing) {
+      var l = d.requirements.listing || {};
+      if (t.dataset.v === "") delete l[t.dataset.listing];
+      else l[t.dataset.listing] = Number(t.dataset.v);
+      if (Object.keys(l).length) d.requirements.listing = l;
+      else delete d.requirements.listing;
+      changed();
+      return;
+    }
+    if (t.dataset.set) {
+      setPath(d, t.dataset.set, t.dataset.v === "" ? undefined : t.dataset.v);
+      changed();
+      return;
+    }
+    if (t.dataset.hl) {
+      var hl = (d.proof.highlights || []).slice();
+      var at = hl.indexOf(t.dataset.hl);
+      if (at >= 0) hl.splice(at, 1);
+      else hl.push(t.dataset.hl);
+      if (hl.length) d.proof.highlights = hl;
+      else delete d.proof.highlights;
+      changed();
+      return;
+    }
+    if (t.dataset.cta) {
+      if (t.dataset.cta === "__custom") {
+        if (has(C.ctaPresets, d.proof.interestCta)) d.proof.interestCta = "";
+      } else d.proof.interestCta = t.dataset.cta;
+      changed();
+      var cta = document.getElementById("nd-cta");
+      if (cta) cta.focus();
+      return;
+    }
     if (t.dataset.tone) {
       d.badge.tone = t.dataset.tone;
-      rerenderEditor();
-      renderList();
+      changed();
       return;
     }
     if (t.dataset.icon) {
       d.icon = t.dataset.icon;
-      rerenderEditor();
+      changed();
       return;
     }
     if (t.dataset.contact) {
       setContact(d, t.dataset.contact, t.dataset.v);
-      rerenderEditor();
+      changed();
       return;
     }
     if (t.dataset.move) {
@@ -928,90 +1282,44 @@
       var tmp = d.channels[i];
       d.channels[i] = d.channels[j];
       d.channels[j] = tmp;
-      rerenderEditor();
+      changed();
     }
   });
 
   root.addEventListener("keydown", function (e) {
     var g = e.target.closest && e.target.closest("[data-node]");
-    if (g && (e.key === "Enter" || e.key === " ")) {
+    if (g && g.tagName !== "BUTTON" && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
-      g.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      selectNode(g.dataset.node);
     }
   });
 
+  // Champs texte : pris en compte à la saisie, sans redessiner le formulaire (le champ garde le focus).
   root.addEventListener("input", function (e) {
     var t = e.target;
     var d = state.draft;
     if (!d || !t.dataset || !t.dataset.f) return;
     var v = t.value;
     setPath(d, t.dataset.f, v);
-    if (t.dataset.f === "label" && state.mode === "create" && !d._idTouched) {
-      d.id = slug(v);
-      var idInput = document.getElementById("nd-id");
-      if (idInput) idInput.value = d.id;
+    if (t.dataset.f === "label") {
+      if (state.mode === "create" && !d._idTouched) {
+        d.id = slug(v);
+        var idInput = document.getElementById("nd-id");
+        if (idInput) idInput.value = d.id;
+      }
+      if (!d._badgeTouched) {
+        d.badge.text = v;
+        var b = document.getElementById("nd-badge");
+        if (b) b.value = v;
+      }
     }
     if (t.dataset.f === "id") d._idTouched = true;
+    if (t.dataset.f === "badge.text") d._badgeTouched = true;
+    if (t.dataset.f === "commercial.pitchFocus" && !v.trim()) d.commercial.pitchFocus = "";
     renderHeader();
     renderGraph();
     renderPrereq();
     scheduleValidation();
-  });
-
-  root.addEventListener("change", function (e) {
-    var t = e.target;
-    var d = state.draft;
-    if (!d) return;
-    if (t.dataset && t.dataset.f) {
-      // Champs texte : déjà pris en compte à la saisie (événement input). Redessiner l'éditeur ici remplacerait
-      // le champ ou le bouton que l'utilisateur est en train de viser.
-      if (t.tagName !== "SELECT") return;
-      setPath(d, t.dataset.f, t.value);
-      rerenderEditor();
-      return;
-    }
-    if (t.dataset && t.dataset.fBool) {
-      d[t.dataset.fBool] = t.checked;
-      rerenderEditor();
-      return;
-    }
-    if (t.dataset && t.dataset.module) {
-      if (t.checked && d.scanModules.indexOf(t.dataset.module) < 0) d.scanModules.push(t.dataset.module);
-      if (!t.checked) d.scanModules = d.scanModules.filter(function (m) { return m !== t.dataset.module; });
-      rerenderEditor();
-      return;
-    }
-    if (t.dataset && t.dataset.channel) {
-      toggleChannel(d, t.dataset.channel, t.checked);
-      rerenderEditor();
-      return;
-    }
-    if (t.name === "nd-website") {
-      d.requirements.website = t.value;
-      if (t.value === "forbidden") {
-        // Sans site, l'email et le formulaire sont introuvables : ces canaux sont retirés.
-        ["email", "contact_form"].forEach(function (c) { toggleChannel(d, c, false); });
-        if (d.channels.indexOf("phone") < 0) toggleChannel(d, "phone", true);
-      }
-      if (t.value !== "required" && d.proof.kind === "audit_report") {
-        d.proof = { kind: "demo_web", generator: "llm_demo", focus: "showcase", interestCta: d.proof.interestCta };
-        Object.keys(d.pitch).forEach(function (c) { if (d.pitch[c] === "tracker_cold_email") d.pitch[c] = "llm_cold_email"; });
-      }
-    } else if (t.name === "nd-proof") {
-      d.proof = t.value === "demo_web"
-        ? { kind: "demo_web", generator: "llm_demo", focus: d.proof.focus || "showcase", interestCta: d.proof.interestCta }
-        : { kind: "audit_report", generator: "tracker_report", interestCta: d.proof.interestCta };
-      if (t.value === "demo_web") Object.keys(d.pitch).forEach(function (c) { if (d.pitch[c] === "tracker_cold_email") d.pitch[c] = "llm_cold_email"; });
-    } else if (t.name === "nd-focus") {
-      d.proof.focus = t.value;
-    } else if (t.name && t.name.indexOf("nd-pitch-") === 0) {
-      d.pitch[t.name.slice("nd-pitch-".length)] = t.value;
-    } else if (t.name === "nd-bm") {
-      d.commercial.businessModel = t.value;
-    } else {
-      return;
-    }
-    rerenderEditor();
   });
 
   window.addEventListener("beforeunload", function (e) {
@@ -1021,26 +1329,54 @@
     }
   });
 
-  /* ---------- styles du graphe ---------- */
+  /* ---------- styles ---------- */
 
   var style = document.createElement("style");
   style.textContent =
-    ".nd-lane{font:600 11px 'Plus Jakarta Sans',system-ui,sans-serif;fill:#71717a}" +
-    ".nd-edge{stroke:#a1a1aa;stroke-width:1.6;stroke-dasharray:5 5;animation:nd-flow 1.2s linear infinite}" +
-    ".nd-edge-sel{stroke:#6366f1;stroke-width:2}" +
-    ".nd-edge-off{stroke:#e4e4e7;stroke-width:1.4;stroke-dasharray:3 5}" +
+    ".nd-row{display:grid;grid-template-columns:6.5rem minmax(0,1fr);gap:.75rem;align-items:center;padding:.6rem 0;border-top:1px dashed #f0f0f2}" +
+    ".nd-row:first-child{border-top:0}" +
+    ".nd-stage{font-size:11px;font-weight:600;color:#71717a;line-height:1.2}" +
+    ".nd-cards{display:flex;flex-wrap:wrap;justify-content:center;gap:.6rem;position:relative;z-index:1}" +
+    ".nd-card{position:relative;width:10.5rem;min-height:3.6rem;padding:.55rem .7rem .55rem .9rem;background:#fff;border:1px solid #e4e4e7;border-radius:.85rem;box-shadow:0 1px 3px rgba(24,24,27,.06);cursor:pointer;outline:none;text-align:left;transition:border-color .15s,box-shadow .15s,opacity .15s,transform .15s}" +
+    ".nd-card:hover{border-color:#a1a1aa}" +
+    ".nd-card:focus-visible{box-shadow:0 0 0 3px rgba(99,102,241,.35)}" +
+    ".nd-sel{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.25);background:#fafaff}" +
+    ".nd-rel{border-color:#c7d2fe}" +
+    ".nd-dim{opacity:.45}" +
+    ".nd-miss{border-color:#fda4af;background:#fff1f2}" +
+    ".nd-bar{position:absolute;left:0;top:.7rem;bottom:.7rem;width:3px;border-radius:2px}" +
+    ".nd-label{min-width:0;overflow-wrap:anywhere}" +
+    ".nd-title{display:flex;align-items:flex-start;gap:6px;font-size:12px;font-weight:700;color:#18181b;line-height:1.2;padding-right:.9rem}" +
+    ".nd-icon{width:14px;height:14px;flex:none;display:inline-block;margin-top:1px}" +
+    ".nd-sub{display:block;font-size:10.5px;color:#52525b;line-height:1.3;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}" +
+    ".nd-miss .nd-sub{color:#be123c}" +
+    ".nd-x{position:absolute;top:.35rem;right:.35rem;width:18px;height:18px;padding:3px;border-radius:6px;color:#a1a1aa;opacity:0;transition:opacity .15s}" +
+    ".nd-card:hover .nd-x,.nd-card:focus-within .nd-x,.nd-sel .nd-x{opacity:1}" +
+    ".nd-x:hover{background:#fee2e2;color:#be123c}" +
+    "@media (hover:none){.nd-x{opacity:1}}" +
+    ".nd-add{align-self:center;min-height:3.6rem;padding:0 .9rem;border:1px dashed #c7c7cf;border-radius:.85rem;font-size:11.5px;font-weight:600;color:#4f46e5;background:#fafafa}" +
+    ".nd-add:hover,.nd-add-open{border-color:#6366f1;background:#eef2ff}" +
+    ".nd-palette{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.5rem;margin:.1rem 0 .7rem 7.25rem;padding:.6rem;border:1px solid #e0e7ff;background:#f8f9ff;border-radius:.9rem;position:relative;z-index:2}" +
+    "@media (max-width:640px){.nd-palette{margin-left:0}.nd-row{grid-template-columns:1fr}.nd-stage{text-align:center}}" +
+    ".nd-pal-item{display:flex;gap:.55rem;align-items:flex-start;text-align:left;padding:.55rem .6rem;border:1px solid #e4e4e7;border-radius:.7rem;background:#fff}" +
+    ".nd-pal-item:hover:not(:disabled){border-color:#6366f1}" +
+    ".nd-pal-item:disabled{opacity:.6;cursor:not-allowed}" +
+    ".nd-pal-item .nd-icon{margin-top:2px}" +
+    ".nd-edge{fill:none;stroke:#d4d4d8;stroke-width:1.4}" +
+    ".nd-edge-sel{stroke:#6366f1;stroke-width:2;stroke-dasharray:5 5;animation:nd-flow 1.1s linear infinite}" +
+    ".nd-edge-opt{stroke-dasharray:2 4;stroke-width:1.4;animation:none}" +
     "@keyframes nd-flow{to{stroke-dashoffset:-20}}" +
-    ".nd-node{cursor:pointer;outline:none}" +
-    ".nd-box{fill:#fff;stroke:#e4e4e7;stroke-width:1;transition:stroke .2s,fill .2s}" +
-    ".nd-node:hover .nd-box{stroke:#a1a1aa}" +
-    ".nd-node:focus-visible .nd-box,.nd-sel .nd-box{stroke:#6366f1;stroke-width:2;fill:#fafaff}" +
-    ".nd-off .nd-box{fill:#fafafa;stroke-dasharray:4 4}" +
-    ".nd-off .nd-body{opacity:.55}" +
-    ".nd-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;height:100%;overflow:hidden}" +
-    ".nd-title{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#18181b;margin-bottom:3px;line-height:1.2}" +
-    ".nd-icon{width:15px;height:15px;flex:none;display:inline-block}" +
-    ".nd-line{font-size:11px;color:#52525b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
-    "@media (prefers-reduced-motion:reduce){.nd-edge{animation:none}}";
+    "@media (prefers-reduced-motion:reduce){.nd-edge-sel{animation:none}.nd-card{transition:none}}" +
+    ".nd-h{display:block;font-size:11px;font-weight:700;color:#3f3f46;margin-bottom:.35rem}" +
+    ".nd-input{width:100%;border:1px solid #e4e4e7;border-radius:.6rem;padding:.45rem .7rem;font-size:13px;background:#fff}" +
+    ".nd-input:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.2)}" +
+    ".nd-input:disabled{background:#f4f4f5;color:#71717a}" +
+    ".nd-chip{padding:.3rem .6rem;border:1px solid #e4e4e7;border-radius:999px;font-size:11.5px;font-weight:600;color:#3f3f46;background:#fff}" +
+    ".nd-chip:hover{border-color:#a1a1aa}" +
+    ".nd-chip-on{border-color:#6366f1;background:#eef2ff;color:#3730a3}" +
+    ".nd-btn{display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border:1px solid #e4e4e7;border-radius:.55rem;font-size:11.5px;font-weight:600;color:#27272a;background:#fff}" +
+    ".nd-btn:hover:not(:disabled){background:#f4f4f5}" +
+    ".nd-btn:disabled{opacity:.45;cursor:not-allowed}";
   document.head.appendChild(style);
 
   load(new URLSearchParams(location.search).get("need"));

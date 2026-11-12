@@ -22,6 +22,7 @@ export * from "./types";
 export * from "./qualification";
 export * from "./validate";
 export * from "./catalog";
+export * from "./workflow";
 
 /** Définitions livrées avec le code, dans l'ordre d'affichage : valeurs initiales de la base du dashboard. */
 export const CODE_OPPORTUNITIES: readonly OpportunityDefinition[] = [

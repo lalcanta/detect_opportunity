@@ -1,7 +1,7 @@
 import { getCompetitorBenchmark } from "../benchmarks/competitorBenchmarks";
 import { detectArtisanArchetype, pickDesignDirection, renderDesignBrief } from "./designDirections";
 import type { ModelRouter } from "../llm/modelRouter";
-import type { DemoFocus } from "../../../shared/opportunities";
+import { demoHighlightsInstruction, type DemoFocus, type DemoHighlight } from "../../../shared/opportunities";
 import type { MapsLead, SiteAudit, SiteInspection, TokenUsageRecord } from "../types";
 import { stripCodeFences } from "../utils/helpers";
 
@@ -15,6 +15,8 @@ export interface DemoInput {
   remoteAppUrl: string;
   /** Angle de la démo, déclaré par l'opportunité (shared/opportunities). */
   focus?: DemoFocus;
+  /** Éléments à mettre en avant, choisis dans l'onglet Besoins. */
+  highlights?: readonly DemoHighlight[];
 }
 
 /** Consigne ajoutée au prompt selon l'angle de l'opportunité (même intention que les consignes du mode prep). */
@@ -134,7 +136,7 @@ G. Barre d'appel mobile : barre fixe en bas d'écran sur mobile uniquement (fixe
 - N'ajoute AUCUN script de tracking (il est injecté automatiquement après).
 - Réponds UNIQUEMENT avec le code HTML complet (<!DOCTYPE html> ... </html>), sans bloc markdown (\`\`\`) ni commentaire avant ou après.`;
 
-  const focusInstruction = demoFocusInstruction(input.focus, lead.city);
+  const focusInstruction = [demoFocusInstruction(input.focus, lead.city), demoHighlightsInstruction(input.highlights)].filter(Boolean).join("\n\n");
   const { text } = await router.generate({
     task: "demo",
     prompt: focusInstruction ? `${prompt}\n\n${focusInstruction}` : prompt,

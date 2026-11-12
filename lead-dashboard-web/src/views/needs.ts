@@ -8,7 +8,12 @@ import {
   BUSINESS_MODEL_CATALOG,
   CHANNEL_CATALOG,
   CHANNEL_IDS,
+  DATA_KEYS,
   DEMO_FOCUS_CATALOG,
+  DEMO_HIGHLIGHT_CATALOG,
+  INTEREST_CTA_PRESETS,
+  LISTING_STEPS,
+  MESSAGE_TONE_CATALOG,
   PITCH_GENERATOR_CATALOG,
   PITCH_KIND_BY_GENERATOR,
   PROOF_CATALOG,
@@ -16,17 +21,21 @@ import {
   SCAN_MODULE_IDS,
   STATUS_CATALOG,
   WEBSITE_REQUIREMENT_CATALOG,
+  WORKFLOW_NODES,
+  WORKFLOW_STAGES,
 } from "../../../shared/opportunities";
 import { SCANNABLE_OPPORTUNITY_TYPES } from "../types";
 import { opportunityBadgeMeta } from "./components";
 import { esc, icon, type IconName } from "./layout";
 
 /** Change à chaque modification de public/static/besoins.js, pour contourner le cache du CDN. */
-export const NEEDS_ASSET_VERSION = "20261112e";
+export const NEEDS_ASSET_VERSION = "20261112w2";
 
 /** Icônes proposées pour un besoin, et celles du graphe. */
 const NEED_ICONS: IconName[] = ["globe", "shield", "star", "map-pin", "target", "sparkles", "search", "chart", "zap", "users", "file-text", "message", "phone", "mail", "layers", "cpu"];
-const GRAPH_ICONS: IconName[] = ["search", "sliders", "eye", "check-circle", "arrow-right", "sparkles", "file-text", "phone", "mail", "message", "inbox", "user", "layers"];
+const GRAPH_ICONS: IconName[] = [
+  ...new Set([...WORKFLOW_NODES.map((n) => n.icon as IconName), "arrow-right", "check", "x", "alert-circle", "zap"] as IconName[]),
+];
 
 export function needsTab(): string {
   const icons: Record<string, string> = {};
@@ -41,6 +50,13 @@ export function needsTab(): string {
     status: STATUS_CATALOG,
     businessModel: BUSINESS_MODEL_CATALOG,
     tones: BADGE_TONE_CATALOG,
+    nodes: WORKFLOW_NODES,
+    stages: WORKFLOW_STAGES,
+    keys: DATA_KEYS,
+    highlights: Object.entries(DEMO_HIGHLIGHT_CATALOG).map(([id, e]) => ({ id, label: e.label, description: e.description })),
+    messageTones: Object.entries(MESSAGE_TONE_CATALOG).map(([id, e]) => ({ id, label: e.label, description: e.description })),
+    ctaPresets: INTEREST_CTA_PRESETS,
+    listingSteps: LISTING_STEPS,
     needIcons: NEED_ICONS,
     icons,
   };

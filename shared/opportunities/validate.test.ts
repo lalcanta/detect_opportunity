@@ -49,7 +49,7 @@ describe("validateOpportunityDefinition", () => {
   it("refuse un script d'appel pour l'email", () => {
     const d = website();
     d.pitch.email = "llm_phone_battlecard";
-    assert.ok(errorsOf(d).some((e) => e.includes("un message écrit est attendu")));
+    assert.ok(errorsOf(d).some((e) => e.startsWith("« Email » a besoin de « Message écrit »")));
   });
 
   it("refuse un contact exigé qui n'est pas un canal", () => {
@@ -61,10 +61,11 @@ describe("validateOpportunityDefinition", () => {
   it("refuse un email exigé ou utilisé quand le site est interdit", () => {
     const d = website();
     d.requirements = { website: "forbidden", contacts: { allOf: ["email"] } };
-    assert.ok(errorsOf(d).some((e) => e.startsWith("sans site, seul le téléphone peut être exigé")));
+    assert.ok(errorsOf(d).some((e) => e.includes("« Site web » : impossible pour un besoin « sans site »")));
     const c = website();
     c.requirements = { website: "forbidden", contacts: { allOf: ["phone"] } };
-    assert.ok(errorsOf(c).some((e) => e.includes("seul le téléphone peut servir de canal")));
+    c.scanModules = ["dirigeant_sirene"];
+    assert.ok(errorsOf(c).some((e) => e.startsWith("« Email » a besoin de « Email »")));
     c.channels = ["phone"];
     c.pitch = { phone: "llm_phone_battlecard" };
     assert.deepEqual(errorsOf(c), []);
@@ -73,16 +74,47 @@ describe("validateOpportunityDefinition", () => {
   it("exige la vérification qui trouve l'email", () => {
     const d = website();
     d.scanModules = d.scanModules.filter((m: string) => m !== "contacts_legal");
-    assert.ok(errorsOf(d).some((e) => e.includes("contacts et mentions légales")));
+    assert.ok(errorsOf(d).some((e) => e === "« Email » a besoin de « Email » : ajoutez « Email et mentions »"));
   });
 
   it("réserve le rapport d'audit et son email aux prospects avec site", () => {
     const d = audit();
     d.requirements.website = "optional";
-    assert.ok(errorsOf(d).some((e) => e.includes("rapport d'audit exige")));
+    assert.ok(errorsOf(d).some((e) => e.includes("réglez le filtre Maps sur « Site exigé »")));
     const w = website();
     w.pitch.email = "tracker_cold_email";
-    assert.ok(errorsOf(w).some((e) => e.includes("l'email d'audit")));
+    assert.ok(errorsOf(w).some((e) => e.startsWith("« Email d'audit » a besoin de « Rapport d'audit »")));
+  });
+
+  it("refuse deux messages différents pour l'email et le formulaire", () => {
+    const d = audit();
+    d.proof = { kind: "audit_report", generator: "tracker_report", interestCta: "ok" };
+    d.pitch.contact_form = "llm_cold_email";
+    assert.ok(errorsOf(d).some((e) => e.includes("produisent tous deux « Message écrit »")));
+  });
+
+  it("valide les critères de la fiche Maps, les points forts et le ton", () => {
+    const d = website();
+    d.requirements.listing = { minRating: 4, maxReviews: 30 };
+    d.proof.highlights = ["gallery", "faq"];
+    d.commercial.tone = "direct";
+    const r = validateOpportunityDefinition(d);
+    assert.ok(r.ok);
+    if (r.ok) {
+      assert.deepEqual(r.def.requirements.listing, { minRating: 4, maxReviews: 30 });
+      assert.deepEqual(r.def.proof.kind === "demo_web" && r.def.proof.highlights, ["gallery", "faq"]);
+      assert.equal(r.def.commercial.tone, "direct");
+    }
+    assert.ok(errorsOf({ ...d, requirements: { ...d.requirements, listing: { minRating: 7 } } }).some((e) => e.startsWith("note minimale")));
+    assert.ok(errorsOf({ ...d, requirements: { ...d.requirements, listing: { minRating: 4.5, maxRating: 4 } } }).some((e) => e.includes("minimum dépasse")));
+    assert.ok(errorsOf({ ...d, proof: { ...d.proof, highlights: ["licorne"] } }).some((e) => e.includes("valeur inconnue")));
+  });
+
+  it("reprend le libellé quand l'angle commercial est vide", () => {
+    const d = website();
+    d.commercial.pitchFocus = "  ";
+    const r = validateOpportunityDefinition(d);
+    assert.ok(r.ok && r.def.commercial.pitchFocus === d.label);
   });
 
   it("refuse un module, un statut ou une preuve inconnus", () => {

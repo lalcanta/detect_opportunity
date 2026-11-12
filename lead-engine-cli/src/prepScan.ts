@@ -8,7 +8,9 @@ import { generateFlyerPdf } from "./generator/flyerGenerator";
 import {
   DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID,
   DEFAULT_OPPORTUNITY_ID,
+  demoHighlightsInstruction,
   describeRejection,
+  messageToneInstruction,
   findOpportunity,
   getOpportunityOrDefault,
   needsInspectionToQualify,
@@ -387,6 +389,7 @@ ${renderDesignBrief(direction)}
 ## Cible & Type de Besoin Détecté :
 - Type d'offre : ${oppLabel} (id: ${oppType})
 ${opts.pitch_focus ? `- Angle spécifique demandé : ${opts.pitch_focus}` : ""}
+${def.proof.kind === "demo_web" && demoHighlightsInstruction(def.proof.highlights) ? `- ${demoHighlightsInstruction(def.proof.highlights)}` : ""}
 
 ## Informations Prospect :
 - Nom : ${lead.name}
@@ -434,6 +437,7 @@ ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rati
           leadDir,
           oppLabel,
           pitchFocus: opts.pitch_focus || def.commercial.pitchFocus,
+          tone: messageToneInstruction(def.commercial.tone),
           channel: primaryChannel,
           demoUrl: `${cfg.REMOTE_APP_URL}/demos/${id}`,
           contactFormUrl: inspection?.contactForm?.url ?? null,
@@ -506,7 +510,7 @@ ${
       : `Le prospect a besoin d'un site web moderne et rapide convertissant le trafic smartphone en appels téléphoniques.`
 }
 
-## Format
+${messageToneInstruction(def.commercial.tone) ? `## Ton\n${messageToneInstruction(def.commercial.tone)}\n\n` : ""}## Format
 FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; ourAdvantages 3 puces de 12 mots maximum ; currentSiteCritique 3 constats courts et vérifiables ; accroche (callScript / openingPitch) 60 mots maximum ; 3 objections, réponses de 2 phrases maximum ; coldEmail.body 120 mots maximum. N'invente ni avis, ni certification, ni chiffre absent des données.
 
 ## Schéma JSON Requis :
@@ -606,6 +610,8 @@ function buildWrittenPitchPrompt(p: {
   leadDir: string;
   oppLabel: string;
   pitchFocus: string;
+  /** Consigne de ton choisie dans l'onglet Besoins, ou chaîne vide. */
+  tone: string;
   channel: ChannelId;
   demoUrl: string;
   contactFormUrl: string | null;
@@ -633,7 +639,7 @@ ${viaForm ? `Formulaire de contact du site (${p.contactFormUrl ?? "URL dans meta
 - Données d'inspection : voir \`meta.json\` dans le même dossier.
 
 ## Règles
-- Vouvoiement, ton chaleureux et professionnel, un seul constat précis, le lien de la démo.
+- Vouvoiement, ${p.tone ? p.tone.charAt(0).toLowerCase() + p.tone.slice(1).replace(/\.$/, "") : "ton chaleureux et professionnel"}, un seul constat précis, le lien de la démo.
 - Terminer par une question simple qui appelle une réponse écrite.
 - Pas de promesse chiffrée, pas de jargon.
 - Dernière ligne : « Pour ne plus recevoir de message de notre part, répondez simplement STOP. »

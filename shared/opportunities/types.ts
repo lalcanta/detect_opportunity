@@ -48,9 +48,21 @@ export const ANY_CONTACT: ContactRequirement = { anyOf: ["phone", "email", "cont
 /** Présence d'un site exigée : donne aussi le filtre de site par défaut du scan. */
 export type WebsiteRequirement = "required" | "forbidden" | "optional";
 
+/**
+ * Critères lus sur la fiche Maps, avant toute visite du site. Une fiche sans note ou sans avis connus n'est pas
+ * écartée par un minimum, seulement par un maximum de 0 avis.
+ */
+export interface ListingCriteria {
+  minRating?: number;
+  maxRating?: number;
+  minReviews?: number;
+  maxReviews?: number;
+}
+
 export interface OpportunityRequirements {
   website: WebsiteRequirement;
   contacts: ContactRequirement;
+  listing?: ListingCriteria;
 }
 
 export type BusinessModel = "one_shot" | "recurring" | "both";
@@ -63,6 +75,27 @@ export type BadgeTone = "blue" | "cyan" | "amber" | "emerald" | "purple" | "zinc
  */
 export type DemoFocus = "showcase" | "reviews" | "seo_local" | "ads_acquisition";
 
+/** Éléments qu'une démo peut mettre en avant, choisis au clic dans l'onglet Besoins. */
+export const DEMO_HIGHLIGHTS = [
+  "quote_form",
+  "online_booking",
+  "gallery",
+  "before_after",
+  "menu",
+  "service_area",
+  "emergency",
+  "reviews_wall",
+  "team",
+  "faq",
+  "whatsapp",
+  "price_simulator",
+] as const;
+export type DemoHighlight = (typeof DEMO_HIGHLIGHTS)[number];
+
+/** Ton des messages (script d'appel et email). */
+export const MESSAGE_TONES = ["warm", "direct", "expert"] as const;
+export type MessageTone = (typeof MESSAGE_TONES)[number];
+
 /** Générateurs de preuve implémentés dans lead-engine-cli. */
 export const PROOF_GENERATOR_IDS = ["llm_demo", "tracker_report"] as const;
 export type ProofGeneratorId = (typeof PROOF_GENERATOR_IDS)[number];
@@ -73,6 +106,8 @@ export type ProofDefinition =
       kind: "demo_web";
       generator: "llm_demo";
       focus: DemoFocus;
+      /** Éléments à mettre en avant dans la démo (catalogue `DEMO_HIGHLIGHT_CATALOG`). */
+      highlights?: readonly DemoHighlight[];
       /** Libellé du bouton d'intérêt affiché au prospect sur /demos/:id. */
       interestCta: string;
     }
@@ -130,7 +165,9 @@ export interface OpportunityDefinition {
   flyer: boolean;
   commercial: {
     businessModel: BusinessModel;
+    /** Angle repris dans la consigne des messages ; le libellé du besoin s'il est laissé vide. */
     pitchFocus: string;
+    tone?: MessageTone;
   };
 }
 

@@ -7,6 +7,8 @@ import type {
   BusinessModel,
   ChannelId,
   DemoFocus,
+  DemoHighlight,
+  MessageTone,
   OpportunityStatus,
   PitchGeneratorId,
   ScanModuleId,
@@ -81,3 +83,52 @@ export const BADGE_TONE_CATALOG: Record<BadgeTone, CatalogEntry> = {
   purple: { label: "Violet", description: "" },
   zinc: { label: "Gris", description: "" },
 };
+
+/** Éléments à mettre en avant dans une démo : `instruction` est ajoutée telle quelle à la consigne de génération. */
+export const DEMO_HIGHLIGHT_CATALOG: Record<DemoHighlight, CatalogEntry & { instruction: string }> = {
+  quote_form: { label: "Devis express", description: "Formulaire de demande de devis court.", instruction: "un formulaire de devis express très visible (3 à 4 champs)" },
+  online_booking: { label: "Prise de rendez-vous", description: "Créneaux à réserver en ligne.", instruction: "un module de prise de rendez-vous en ligne (choix du jour et du créneau, sans paiement)" },
+  gallery: { label: "Galerie de réalisations", description: "Photos des chantiers ou des produits.", instruction: "une galerie de réalisations filtrable, avec les vraies photos du prospect si disponibles" },
+  before_after: { label: "Avant / après", description: "Comparateur glissant.", instruction: "un comparateur avant / après à curseur glissant" },
+  menu: { label: "Menu ou carte", description: "Carte, plats, formules.", instruction: "une carte (menu) lisible sur mobile, sans prix inventés" },
+  service_area: { label: "Zone d'intervention", description: "Villes et rayon couverts.", instruction: "la zone d'intervention autour de la ville du prospect (liste des communes proches ou carte stylisée)" },
+  emergency: { label: "Urgence", description: "Bandeau d'intervention rapide.", instruction: "un bandeau d'urgence avec appel direct, sans promettre de délai non fourni" },
+  reviews_wall: { label: "Mur d'avis", description: "Avis Google mis en scène.", instruction: "un mur d'avis Google mis en scène avec la note réelle (aucun avis inventé)" },
+  team: { label: "Équipe et savoir-faire", description: "Présentation de l'artisan.", instruction: "une section équipe et savoir-faire, avec des emplacements « à compléter » pour les faits non fournis" },
+  faq: { label: "FAQ", description: "Questions fréquentes du métier.", instruction: "une FAQ dépliable avec les questions fréquentes du métier" },
+  whatsapp: { label: "WhatsApp", description: "Bouton de discussion directe.", instruction: "un bouton WhatsApp flottant vers le numéro du prospect" },
+  price_simulator: { label: "Simulateur", description: "Estimation interactive, sans prix ferme.", instruction: "un simulateur interactif d'estimation qui aboutit à une demande de devis (aucun prix ferme affiché)" },
+};
+
+/** Ton des messages : `instruction` est ajoutée aux consignes du script d'appel et de l'email. */
+export const MESSAGE_TONE_CATALOG: Record<MessageTone, CatalogEntry & { instruction: string }> = {
+  warm: { label: "Chaleureux", description: "Proche, simple, de voisin à voisin.", instruction: "Ton chaleureux et simple, de professionnel local à professionnel local." },
+  direct: { label: "Direct", description: "Court, concret, va droit au but.", instruction: "Ton direct : phrases courtes, un seul argument fort, appel à l'action clair." },
+  expert: { label: "Expert", description: "Factuel, s'appuie sur les constats.", instruction: "Ton d'expert : factuel, appuyé sur les constats mesurés, sans jargon inutile." },
+};
+
+/** Textes proposés pour le bouton d'intérêt de la démo, pour éviter la saisie. */
+export const INTEREST_CTA_PRESETS: readonly string[] = [
+  "Ce site me plaît, on en discute",
+  "Ce design me plaît, on en discute",
+  "Je veux être rappelé",
+  "Ce rapport m'intéresse",
+];
+
+/** Paliers proposés pour les critères de la fiche Maps. */
+export const LISTING_STEPS = {
+  rating: [3, 3.5, 4, 4.5],
+  reviews: [5, 10, 20, 50, 100],
+} as const;
+
+/** Consigne « éléments à mettre en avant » d'une démo, ou chaîne vide. */
+export function demoHighlightsInstruction(highlights: readonly DemoHighlight[] | undefined): string {
+  const items = (highlights ?? []).map((h) => DEMO_HIGHLIGHT_CATALOG[h]?.instruction).filter(Boolean);
+  if (!items.length) return "";
+  return `ÉLÉMENTS À METTRE EN AVANT (choisis pour ce besoin, tous obligatoires) : ${items.join(" ; ")}.`;
+}
+
+/** Consigne de ton des messages, ou chaîne vide. */
+export function messageToneInstruction(tone: MessageTone | undefined): string {
+  return tone ? MESSAGE_TONE_CATALOG[tone]?.instruction ?? "" : "";
+}

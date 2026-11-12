@@ -16,13 +16,20 @@ export interface ContactAvailability {
   website: boolean;
   email?: boolean;
   contactForm?: boolean;
+  /** Note et nombre d'avis de la fiche Maps (`null` si inconnus), pour les critères `requirements.listing`. */
+  rating?: number | null;
+  reviewsCount?: number | null;
 }
 
 export type RejectionReason =
   | "website_required"
   | "website_forbidden"
   | `missing_${ChannelId}`
-  | `missing_any_of:${string}`;
+  | `missing_any_of:${string}`
+  | `rating_below:${number}`
+  | `rating_above:${number}`
+  | `reviews_below:${number}`
+  | `reviews_above:${number}`;
 
 export interface QualificationResult {
   qualified: boolean;
@@ -50,7 +57,16 @@ export function evaluateRequirements(
   stage: QualificationStage,
 ): QualificationResult {
   const reasons: RejectionReason[] = [];
-  const { website, contacts } = def.requirements;
+  const { website, contacts, listing } = def.requirements;
+
+  // Critères de la fiche : une valeur inconnue n'écarte pas, sauf « 0 avis maximum » qui vise les fiches sans avis.
+  if (listing) {
+    const { rating, reviewsCount } = availability;
+    if (listing.minRating !== undefined && rating != null && rating < listing.minRating) reasons.push(`rating_below:${listing.minRating}`);
+    if (listing.maxRating !== undefined && rating != null && rating > listing.maxRating) reasons.push(`rating_above:${listing.maxRating}`);
+    if (listing.minReviews !== undefined && reviewsCount != null && reviewsCount < listing.minReviews) reasons.push(`reviews_below:${listing.minReviews}`);
+    if (listing.maxReviews !== undefined && (reviewsCount ?? 0) > listing.maxReviews) reasons.push(`reviews_above:${listing.maxReviews}`);
+  }
 
   if (website === "required" && !availability.website) reasons.push("website_required");
   if (website === "forbidden" && availability.website) reasons.push("website_forbidden");
@@ -79,6 +95,11 @@ const CHANNEL_NAMES: Record<ChannelId, string> = { phone: "téléphone", email: 
 export function describeRejection(reason: RejectionReason): string {
   if (reason === "website_required") return "pas de site web (exigé)";
   if (reason === "website_forbidden") return "a déjà un site web (exclu)";
+  const [kind, value = ""] = reason.split(":");
+  if (kind === "rating_below") return `note inférieure à ${value.replace(".", ",")}`;
+  if (kind === "rating_above") return `note supérieure à ${value.replace(".", ",")}`;
+  if (kind === "reviews_below") return `moins de ${value} avis`;
+  if (kind === "reviews_above") return `plus de ${value} avis`;
   if (reason.startsWith("missing_any_of:")) {
     const list = reason.slice("missing_any_of:".length).split("|") as ChannelId[];
     return `aucun contact parmi : ${list.map((c) => CHANNEL_NAMES[c] ?? c).join(", ")}`;

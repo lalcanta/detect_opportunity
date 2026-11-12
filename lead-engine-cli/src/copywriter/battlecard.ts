@@ -22,6 +22,8 @@ export async function generateBattlecard(
   audit: SiteAudit,
   demoUrl: string,
   usageSink: TokenUsageRecord[],
+  /** Consigne de ton du besoin, ou chaîne vide. */
+  tone = "",
 ): Promise<Battlecard> {
   const best = [...lead.recentReviews].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
   const prompt = `Tu prépares le dossier commercial d'un artisan pour la closer (téléprospectrice) ET un brouillon d'email contextuel.
@@ -49,7 +51,7 @@ Réponds en JSON strict :
    "body": "Email court, chaleureux et adapté au contexte exact de ${lead.name} (${lead.activity} à ${lead.city}), expliquant les avantages de la maquette préparée pour lui (${demoUrl}) par rapport à sa situation actuelle."
  }
 }
-Français, ton chaleureux et professionnel, sans promesse mensongère.
+Français, ${tone || "ton chaleureux et professionnel."} Sans promesse mensongère.
 FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; ourAdvantages 3 puces de 12 mots maximum ; currentSiteCritique 3 constats courts et vérifiables ; accroche (callScript) 60 mots maximum ; 3 objections, réponses de 2 phrases maximum ; coldEmail.body 120 mots maximum. N'invente ni avis, ni certification, ni chiffre absent des données.`;
 
   try {
