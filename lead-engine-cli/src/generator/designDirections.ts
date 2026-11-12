@@ -92,12 +92,12 @@ export const DESIGN_DIRECTIONS: readonly DesignDirection[] = [
     name: "Éditorial XXL",
     mood: "Un magazine d'architecture : typographie géante, beaucoup d'air, chaque section comme une double page.",
     fonts: { display: "Fraunces", body: "Inter" },
-    hero: "Titre serif énorme (clamp(3rem, 9vw, 8rem)) sur 2-3 lignes, un mot clé en italique couleur marque ; grille asymétrique 7/5 avec une grande photo (ou un aplat texturé) qui déborde de la grille ; numéro de section « 01 » en petit.",
-    color: "Fond papier chaud très clair, encre presque noire, couleur de marque réservée aux accents (mot en italique, filets, chiffres).",
+    hero: "Titre serif énorme (clamp(3rem, 9vw, 8rem)) composé comme une couverture : lignes de longueurs et d'alignements différents, la typographie est l'image ; grille asymétrique 7/5 avec une grande photo (ou un aplat texturé) qui déborde de la grille.",
+    color: "Fond clair teinté de la couleur de marque (pas le crème #F4F1EA par défaut), encre profonde tirée de la marque, couleur vive réservée aux filets et aux chiffres réels.",
     signature: [
+      "révélation de la grande photo du hero par clip-path (inset(100% 0 0 0) → inset(0)) au chargement",
       "bandeau défilant (marquee CSS infini) des prestations entre deux sections",
-      "révélation des images au scroll par clip-path (inset(100% 0 0 0) → inset(0))",
-      "sections numérotées 01 / 02 / 03 avec filets fins",
+      "légendes de photos et filets fins façon magazine",
     ],
     rhythm: "Alternance pleine largeur / colonnes décalées ; une section en fond encre (texte clair) au milieu de la page.",
     suits: ["matiere", "gourmand", "studio", "autre"],
@@ -107,8 +107,8 @@ export const DESIGN_DIRECTIONS: readonly DesignDirection[] = [
     name: "Nuit premium lumineuse",
     mood: "Une marque tech haut de gamme : fond sombre profond, halos de lumière à la couleur de la marque, verre dépoli.",
     fonts: { display: "Space Grotesk", body: "Manrope" },
-    hero: "Fond quasi noir teinté de la couleur de marque, 2-3 halos flous (radial-gradient + blur) qui dérivent lentement ; titre blanc très gras avec un mot en dégradé de texte animé ; carte en verre (backdrop-blur, bordure 1px blanche à 10 %) qui met en avant la note Google réelle.",
-    color: "Sombre dominant, couleur de marque en lumière (halos, bordures lumineuses, boutons), texte blanc / gris clair avec contraste AA.",
+    hero: "Fond quasi noir teinté de la couleur de marque, 2-3 halos flous (radial-gradient + blur) qui dérivent lentement ; titre blanc très gras dont tout le bloc reçoit un léger dégradé lumineux ; carte en verre (backdrop-blur, bordure 1px blanche à 10 %) qui met en avant la note Google réelle.",
+    color: "Sombre teinté de la couleur de marque (jamais un noir neutre #0B0B0B avec un seul accent vert acide), couleur de marque en lumière (halos, bordures, boutons), texte clair avec contraste AA.",
     signature: [
       "effet projecteur : un halo suit la souris sur les cartes de prestations (CSS variables mises à jour en JS)",
       "bordures en dégradé animé sur le bouton principal",
@@ -122,14 +122,14 @@ export const DESIGN_DIRECTIONS: readonly DesignDirection[] = [
     name: "Bento moderne",
     mood: "L'interface d'une app soignée : tuiles de tailles variées, coins très arrondis, couleurs pastel tirées de la marque.",
     fonts: { display: "Plus Jakarta Sans", body: "Plus Jakarta Sans" },
-    hero: "Grille bento dès le premier écran : grande tuile titre + boutons, tuile note Google réelle avec étoiles, tuile photo, tuile « Devis gratuit » colorée, tuile ville avec une mini carte stylisée en CSS ; les tuiles apparaissent en cascade.",
+    hero: "Grille bento dès le premier écran : grande tuile titre + boutons, tuile note Google réelle avec étoiles, tuile photo, tuile « Devis gratuit » colorée, tuile ville avec une mini carte stylisée en CSS.",
     color: "Fond gris très clair, tuiles blanches et 2 tuiles teintées (couleur de marque pleine et sa version pastel).",
     signature: [
-      "apparition en cascade des tuiles (animation-delay croissant)",
+      "au chargement, les tuiles du premier écran se posent en cascade (animation-delay croissant) : c'est le seul moment animé sans action du visiteur",
       "légère inclinaison 3D des tuiles au survol (perspective + rotateX/Y en JS, désactivée sur tactile)",
       "prestations en bento (une tuile large, deux hautes, le reste carré), pas une grille de 6 cartes identiques",
     ],
-    rhythm: "Blocs bento successifs séparés par de grands titres ; rayons généreux (rounded-[2rem]).",
+    rhythm: "Blocs bento successifs séparés par de grands titres ; rayons hiérarchisés (grandes tuiles rounded-[2rem], petits éléments plus serrés), ombres variées selon la profondeur.",
     suits: ["gourmand", "urgence", "studio", "autre"],
   },
   {
@@ -165,16 +165,16 @@ export const DESIGN_DIRECTIONS: readonly DesignDirection[] = [
   {
     id: "swiss",
     name: "Grille suisse technique",
-    mood: "Un plan d'ingénieur : grille stricte visible, étiquettes monospace, chiffres géants, une seule couleur d'accent.",
-    fonts: { display: "Inter Tight", body: "JetBrains Mono" },
-    hero: "Grille 12 colonnes avec filets visibles ; titre très serré (tracking -0.04em) ; étiquettes monospace en capitales (« [01] COUVERTURE », coordonnées « 42.98° N ») ; note Google réelle affichée en chiffre géant.",
+    mood: "Un plan d'ingénieur : grille stricte visible, chiffres géants, une seule couleur d'accent, aucune décoration.",
+    fonts: { display: "Archivo", body: "Archivo" },
+    hero: "Grille 12 colonnes avec filets visibles ; titre très serré (tracking -0.04em) qui occupe exactement des colonnes de la grille ; coordonnées réelles de la ville en petit ; note Google réelle affichée en chiffre géant.",
     color: "Blanc et noir purs, une seule couleur d'accent (la couleur de marque) utilisée avec parcimonie.",
     signature: [
       "compteurs animés à l'apparition, uniquement sur des chiffres réels (note Google, nombre d'avis)",
       "lignes de grille qui se dessinent à l'apparition (scaleX de 0 à 1)",
       "survol des lignes de prestations : la ligne se remplit de la couleur d'accent",
     ],
-    rhythm: "Prestations en liste-tableau numérotée plutôt qu'en cartes ; beaucoup de filets, peu de fonds.",
+    rhythm: "Prestations en liste-tableau plutôt qu'en cartes (numérotée seulement si c'est une suite d'étapes) ; beaucoup de filets, peu de fonds.",
     suits: ["matiere", "urgence", "studio", "autre"],
   },
   {
@@ -182,11 +182,11 @@ export const DESIGN_DIRECTIONS: readonly DesignDirection[] = [
     name: "Organique chaleureux",
     mood: "Fait main et généreux : formes douces, tons chauds, soulignés dessinés à la main, sensation de terroir moderne.",
     fonts: { display: "DM Serif Display", body: "DM Sans" },
-    hero: "Photo (ou illustration CSS) dans une forme organique (border-radius en blob animé qui se transforme lentement) ; titre serif avec un mot souligné par un trait SVG dessiné à la main animé (stroke-dashoffset) ; formes de fond douces.",
-    color: "Crème, terracotta, vert olive ou tons de la marque adoucis ; jamais de gris froid.",
+    hero: "Photo (ou illustration CSS) dans une forme organique (border-radius en blob animé qui se transforme lentement) ; titre serif généreux ; un trait SVG dessiné à la main (stroke-dashoffset) court sous tout le titre ; formes de fond douces.",
+    color: "Tons de la marque adoucis et réchauffés, complétés par une teinte naturelle tirée du métier (farine, bois, feuillage…) ; pas le duo crème + terracotta par défaut ; jamais de gris froid.",
     signature: [
       "blob animé (border-radius qui se transforme) autour de la photo principale",
-      "soulignement SVG dessiné à la main qui se trace à l'apparition",
+      "trait SVG dessiné à la main qui se trace sous le titre au chargement",
       "séparateurs de sections en vagues SVG",
     ],
     rhythm: "Sections aux fonds crème alternés, éléments qui se chevauchent légèrement, beaucoup de rondeur.",
@@ -200,7 +200,7 @@ export const DESIGN_DIRECTIONS: readonly DesignDirection[] = [
     hero: "Écran partagé : à gauche le titre et les boutons sur fond couleur de marque, à droite une pile de visuels (vraies photos ou cartes) qui se décalent en éventail ; titre révélé mot par mot.",
     color: "Couleur de marque en grands aplats face à du blanc ; contraste fort, accents complémentaires.",
     signature: [
-      "révélation du titre mot par mot (spans avec animation-delay)",
+      "révélation du titre mot par mot au chargement (spans avec animation-delay)",
       "section « Pourquoi nous » avec colonne gauche sticky et contenu qui défile à droite",
       "cartes empilées qui se déploient en éventail au survol",
     ],
@@ -235,30 +235,59 @@ export function googleFontsHref(d: DesignDirection): string {
   return `https://fonts.googleapis.com/css2?${fixed.join("&")}&display=swap`;
 }
 
+/**
+ * Principes de design, synthèse de la skill « frontend-design » (plugin officiel claude-plugins-official),
+ * adaptée aux démos d'artisans. Communs au mode automatique (prompt API) et au mode agent (prompt_demo.md).
+ */
+export const DESIGN_PRINCIPLES = `PRINCIPES DE DESIGN (ce qui sépare un site de studio d'une page générée) :
+- Ancre chaque choix dans le métier : ses matières, ses outils, ses gestes, son vocabulaire et sa ville. Le hero ouvre sur ce qu'il y a de plus caractéristique de ce métier (une photo, un geste, un objet, un chiffre réel), pas sur un gabarit.
+- Concentre l'audace en un seul endroit : un élément mémorable (l'effet signature principal), tout le reste sobre, aligné et discipliné. Avant de conclure, retire un accessoire.
+- La typographie porte la personnalité : échelle typographique nette (graisses, tailles et interlignes choisis), titres traités comme un élément graphique à part entière, lignes de texte de moins de 75 caractères, interligne un peu plus généreux pour un texte à empattements.
+- La structure est de l'information : bordures, filets, numéros et étiquettes ne servent que s'ils disent quelque chose. Numérotation 01 / 02 / 03 uniquement pour une vraie suite d'étapes (ex. déroulé d'un chantier).
+- Mouvement : un seul moment orchestré au chargement (le premier écran), puis des animations qui répondent aux actions du visiteur (survol, clic, ouverture, envoi du devis). Pas de fondu-glissé sur chaque section, pas d'effet de survol sur chaque carte.
+- Mots : du point de vue du client, simples et concrets. Chaque bouton dit ce qui se passe (« Appeler maintenant », « Demander un devis ») et garde le même nom de bout en bout ; message de confirmation assorti (« Demande envoyée »). Pas de remplissage, pas de superlatif creux.
+- Méthode : avant le code, fixe ton plan dans un commentaire HTML <!-- PLAN … --> juste après <!DOCTYPE html> : 4 à 6 couleurs hex nommées, rôle de chaque police, concept de mise en page en une phrase, l'élément mémorable. Relis-le : si une partie ressemble à ce que tu ferais pour n'importe quel artisan, change-la. Puis code en suivant ce plan.
+- Socle de qualité, sans l'annoncer : responsive jusqu'à 360 px, focus clavier visible, prefers-reduced-motion respecté, contrastes AA, palette harmonieuse. Attention aux spécificités CSS qui s'annulent (marges entre sections).`;
+
+/** Signes typiques d'une page générée, à proscrire sauf si la direction les demande explicitement. */
+const GENERATED_TELLS = [
+  "un seul mot ou groupe de mots du titre mis en couleur, en italique ou en gras",
+  "petites étiquettes en CAPITALES espacées (classes uppercase + tracking-widest) au-dessus des titres, sur les badges ou dans les boutons : écris les étiquettes et les boutons en casse normale",
+  "métadonnées enchaînées avec des points médians (« A · B · C ») et libellés « MOT — fragment »",
+  "flèche « → » ajoutée au texte des boutons et des liens",
+  "police monospace pour de petites étiquettes de données",
+  "fond crème (#F4F1EA) avec titre serif et accent terracotta (#D97757), sauf si ce sont les couleurs du prospect",
+  "noir neutre (#0B0B0B, #111) avec un unique accent vert acide ou vermillon",
+  "contenu découpé en cartes identiques, même rayon partout, même ombre grise douce, dégradés en décoration",
+  "gros chiffre + petit libellé + dégradé comme hero par défaut, ou rangée de 3 « statistiques » sous le hero (« 100 % », « 5/5 », « Local ») : seuls la note et le nombre d'avis Google réels sont des chiffres",
+  "nom de l'entreprise ou fin du titre passés en italique ou dans une autre couleur : le titre garde un seul traitement",
+];
+
 /** Consignes de direction artistique et d'effet « wahou », communes au mode automatique et au mode prep. */
 export function renderDesignBrief(d: DesignDirection): string {
   return `DIRECTION ARTISTIQUE IMPOSÉE POUR CE PROSPECT : « ${d.name} »
 ${d.mood}
-- Polices (Google Fonts, à charger dans le <head>) : titres ${d.fonts.display}, texte ${d.fonts.body}.
+- Polices (Google Fonts, à charger dans le <head>) : ${d.fonts.display === d.fonts.body ? `une seule famille, ${d.fonts.display}, avec des graisses et tailles bien contrastées` : `titres ${d.fonts.display}, texte ${d.fonts.body}`}.
   <link rel="stylesheet" href="${googleFontsHref(d)}">
 - Hero : ${d.hero}
 - Couleurs : ${d.color} Pars des couleurs de marque du prospect et ajuste-les pour garder un contraste lisible (WCAG AA).
-- Effets signature (tous attendus) :
+- Effets signature (le premier est l'élément mémorable de la page, les autres restent discrets) :
 ${d.signature.map((s) => `  * ${s}`).join("\n")}
 - Rythme de page : ${d.rhythm}
 
-EFFET « WAHOU » (exigences communes) :
-- Le premier écran doit impressionner en une seconde : animation d'entrée en cascade (titre, sous-titre, boutons, visuel), composition travaillée, jamais un simple texte centré sur fond blanc.
-- Mouvement maîtrisé : apparition des sections au scroll (IntersectionObserver qui ajoute une classe), micro-interactions au survol et au clic sur tous les boutons et cartes, transitions de 200 à 700 ms avec des courbes douces (cubic-bezier(.2,.8,.2,1)).
-- Typographie expressive : titres en clamp() très grands, interlettrage serré, hiérarchie forte ; un mot clé mis en valeur (couleur, italique, dégradé ou soulignement).
-- Profondeur : superpositions, ombres colorées, textures ou dégradés ; pas d'aplats blancs partout.
+EFFET « WAHOU » :
+- Le premier écran doit impressionner en une seconde : composition travaillée, entrée orchestrée (titre, visuel, actions), jamais un simple texte centré sur fond uni.
+- Interactions soignées : retours visuels nets au survol et au clic des boutons, du formulaire de devis et du composant signature, transitions de 200 à 600 ms (cubic-bezier(.2,.8,.2,1)).
+- Profondeur : superpositions, ombres colorées et variées selon la hiérarchie, textures ou dégradés au service de la direction.
 - CSS et JavaScript maison dans des balises <style> et <script> (aucune autre bibliothèque que Tailwind CDN et Lucide).
-- Accessibilité : @media (prefers-reduced-motion: reduce) coupe les animations ; contrastes lisibles ; focus visibles.
 - Mobile (390 px) aussi soigné que l'ordinateur : aucun débordement horizontal, effets lourds (parallaxe, inclinaison 3D) désactivés sur tactile.
+
+${DESIGN_PRINCIPLES}
 
 À ÉVITER (c'est ce qui rend les démos interchangeables) :
 - hero centré « titre + 2 boutons » sur fond blanc ou gris uni ;
 - grille de 6 cartes blanches identiques avec une icône en haut ;
 - palette zinc / blanc partout, coins rounded-xl et ombres shadow-lg partout ;
-- emojis comme icônes, texte de remplissage générique (« Bienvenue sur notre site »).`;
+- emojis comme icônes, texte de remplissage générique (« Bienvenue sur notre site ») ;
+${GENERATED_TELLS.map((t) => `- ${t} ;`).join("\n")}`;
 }

@@ -408,7 +408,7 @@ ${
         : `3. **Hero section immersive sur-mesure** : Disposition visuelle adaptée à l'archétype (${craft.archetype}), titre marquant, badge avis Google réels, bouton d'action principal.`
 }
 4. **Composant interactif signature intégré** : Implémenter le composant interactif (${craft.signatureComponent}) en JavaScript pur léger et autonome sans dépendance externe.
-5. **Grille de prestations & tarifs indicatifs clairs** adaptée au métier de ${lead.activity || "cet artisan"}.
+5. **Prestations ou produits propres au métier** de ${lead.activity || "cet artisan"} (de vrais intitulés du métier, pas des formules génériques ; aucun prix), mis en scène selon la direction artistique.
 6. **Preuve sociale & Vrais Avis Google** intégrés :
 ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rating}★)`).join("\n") || "   - Aucun texte d'avis disponible : N'INVENTE AUCUN AVIS. Affiche la note réelle et un emplacement « Vos avis Google s'afficheront ici »."}
 > **Honnêteté (impératif)** : n'affirme aucun fait absent des données (certification RGE/Qualibat, garantie décennale, assurance, délai d'intervention, prix, années d'expérience, nombre de chantiers, horaires). Présente-les comme des emplacements « à compléter » ou des exemples clairement signalés.

@@ -53,7 +53,7 @@ Avant d'écrire une seule ligne de HTML, identifiez l'archétype du prospect :
 - **Typographie** : Rétro-chic chaleureuse (`Fraunces`, `Cinzel`, ou `serif font-semibold`).
 - **Composants signatures obligatoires** :
   1. **Badge d'Ouverture Vivant** : Pastille verte pulsante avec script d'heure dynamique (*« Ouvert actuellement jusqu'à 19h30 »*).
-  2. **Présentoir des Spécialités Phares** : Cartes façon vitrine avec macarons « 100% Fait Maison » et bouton d'action *« Réserver pour ce midi »*.
+  2. **Présentoir des Spécialités Phares** : Cartes façon vitrine (nom et photo réels du produit, aucune mention « fait maison » non vérifiée) et bouton d'action *« Réserver pour ce midi »*.
   3. **Origine des matières premières** : Carte locale ou bandeau des producteurs partenaires (farine régionale, viandes d'éleveurs voisins).
 
 ---
@@ -148,7 +148,10 @@ Avant de livrer `demo.html`, vérifiez :
    `prompt_demo.md` impose une **direction artistique** (Éditorial XXL, Nuit premium, Bento, Néo-brutal, Plein cadre,
    Grille suisse, Organique, Split cinétique : voir `lead-engine-cli/src/generator/designDirections.ts`) : elle prime
    sur la palette et la typographie de l'archétype, qui gardent la psychologie client et le composant signature.
-   Le premier écran doit produire un effet « wahou » (animation d'entrée, typographie expressive, profondeur).
+   Le premier écran doit produire un effet « wahou » (entrée orchestrée, typographie expressive, profondeur).
+   `prompt_demo.md` contient aussi les **principes de design** (synthèse de la skill officielle `frontend-design`) et la
+   liste des signes de page générée à proscrire : appliquez-les, ils priment sur les exemples de code de ce guide
+   (étiquettes en capitales, fond crème + terracotta, apparitions au scroll sur chaque section…).
 2. ✅ **Rien n'est inventé ?** Vrais avis Google seulement (sinon note réelle + emplacement), aucune certification,
    garantie, délai ou prix affirmé sans source (voir §0).
 3. ✅ **Le numéro de téléphone réel et le WhatsApp fonctionnent-ils ?**

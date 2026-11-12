@@ -62,8 +62,8 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     ],
     conversionBlueprint: {
       hero: {
-        headlinePattern: "{METIER} à {VILLE} & Environs — Dépannage Rapide & Devis 100% Gratuit",
-        subheadlinePattern: "Artisan qualifié disponible 7j/7 pour tous vos travaux d'installation, entretien et urgences à {VILLE}. Tarifs transparents garantis.",
+        headlinePattern: "{METIER} à {VILLE} et alentours : dépannage, installation, entretien",
+        subheadlinePattern: "Un artisan de {VILLE} joignable en direct pour vos travaux d'installation, d'entretien et vos dépannages. Devis gratuit avant toute intervention.",
         primaryCta: "Appeler pour une Urgence (N° affiché en grand)",
         secondaryCta: "Demander un Devis Gratuit",
         trustBadges: ["Garantie Décennale 10 ans", "Artisan Certifié RGE", "Agréé Assurances", "Devis Gratuit & Sans engagement"],
@@ -83,9 +83,9 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
       competitiveAdvantages: {
         sectionTitle: "Pourquoi les habitants de {VILLE} nous font confiance",
         points: [
-          { title: "Intervention Express 7j/7", desc: "Un problème de fuite ou de chaudière ? Un technicien qualifié intervient chez vous dans les plus brefs délais." },
+          { title: "Un appel, un interlocuteur", desc: "Une fuite ou une panne de chaudière ? Vous parlez directement à l'artisan, qui vous dit quand il peut passer." },
           { title: "Transparence Tarifaire Totale", desc: "Devis clair et validé avant tout début de travaux. Aucune surprise sur votre facture." },
-          { title: "Matériel Haut de Gamme", desc: "Partenaire des plus grandes marques (Atlantic, De Dietrich, Saunier Duval, Daikin) garantissant longévité et économies." },
+          { title: "Du matériel expliqué", desc: "Le choix des équipements est détaillé sur le devis, avec leurs avantages et leur entretien." },
           { title: "Artisan de Proximité", desc: "Un interlocuteur unique, joignable directement sans plateforme intermédiaire." },
         ],
       },
@@ -102,7 +102,7 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     },
     copywritingHooks: [
       "Une panne de chauffage ou une fuite d'eau ? Ne restez pas sans solution.",
-      "Des économies d'énergie durables grâce à une installation certifiée RGE.",
+      "Une installation pensée pour consommer moins, expliquée avant les travaux.",
       "L'exigence du travail bien fait, le respect des délais et des normes en vigueur.",
     ],
   },
@@ -124,8 +124,8 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     ],
     conversionBlueprint: {
       hero: {
-        headlinePattern: "Électricien Qualifié à {VILLE} — Dépannage & Installation Sécurisée",
-        subheadlinePattern: "Travaux d'électricité générale, mise en conformité et domotique. Sécurité garantie et intervention rapide à {VILLE}.",
+        headlinePattern: "Électricien à {VILLE} : dépannage, installation, mise en conformité",
+        subheadlinePattern: "Travaux d'électricité générale, mise en conformité et domotique à {VILLE}. Devis gratuit et détaillé avant les travaux.",
         primaryCta: "Appel Dépannage Électrique",
         secondaryCta: "Demander une Étude / Devis",
         trustBadges: ["Norme NFC 15-100", "Garantie Décennale", "Certifié Qualifelec", "Assurances Responsabilité Civile"],
@@ -143,11 +143,11 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
         layoutStyle: "Cartes modernes épurées avec contrastes de couleurs précises et pastilles de garantie",
       },
       competitiveAdvantages: {
-        sectionTitle: "La garantie d'une installation électrique irréprochable",
+        sectionTitle: "Une installation électrique expliquée de A à Z",
         points: [
-          { title: "Sécurité Absolue", desc: "Chaque chantier respecte strictement les normes en vigueur pour protéger votre famille et vos biens." },
-          { title: "Matériel Certifié NF", desc: "Utilisation exclusive de composants de grandes marques reconnues (Legrand, Schneider Electric, Hager)." },
-          { title: "Devis Clair & Détaillé sous 24h", desc: "Transparence totale sur la main d'œuvre et les fournitures." },
+          { title: "Le travail aux normes", desc: "Les installations suivent les normes en vigueur, expliquées pièce par pièce." },
+          { title: "Le matériel détaillé", desc: "Chaque composant posé figure sur le devis : vous savez ce qui est installé chez vous." },
+          { title: "Un devis clair", desc: "Main d'œuvre et fournitures séparées, sans ligne floue." },
         ],
       },
       proofAndReviews: {
@@ -164,7 +164,7 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     copywritingHooks: [
       "Votre sécurité électrique ne supporte aucun compromis.",
       "Modernisez votre installation et réduisez votre facture énergétique.",
-      "Un électricien expérimenté à votre écoute pour concrétiser vos projets.",
+      "Un électricien à votre écoute pour concrétiser vos projets.",
     ],
   },
   {
@@ -185,8 +185,8 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     ],
     conversionBlueprint: {
       hero: {
-        headlinePattern: "{METIER} à {VILLE} — Agencement Sur-Mesure & Finitions d'Excellence",
-        subheadlinePattern: "Donnez vie à vos projets d'aménagement avec un artisan passionné. Fabrication sur-mesure, pose soignée et matériaux durables.",
+        headlinePattern: "{METIER} à {VILLE} : fabrication et agencement sur mesure",
+        subheadlinePattern: "Vos projets d'aménagement conçus avec vous, fabriqués à vos mesures et posés chez vous, à {VILLE} et alentours.",
         primaryCta: "Prendre Rendez-vous / Devis Gratuit",
         secondaryCta: "Découvrir nos Réalisations",
         trustBadges: ["Garantie Décennale", "Fabrication Française / Sur-mesure", "Devis Détaillé Gratuit", "Chantiers Propres & Soignés"],
@@ -206,9 +206,9 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
       competitiveAdvantages: {
         sectionTitle: "L'art du sur-mesure et des finitions impeccables",
         points: [
-          { title: "Créations 100% Personnalisées", desc: "Chaque projet est unique. Nous concevons vos menuiseries et agencements au millimètre près." },
-          { title: "Matériaux Nobles & Durables", desc: "Sélection rigoureuse des essences de bois, profils aluminium à rupture de pont thermique et quincaillerie haut de gamme." },
-          { title: "Respect Rigoureux des Délais", desc: "Planning précis convenu ensemble et tenu du premier coup de scie à la pose finale." },
+          { title: "Conçu pour votre intérieur", desc: "Chaque projet part de vos mesures, de vos usages et de vos envies." },
+          { title: "Des matériaux choisis ensemble", desc: "Essences de bois, finitions et quincaillerie présentées avant la fabrication." },
+          { title: "Un planning convenu ensemble", desc: "Les étapes, de la prise de mesures à la pose, sont fixées avec vous." },
         ],
       },
       proofAndReviews: {
@@ -246,8 +246,8 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     ],
     conversionBlueprint: {
       hero: {
-        headlinePattern: "Artisan Couvreur-Zingueur à {VILLE} — Travaux de Toiture & Garantie 10 ans",
-        subheadlinePattern: "Rénovation de toiture, étanchéité, zinguerie et réparation de fuite d'urgence à {VILLE}. Déplacement et diagnostic gratuits.",
+        headlinePattern: "Couvreur à {VILLE} : toiture, zinguerie et réparation de fuites",
+        subheadlinePattern: "Rénovation de toiture, étanchéité, zinguerie et réparation de fuites à {VILLE} et alentours. Devis gratuit après visite.",
         primaryCta: "Demander un Diagnostic Toiture Offert",
         secondaryCta: "Urgence Fuite Toiture (Appel direct)",
         trustBadges: ["Garantie Décennale 10 Ans", "Intervention Urgence Fuite", "Devis & Déplacement Gratuits", "Matériaux Certifiés NF"],
@@ -267,9 +267,9 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
       competitiveAdvantages: {
         sectionTitle: "Votre toit entre les mains d'un véritable artisan couvreur",
         points: [
-          { title: "Protection & Étanchéité Garantie 10 Ans", desc: "Chaque intervention bénéficie d'une garantie décennale complète auprès de compagnies d'assurance françaises reconnues." },
-          { title: "Déplacement & Estimation Gratuits", desc: "Nous montons sur votre toit pour inspecter l'état réel de votre couverture avant tout chiffrage." },
-          { title: "Sécurité & Matériaux de Premier Choix", desc: "Respect des normes DTU de couverture et pose de tuiles de fabricants français réputés." },
+          { title: "Un état des lieux avant le devis", desc: "Le toit est inspecté et vous recevez les constats, photos à l'appui, avant tout chiffrage." },
+          { title: "Un devis gratuit et détaillé", desc: "Matériaux, surfaces et main d'œuvre détaillés, sans engagement." },
+          { title: "Un chantier propre et sécurisé", desc: "Protection des abords et nettoyage en fin de chantier." },
         ],
       },
       proofAndReviews: {
@@ -285,7 +285,7 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     },
     copywritingHooks: [
       "Protégez durablement votre patrimoine avec une toiture saine et étanche.",
-      "Une tuile cassée ou une infiltration ? Nous intervenons sans délai pour stopper les dégâts.",
+      "Une tuile cassée ou une infiltration ? Appelez pour faire le point sur votre toiture.",
       "Redonnez à votre maison tout son éclat avec un traitement de toiture professionnel.",
     ],
   },
@@ -307,8 +307,8 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     ],
     conversionBlueprint: {
       hero: {
-        headlinePattern: "{NOM_ENTREPRISE} — Votre {METIER} Artisanal à {VILLE}",
-        subheadlinePattern: "Le goût authentique du 100% fait maison. Produits frais, farine de tradition et savoir-faire artisanal chaque jour à {VILLE}.",
+        headlinePattern: "{NOM_ENTREPRISE}, {METIER} à {VILLE}",
+        subheadlinePattern: "Pains, viennoiseries et spécialités de la boutique, à découvrir à {VILLE}.",
         primaryCta: "Découvrir nos Spécialités",
         secondaryCta: "Commander / Nous Joindre",
         trustBadges: ["100% Fabrication Artisanale", "Farine & Produits Locaux", "Pains au Levain Naturel", "Ouvert du Mardi au Dimanche"],
@@ -328,8 +328,8 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
       competitiveAdvantages: {
         sectionTitle: "Notre engagement pour la qualité et le goût",
         points: [
-          { title: "Des Ingrédients Sélectionnés avec Soin", desc: "Farines de meule locales, beurre AOP et matières premières rigoureusement choisies." },
-          { title: "Une Cuisson Tout au Long de la Journée", desc: "Du pain chaud et croustillant à toute heure pour accompagner vos repas." },
+          { title: "La vitrine du jour", desc: "Les produits de la boutique présentés avec leurs photos, à mettre à jour simplement." },
+          { title: "Commander à l'avance", desc: "Un appel suffit pour réserver une commande et la retirer en boutique." },
           { title: "Un Accueil Chaleureux & Souriant", desc: "Le plaisir de vous servir et de vous conseiller au quotidien dans notre boutique." },
         ],
       },
@@ -345,7 +345,7 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
       coverageAreaPrompt: "Situé au cœur de {VILLE}, parking et accès facile à proximité.",
     },
     copywritingHooks: [
-      "Retrouvez le vrai goût du pain de tradition pétri et cuit sur place chaque matin.",
+      "Le pain et les spécialités de votre boutique de quartier.",
       "Des douceurs préparées avec amour pour illuminer vos moments de partage.",
       "La passion de l'artisanat au service de vos papilles.",
     ],
@@ -368,8 +368,8 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     ],
     conversionBlueprint: {
       hero: {
-        headlinePattern: "Garage Automobile à {VILLE} — Entretien, Réparation & Carrosserie Toutes Marques",
-        subheadlinePattern: "Mécanique générale, diagnostic électronique et carrosserie. Votre véhicule entre les mains d'experts avec garantie constructeur préservée.",
+        headlinePattern: "Garage à {VILLE} : entretien, réparation et carrosserie",
+        subheadlinePattern: "Mécanique générale, diagnostic et carrosserie à {VILLE}. Devis présenté avant toute intervention.",
         primaryCta: "Prendre Rendez-vous en Ligne",
         secondaryCta: "Appeler le Garage Directement",
         trustBadges: ["Garantie Constructeur Préservée", "Véhicule de Courtoisie Prêté", "Devis Avant Travaux", "Toutes Marques"],
@@ -389,9 +389,9 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
       competitiveAdvantages: {
         sectionTitle: "Pourquoi confier votre voiture à notre atelier ?",
         points: [
-          { title: "Véhicule de Prêt Mis à Disposition", desc: "Restez mobile pendant que nous prenons soin de votre véhicule." },
+          { title: "Un rendez-vous simple", desc: "Un appel pour fixer le passage au garage, sans plateforme intermédiaire." },
           { title: "Transparence Totale des Tarifs", desc: "Aucun travail n'est engagé sans votre accord préalable sur le devis." },
-          { title: "Équipements de Diagnostic Haute Précision", desc: "Des outils récents pour intervenir efficacement sur toutes les marques de véhicules récents." },
+          { title: "Le diagnostic expliqué", desc: "Ce qui a été constaté et ce qui est conseillé, expliqué avant les travaux." },
         ],
       },
       proofAndReviews: {
@@ -430,8 +430,8 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
     ],
     conversionBlueprint: {
       hero: {
-        headlinePattern: "{NOM_ENTREPRISE} — Votre Artisan {METIER} de Confiance à {VILLE}",
-        subheadlinePattern: "Expertise reconnue, travail soigné et accompagnement sur-mesure pour tous vos projets à {VILLE} et alentours.",
+        headlinePattern: "{NOM_ENTREPRISE}, {METIER} à {VILLE}",
+        subheadlinePattern: "Vos projets étudiés avec vous, un devis gratuit et un interlocuteur unique, à {VILLE} et alentours.",
         primaryCta: "Appeler Directement (N° affiché)",
         secondaryCta: "Demander un Devis Gratuit",
         trustBadges: ["Artisan Local Qualifié", "Devis Gratuit & Sans Engagement", "Assurances & Garanties", "Intervention Rapide"],
@@ -449,9 +449,9 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
       competitiveAdvantages: {
         sectionTitle: "Les engagements de notre entreprise",
         points: [
-          { title: "Savoir-Faire & Expérience", desc: "Des années de pratique pour vous garantir un résultat impeccable et durable." },
+          { title: "Un interlocuteur unique", desc: "La même personne vous répond, établit le devis et réalise le travail." },
           { title: "Écoute & Proximité", desc: "Un artisan local à votre écoute qui privilégie la relation humaine et la confiance." },
-          { title: "Tarifs Compétitifs & Devis Clair", desc: "Une tarification honnête, expliquée et sans surprise." },
+          { title: "Un devis clair", desc: "Chaque ligne du devis est expliquée avant de commencer." },
         ],
       },
       proofAndReviews: {
@@ -466,7 +466,7 @@ export const COMPETITOR_BENCHMARKS: CompetitorBenchmark[] = [
       coverageAreaPrompt: "Intervention à {VILLE} et dans toute la région environnante.",
     },
     copywritingHooks: [
-      "La garantie d'un travail soigné, réalisé par un artisan passionné.",
+      "Un travail soigné, expliqué étape par étape.",
       "Des solutions concrètes et adaptées à votre budget.",
       "Votre satisfaction est notre meilleure carte de visite.",
     ],

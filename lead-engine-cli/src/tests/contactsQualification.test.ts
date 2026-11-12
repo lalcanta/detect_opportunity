@@ -205,4 +205,26 @@ describe("directions artistiques des démos", () => {
     assert.equal(googleFontsHref(neo), "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700;800&display=swap");
     assert.match(renderDesignBrief(neo), /Néo-brutal coloré[\s\S]*prefers-reduced-motion/);
   });
+  it("intègre les principes frontend-design et les signes de page générée", async () => {
+    const { googleFontsHref, renderDesignBrief, DESIGN_DIRECTIONS } = await import("../generator/designDirections");
+    const swiss = DESIGN_DIRECTIONS.find((d) => d.id === "swiss")!;
+    assert.equal(googleFontsHref(swiss), "https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap");
+    const brief = renderDesignBrief(swiss);
+    assert.match(brief, /une seule famille, Archivo/);
+    assert.match(brief, /PRINCIPES DE DESIGN[\s\S]*un seul moment orchestré/);
+    assert.match(brief, /<!-- PLAN/);
+    assert.match(brief, /#F4F1EA/);
+    // Les directions elles-mêmes ne doivent plus prescrire ces signes.
+    for (const d of DESIGN_DIRECTIONS) {
+      const own = [d.hero, d.color, ...d.signature, d.rhythm].join(" ");
+      assert.doesNotMatch(own, /un mot (clé )?(en italique|en dégradé|souligné)|« 01 »|capitales \(/, d.id);
+    }
+  });
+  it("retire le plan de design du HTML livré", async () => {
+    const { finalizeDemoHtml, stripDesignPlan } = await import("../generator/demoGenerator");
+    const raw = "<!DOCTYPE html>\n<!-- PLAN\ncouleurs : #123\n-->\n<html><head></head><body><!-- note --></body></html>";
+    assert.doesNotMatch(stripDesignPlan(raw), /PLAN/);
+    assert.match(stripDesignPlan(raw), /<!-- note -->/);
+    assert.doesNotMatch(finalizeDemoHtml(raw, { leadId: "x", logoUrl: null, remoteAppUrl: "https://t.invalid" }), /PLAN/);
+  });
 });

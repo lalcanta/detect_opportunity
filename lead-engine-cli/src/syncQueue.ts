@@ -3,6 +3,7 @@ import { readdir, readFile, rename, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { loadConfig } from "./config";
 import { pushLead } from "./sync/pushLead";
+import { stripDesignPlan } from "./generator/demoGenerator";
 import { log, stripCodeFences } from "./utils/helpers";
 import type { Battlecard, LeadContact, SyncPayload, TokenUsageRecord } from "./types";
 
@@ -224,7 +225,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
 
     try {
       const meta = JSON.parse(await readFile(metaPath, "utf-8"));
-      const demoHtml = await readFile(demoPath, "utf-8");
+      const demoHtml = stripDesignPlan(await readFile(demoPath, "utf-8"));
       const battlecardRaw = await readFile(battlecardPath, "utf-8");
       const rawBc = JSON.parse(stripCodeFences(battlecardRaw)) as RawBattlecardFile;
 

@@ -100,7 +100,7 @@ ${
 ================================================================================
 A. Hero : accroche inspirée de « ${headline} » et « ${subheadline} » (reformule librement, garde le métier et la ville). Deux actions : appeler (lien tel:${cleanPhone}, numéro visible) et demander un devis (ancre #devis).
    Réassurance UNIQUEMENT avec des engagements sans affirmation factuelle (« Devis gratuit », « Artisan local à ${lead.city} »${lead.rating != null ? `, « ${lead.rating}/5 sur Google »` : ""}).
-B. Prestations — section « ${benchmark.conversionBlueprint.servicesGrid.sectionTitle} » : 6 prestations adaptées à « ${lead.activity} », mises en scène selon la direction artistique (bento, liste numérotée, carrousel, défilement…), pas une grille de cartes identiques :
+B. Prestations — section « ${benchmark.conversionBlueprint.servicesGrid.sectionTitle} » : 6 prestations adaptées à « ${lead.activity} », mises en scène selon la direction artistique (bento, liste numérotée, carrousel, défilement…), pas une grille de cartes identiques. Repères ci-dessous : remplace tout repère générique ou étranger à « ${lead.activity} » par une vraie prestation ou un vrai produit de ce métier (ex. pour une charcuterie : saucissons secs, jambons, pâtés, plateaux) :
 ${benchmark.conversionBlueprint.servicesGrid.servicesList.map((sv, idx) => `   ${idx + 1}. ${sv}`).join("\n")}
 C. Pourquoi nous — « ${benchmark.conversionBlueprint.competitiveAdvantages.sectionTitle.replace("{VILLE}", lead.city)} », engagements génériques (aucun délai, chiffre, marque ou label affirmé) :
 ${benchmark.conversionBlueprint.competitiveAdvantages.points.map((pt) => `   - ${pt.title} : ${pt.desc}`).join("\n")}
@@ -151,7 +151,7 @@ G. Barre d'appel mobile : barre fixe en bas d'écran sur mobile uniquement (fixe
  * vrai logo, no-referrer, document fermé, pixel de suivi.
  */
 export function finalizeDemoHtml(text: string, opts: { leadId: string; logoUrl: string | null; remoteAppUrl: string }): string {
-  let rawHtml = stripCodeFences(text);
+  let rawHtml = stripDesignPlan(stripCodeFences(text));
   const logoUrl = opts.logoUrl;
 
   // 1. Déterministiquement réinjecter le vrai logo client sans aucune altération/troncature LLM
@@ -178,6 +178,11 @@ export function finalizeDemoHtml(text: string, opts: { leadId: string; logoUrl: 
   }
 
   return injectTracker(rawHtml, opts.leadId, opts.remoteAppUrl);
+}
+
+/** Retire le plan de design demandé au modèle (commentaire <!-- PLAN … -->) : il n'a pas à être livré au prospect. */
+export function stripDesignPlan(html: string): string {
+  return html.replace(/<!--\s*PLAN\b[\s\S]*?-->\s*/i, "");
 }
 
 export function injectTracker(html: string, leadId: string, remoteAppUrl: string): string {
