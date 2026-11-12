@@ -1,5 +1,6 @@
 import { fetchPlacesReviews, placesReviewsEnabled } from "./placesReviews";
 import { describeRejection, evaluateRequirements, getOpportunityOrDefault } from "../../../shared/opportunities";
+import { ownWebsiteOrNull } from "./websiteClassifier";
 import type { BrowserContext, Page } from "playwright";
 import type { MapsLead, Review } from "../types";
 import { log } from "../utils/helpers";
@@ -203,7 +204,10 @@ async function scrapePlace(page: Page, url: string, opts: ScrapeOptions): Promis
 
   const phoneId = await attr('button[data-item-id^="phone:tel"]', "data-item-id");
   const phone = phoneId ? phoneId.replace("phone:tel:", "") : null;
-  const website = await attr('a[data-item-id="authority"]', "href");
+  const rawWebsite = await attr('a[data-item-id="authority"]', "href");
+  // Page Facebook/Instagram ou fiche d'annuaire : ce n'est pas le site du prospect, il n'est pas inspecté.
+  const website = ownWebsiteOrNull(rawWebsite);
+  const listingUrl = rawWebsite && !website ? rawWebsite : null;
   const ratingRaw = await text('div.F7nice span[aria-hidden="true"]');
   const reviewsLabel = await attr('div.F7nice span[aria-label*="avis"]', "aria-label");
   const activity = (await text("button.DkEaL")) ?? opts.query;
@@ -226,6 +230,7 @@ async function scrapePlace(page: Page, url: string, opts: ScrapeOptions): Promis
     city: realCity,
     phone,
     website,
+    listingUrl,
     rating: ratingRaw ? Number(ratingRaw.replace(",", ".")) || null : null,
     reviewsCount: reviewsLabel ? Number(reviewsLabel.replace(/\D/g, "")) || null : null,
     recentReviews,

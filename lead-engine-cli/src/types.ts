@@ -11,6 +11,8 @@ export interface MapsLead {
   city: string;
   phone: string | null;
   website: string | null;
+  /** Lien de la fiche qui n'est pas un site propre (réseau social, annuaire) ; non inspecté. */
+  listingUrl?: string | null;
   rating: number | null;
   reviewsCount: number | null;
   recentReviews: Review[];

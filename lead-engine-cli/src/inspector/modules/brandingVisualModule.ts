@@ -1,4 +1,5 @@
 import type { ScanModule } from "./types";
+import { collectLogoCandidates, guessImageType, isSocialOrServiceUrl, isUsableLogoImage, pickLogoCandidate, siteMatchesCompany, type LogoCandidate } from "./logoPicker";
 
 /** Convertit une chaîne CSS rgb(...) ou rgba(...) en code hexadécimal (#rrggbb). */
 export function parseRgbToHex(rgb: string): string | null {
@@ -47,7 +48,7 @@ export const brandingVisualModule: ScanModule = {
   id: "branding_visual",
   label: "Identité Visuelle, Logo Base64 & Capture HD",
   description: "Extrait les couleurs dominantes, le vrai logo client encodé en Base64 et la capture d'écran pleine page.",
-  async afterNavigate({ page, result }) {
+  async afterNavigate({ page, result, companyName, phone }) {
     result.dominantColors = await page.evaluate(() => {
       const counts = new Map<string, number>();
       function toHex(rgb: string): string | null {
@@ -68,122 +69,55 @@ export const brandingVisualModule: ScanModule = {
       return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([h]) => h);
     });
 
-    const rawLogoInfo = await page.evaluate(() => {
-      function abs(u: string | null): string | null {
-        if (!u || u.startsWith("data:")) return u;
-        try {
-          return new URL(u, location.href).href;
-        } catch {
-          return null;
-        }
-      }
-
-      function getImgSrc(el: HTMLImageElement): string | null {
-        const isPlaceholder = (s: string | null) => !s || (s.startsWith("data:") && s.length < 500);
-        const candidates = [
-          el.getAttribute("data-lazy-src"),
-          el.getAttribute("data-src"),
-          el.getAttribute("data-original"),
-          el.currentSrc,
-          el.getAttribute("src"),
-        ];
-        for (const c of candidates) {
-          if (c && !isPlaceholder(c)) return c;
-        }
-        const srcset = el.getAttribute("data-srcset") || el.getAttribute("srcset");
-        if (srcset) {
-          const first = srcset.split(",")[0]?.trim().split(/\s+/)[0];
-          if (first && !isPlaceholder(first)) return first;
-        }
-        return el.currentSrc || el.getAttribute("src");
-      }
-
-      const imgSelectors = [
-        'header img[src*="logo" i]',
-        'nav img[src*="logo" i]',
-        '.navbar img[src*="logo" i]',
-        'img[class*="custom-logo" i]',
-        'img[class*="site-logo" i]',
-        '.site-branding img',
-        '.header-logo img',
-        'a[rel="home"] img',
-        'img[alt*="logo" i]',
-        '[class*="logo" i] img',
-        '[id*="logo" i] img',
-        'img[src*="logo" i]',
-        'a[class*="brand" i] img',
-        'a[class*="navbar-brand" i] img',
-        'header a[href="/"] img',
-        'header a[href="./"] img',
-        'nav a[href="/"] img',
-        'header img',
-        'nav img',
-        '[role="banner"] img',
-      ];
-
-      for (const sel of imgSelectors) {
-        const els = Array.from(document.querySelectorAll<HTMLImageElement>(sel));
-        for (const el of els) {
-          const src = getImgSrc(el);
-          const resolved = abs(src);
-          if (resolved) {
-            const rect = el.getBoundingClientRect();
-            if (rect.width >= 16 && rect.height >= 12) {
-              return { url: resolved, isSvg: false };
-            }
+    const candidates = await page.evaluate(collectLogoCandidates).catch(() => [] as LogoCandidate[]);
+    const identity = await page
+      .evaluate(() => ({
+        host: location.hostname,
+        title: document.title || "",
+        // Chiffres de la page (texte et liens tel:), pour retrouver le numéro de la fiche quel que soit son format.
+        digits: ((document.body?.innerText || "") + " " + Array.from(document.querySelectorAll('a[href^="tel:"]')).map((a) => a.getAttribute("href")).join(" ")).replace(/\D/g, ""),
+      }))
+      .catch(() => ({ host: "", title: "", digits: "" }));
+    const siteIsCompany = siteMatchesCompany(identity.host, identity.title, companyName, identity.digits, phone);
+    const pick = pickLogoCandidate(candidates, companyName, siteIsCompany);
+    const fallbacks = await page
+      .evaluate(() => {
+        const abs = (u: string | null | undefined) => {
+          if (!u) return null;
+          try {
+            return new URL(u, location.href).href;
+          } catch {
+            return null;
           }
+        };
+        return [
+          abs(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute("href")),
+          abs(document.querySelector('link[rel*="icon"][sizes*="192"], link[rel*="icon"][sizes*="180"]')?.getAttribute("href")),
+        ].filter((u): u is string => !!u);
+      })
+      .catch(() => [] as string[]);
+    // og:image n'est pas un repli : c'est presque toujours une photo (devanture, plat, chantier).
+    // Icônes du site (apple-touch-icon…) : seulement si le site est bien celui de l'entreprise.
+    const urls = [...(pick ? [pick.url] : []), ...(siteIsCompany ? fallbacks.filter((u) => !isSocialOrServiceUrl(u)) : [])];
+
+    for (const url of urls) {
+      if (url.startsWith("data:")) {
+        if (url.startsWith("data:image/svg") || url.length > 500) {
+          result.logoUrl = url;
+          break;
         }
+        continue;
       }
-
-      const svgLogo = document.querySelector(
-        'header svg[class*="logo" i], nav svg[class*="logo" i], a[class*="brand" i] svg, .logo svg, header a[href="/"] svg',
-      );
-      if (svgLogo) {
-        const rect = svgLogo.getBoundingClientRect();
-        if (rect.width >= 16 && rect.height >= 12) {
-          const svgCode = svgLogo.outerHTML;
-          return {
-            url: `data:image/svg+xml;utf8,${encodeURIComponent(svgCode)}`,
-            isSvg: true,
-          };
-        }
-      }
-
-      const appleTouch = abs(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute("href") ?? null);
-      if (appleTouch) return { url: appleTouch, isSvg: false };
-
-      const iconHighRes = abs(
-        document.querySelector('link[rel*="icon"][sizes*="192"], link[rel*="icon"][sizes*="180"]')?.getAttribute("href") ??
-          null,
-      );
-      if (iconHighRes) return { url: iconHighRes, isSvg: false };
-
-      const ogImage = abs(document.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? null);
-      if (ogImage) return { url: ogImage, isSvg: false };
-
-      return null;
-    });
-
-    if (rawLogoInfo?.url) {
-      if (rawLogoInfo.url.startsWith("data:")) {
-        result.logoUrl = rawLogoInfo.url;
-      } else {
-        try {
-          const imgResp = await page.request.get(rawLogoInfo.url, { timeout: 6000 });
-          if (imgResp.ok()) {
-            const buf = await imgResp.body();
-            const contentType = (imgResp.headers()["content-type"] || "image/png").split(";")[0]?.trim() || "image/png";
-            if (buf.length > 0 && buf.length < 2 * 1024 * 1024) {
-              result.logoUrl = `data:${contentType};base64,${buf.toString("base64")}`;
-            } else {
-              result.logoUrl = rawLogoInfo.url;
-            }
-          } else {
-            result.logoUrl = rawLogoInfo.url;
-          }
-        } catch {
-          result.logoUrl = rawLogoInfo.url;
-        }
+      try {
+        const imgResp = await page.request.get(url, { timeout: 6000 });
+        if (!imgResp.ok()) continue;
+        const buf = await imgResp.body();
+        const contentType = (imgResp.headers()["content-type"] || "").split(";")[0]?.trim() || guessImageType(url);
+        if (!isUsableLogoImage(buf, contentType)) continue;
+        result.logoUrl = buf.length < 2 * 1024 * 1024 ? `data:${contentType};base64,${buf.toString("base64")}` : url;
+        break;
+      } catch {
+        // Logo injoignable : on essaie le suivant.
       }
     }
 

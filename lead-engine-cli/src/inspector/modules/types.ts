@@ -9,6 +9,7 @@ export interface ScanModuleContext {
   url: string;
   companyName?: string;
   city?: string | null;
+  phone?: string | null;
   result: SiteInspection;
 }
 

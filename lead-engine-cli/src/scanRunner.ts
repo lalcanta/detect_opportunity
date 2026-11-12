@@ -201,7 +201,7 @@ async function processLead(
     await onSubStep?.(`🔍 Aucun site actuel : préparation de l'audit stratégique...`);
   }
   const inspection = lead.website
-    ? await inspectSite(context, lead.website, { opportunityType, companyName: lead.name, city: lead.city })
+    ? await inspectSite(context, lead.website, { opportunityType, companyName: lead.name, city: lead.city, phone: lead.phone })
     : null;
   const sireneFallback = !inspection ? await lookupCompanySirene(lead.name, lead.city) : null;
 

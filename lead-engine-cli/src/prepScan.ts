@@ -209,6 +209,7 @@ export async function runPrepScan(
             opportunityType: oppType,
             companyName: lead.name,
             city: lead.city,
+            phone: lead.phone,
           });
           if (inspection.screenshot) {
             await writeFile(`${leadDir}/screenshot.png`, inspection.screenshot);
