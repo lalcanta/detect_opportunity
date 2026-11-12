@@ -38,9 +38,11 @@ adminRoutes.post("/api/admin/assign", requireUser("admin"), async (c) => {
 /** POST /api/admin/users — création d'un utilisateur dans la Whitelist avec lien d'invitation. */
 adminRoutes.post("/api/admin/users", requireUser("admin"), async (c) => {
   const body = await c.req
-    .json<{ name?: string; email?: string; quota?: number; opportunities?: string[] }>()
-    .catch(() => ({}) as { name?: string; email?: string; quota?: number; opportunities?: string[] });
+    .json<{ name?: string; email?: string; quota?: number; opportunities?: string[]; role?: string }>()
+    .catch(() => ({}) as { name?: string; email?: string; quota?: number; opportunities?: string[]; role?: string });
   if (!body.name?.trim()) return c.json({ error: "name_required" }, 400);
+  // Un admin voit et modifie toute l'administration ; un closer ne voit que le pipeline.
+  const role = body.role === "admin" ? "admin" : "closer";
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   const token = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
   const inviteBytes = crypto.getRandomValues(new Uint8Array(16));
@@ -54,9 +56,9 @@ adminRoutes.post("/api/admin/users", requireUser("admin"), async (c) => {
 
   try {
     await c.env.DB.prepare(
-      "INSERT INTO users (id, name, email, invite_code, invited_at, role, phone_quota_weekly, access_token, allowed_opportunities) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'closer', ?, ?, ?)",
+      "INSERT INTO users (id, name, email, invite_code, invited_at, role, phone_quota_weekly, access_token, allowed_opportunities) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)",
     )
-      .bind(id, body.name.trim(), email, inviteCode, body.quota ?? 100, token, opps)
+      .bind(id, body.name.trim(), email, inviteCode, role, body.quota ?? 100, token, opps)
       .run();
   } catch (e) {
     return c.json({ error: "email_already_exists", detail: (e as Error).message }, 400);
@@ -66,6 +68,7 @@ adminRoutes.post("/api/admin/users", requireUser("admin"), async (c) => {
     ok: true,
     id,
     email,
+    role,
     invite_code: inviteCode,
     access_token: token,
     allowed_opportunities: JSON.parse(opps),
@@ -115,6 +118,17 @@ adminRoutes.post("/api/admin/users/:id/channels", requireUser("admin"), async (c
     .bind(JSON.stringify(channels), c.req.param("id"))
     .run();
   return c.json({ ok: true, id: c.req.param("id"), allowed_channels: channels });
+});
+
+/** POST /api/admin/users/:id/role — passe un utilisateur en closer ou en admin (jamais soi-même). */
+adminRoutes.post("/api/admin/users/:id/role", requireUser("admin"), async (c) => {
+  const body = await c.req.json<{ role?: string }>().catch(() => ({}) as { role?: string });
+  if (body.role !== "admin" && body.role !== "closer") return c.json({ error: "invalid_role" }, 400);
+  const id = c.req.param("id");
+  if (id === c.get("user").id) return c.json({ error: "cannot_change_own_role", message: "Vous ne pouvez pas changer votre propre rôle." }, 400);
+  const res = await c.env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(body.role, id).run();
+  if (!res.meta.changes) return c.json({ error: "not_found" }, 404);
+  return c.json({ ok: true, id, role: body.role });
 });
 
 /** POST /api/admin/users/:id/toggle — active / désactive un utilisateur. */

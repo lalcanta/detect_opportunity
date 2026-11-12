@@ -1744,7 +1744,20 @@ ${adminShell(
             </td>
             <td class="py-3">
               <div class="flex flex-col gap-1 items-start">
-                <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${u.role === "admin" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}">${esc(u.role)}</span>
+                ${
+                  u.id === user.id
+                    ? `<span class="px-2 py-0.5 rounded text-[11px] font-semibold ${u.role === "admin" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}">${u.role === "admin" ? "Admin" : "Closer"}</span>`
+                    : `<div class="inline-flex rounded-md border border-zinc-200 bg-zinc-50 p-0.5" role="group" aria-label="Rôle de ${esc(u.name)}">
+                  ${(["closer", "admin"] as const)
+                    .map(
+                      (r) =>
+                        `<button type="button" data-user-role="${esc(u.id)}" data-role="${r}" aria-pressed="${u.role === r}" class="btn-user-role text-[11px] px-2 py-0.5 rounded font-semibold transition-colors ${
+                          u.role === r ? (r === "admin" ? "bg-purple-600 text-white" : "bg-blue-600 text-white") : "text-zinc-500 hover:text-zinc-900"
+                        }">${r === "admin" ? "Admin" : "Closer"}</button>`,
+                    )
+                    .join("")}
+                </div>`
+                }
                 <span class="text-[10px] font-medium ${hasPwd ? "text-emerald-700" : "text-amber-600"}">${hasPwd ? "✔ Mot de passe actif" : "⏳ En attente d'activation"}</span>
               </div>
             </td>
@@ -1784,6 +1797,14 @@ ${adminShell(
 
       <div class="pt-4 border-t border-zinc-100 space-y-3">
         <h3 class="font-semibold text-xs text-zinc-900 uppercase tracking-wider">Inviter & Autoriser une nouvelle personne dans la Whitelist</h3>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-zinc-600 font-medium">Rôle :</span>
+          <div class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5" role="group" aria-label="Rôle de la personne invitée">
+            <button type="button" data-new-role="closer" aria-pressed="true" class="btn-new-role text-xs px-3 py-1.5 rounded-md font-semibold bg-blue-600 text-white">Closer</button>
+            <button type="button" data-new-role="admin" aria-pressed="false" class="btn-new-role text-xs px-3 py-1.5 rounded-md font-semibold text-zinc-500 hover:text-zinc-900">Admin</button>
+          </div>
+          <span id="new-role-help" class="text-[11px] text-zinc-500">Voit le pipeline et les leads qui lui sont attribués.</span>
+        </div>
         <div class="grid sm:grid-cols-4 gap-2">
           <input id="newname" placeholder="Prénom & Nom (ex: Sophie)" class="border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white focus:ring-1 focus:ring-zinc-900">
           <input id="newemail" type="email" placeholder="Email autorisé (ex: sophie@gmail.com)" class="border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white font-mono focus:ring-1 focus:ring-zinc-900 sm:col-span-2">
@@ -1792,7 +1813,7 @@ ${adminShell(
             <button id="adduser" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 text-xs font-semibold shadow-sm whitespace-nowrap">Autoriser & Inviter</button>
           </div>
         </div>
-        <div class="flex flex-wrap items-center gap-2 pt-1">
+        <div id="new-closer-opps" class="flex flex-wrap items-center gap-2 pt-1">
           <span class="text-xs text-zinc-600 font-medium">Besoins autorisés :</span>
           ${OPPORTUNITY_TYPES.map((ot) => `
             <label class="inline-flex items-center gap-1.5 text-xs text-zinc-700 font-medium bg-zinc-50 border border-zinc-200 rounded px-2.5 py-1 cursor-pointer hover:bg-zinc-100 select-none">
@@ -2785,6 +2806,39 @@ document.querySelectorAll('.btn-toggle-opp').forEach(function (b) {
   };
 });
 
+var NEW_ROLE = 'closer';
+var ROLE_HELP = {
+  closer: 'Voit le pipeline et les leads qui lui sont attribués.',
+  admin: 'Accès complet : administration, besoins, scans, quotas et coûts.'
+};
+document.querySelectorAll('.btn-new-role').forEach(function (b) {
+  b.addEventListener('click', function () {
+    NEW_ROLE = b.dataset.newRole;
+    document.querySelectorAll('.btn-new-role').forEach(function (x) {
+      var on = x === b;
+      x.setAttribute('aria-pressed', on ? 'true' : 'false');
+      x.className = 'btn-new-role text-xs px-3 py-1.5 rounded-md font-semibold ' + (on ? (x.dataset.newRole === 'admin' ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white') : 'text-zinc-500 hover:text-zinc-900');
+    });
+    $('new-role-help').textContent = ROLE_HELP[NEW_ROLE];
+    // Un admin voit tous les besoins : le choix des besoins et le quota d'appels ne concernent que les closers.
+    $('new-closer-opps').classList.toggle('hidden', NEW_ROLE === 'admin');
+    $('newquota').classList.toggle('invisible', NEW_ROLE === 'admin');
+  });
+});
+document.querySelectorAll('.btn-user-role').forEach(function (b) {
+  b.addEventListener('click', async function () {
+    if (b.getAttribute('aria-pressed') === 'true') return;
+    var role = b.dataset.role;
+    var msg = role === 'admin'
+      ? 'Donner l’accès admin ? Cette personne pourra tout voir et tout modifier dans l’administration.'
+      : 'Repasser cette personne en closer ? Elle perdra l’accès à l’administration.';
+    if (!confirm(msg)) return;
+    var r = await post('/api/admin/users/' + b.dataset.userRole + '/role', { role: role });
+    if (r.ok) location.reload();
+    else { var j = await r.json().catch(function () { return {}; }); alert(j.message || 'Changement de rôle impossible.'); }
+  });
+});
+
 if ($('adduser')) {
   $('adduser').onclick = async function () {
     var opps = [];
@@ -2797,14 +2851,15 @@ if ($('adduser')) {
       name: nameVal,
       email: emailVal,
       quota: Number($('newquota').value) || 100,
-      opportunities: opps
+      opportunities: opps,
+      role: NEW_ROLE
     })).json();
     if (j.invite_code) {
       var invUrl = location.origin + '/invite/' + j.invite_code;
       var mailHref = buildInviteMailto(j.email, nameVal, j.invite_code);
       $('newtoken').innerHTML =
         '<div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2 mt-2">' +
-          '<div class="font-bold text-emerald-900">✔ ' + nameVal + ' (' + j.email + ') a été ajouté(e) à la Whitelist !</div>' +
+          '<div class="font-bold text-emerald-900">✔ ' + nameVal + ' (' + j.email + ') a été ajouté(e) à la Whitelist' + (j.role === 'admin' ? ' en admin' : '') + ' !</div>' +
           '<div class="text-[11px] font-mono text-emerald-800 break-all">Lien d\\'activation : ' + invUrl + '</div>' +
           '<div class="flex flex-wrap gap-2 pt-1">' +
             '<a href="' + mailHref + '" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1">✉️ Ouvrir le mail d\\'invitation pré-rempli</a>' +
