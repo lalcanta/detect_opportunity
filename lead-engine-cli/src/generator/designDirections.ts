@@ -17,7 +17,10 @@ export interface ArtisanArchetype {
   advice: string;
 }
 
-/** Famille de métier : psychologie du client et composant signature (voir DESIGN_ARCHETYPES.md). */
+/**
+ * Famille de métier : psychologie du client et composant signature.
+ * Fait foi pour les archétypes : toute modification se reporte dans DESIGN_ARCHETYPES.md (description pour humains).
+ */
 export function detectArtisanArchetype(activity: string): ArtisanArchetype {
   const act = activity.toLowerCase();
   if (/couvr|toit|charp|ma[çc]on|fa[çc]ad|terras|carrel/.test(act)) {

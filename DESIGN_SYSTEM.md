@@ -1,11 +1,11 @@
 # Design System & Architecture Visuelle — LeadEngine PRO & Alcantara Studio
 
 Ce document constitue la référence du Design System appliqué à l'ensemble des interfaces du projet :
-- **CRM & Pipeline Closer** ([`lead-dashboard-web/src/views/closer.ts`](file:///Users/loicalcantara/Workspace/Business/detect_opportunity/lead-dashboard-web/src/views/closer.ts))
-- **Administration & Scanner** ([`lead-dashboard-web/src/views/admin.ts`](file:///Users/loicalcantara/Workspace/Business/detect_opportunity/lead-dashboard-web/src/views/admin.ts))
-- **Authentification Whitelist & Invitations** ([`lead-dashboard-web/src/views/login.ts`](file:///Users/loicalcantara/Workspace/Business/detect_opportunity/lead-dashboard-web/src/views/login.ts))
-- **Layout Global & Icônes SVG** ([`lead-dashboard-web/src/views/layout.ts`](file:///Users/loicalcantara/Workspace/Business/detect_opportunity/lead-dashboard-web/src/views/layout.ts))
-- **Landing Page Publique Dissociée (3 Offres & Lead Volontaire)** ([`agency-landing-web/index.html`](file:///Users/loicalcantara/Workspace/Business/detect_opportunity/agency-landing-web/index.html) & [`lead-dashboard-web/src/views/landing.ts`](file:///Users/loicalcantara/Workspace/Business/detect_opportunity/lead-dashboard-web/src/views/landing.ts))
+- **CRM & Pipeline Closer** ([`lead-dashboard-web/src/views/closer.ts`](lead-dashboard-web/src/views/closer.ts))
+- **Administration & Scanner** ([`lead-dashboard-web/src/views/admin.ts`](lead-dashboard-web/src/views/admin.ts))
+- **Authentification Whitelist & Invitations** ([`lead-dashboard-web/src/views/login.ts`](lead-dashboard-web/src/views/login.ts))
+- **Layout Global & Icônes SVG** ([`lead-dashboard-web/src/views/layout.ts`](lead-dashboard-web/src/views/layout.ts))
+- **Landing Page Publique Dissociée (3 Offres & Lead Volontaire)** ([`agency-landing-web/index.html`](agency-landing-web/index.html) & [`lead-dashboard-web/src/views/landing.ts`](lead-dashboard-web/src/views/landing.ts))
 
 ---
 
@@ -26,7 +26,7 @@ Ce document constitue la référence du Design System appliqué à l'ensemble de
 | **Fond Application (Clair)** | `bg-zinc-100/80 text-zinc-900 min-h-screen antialiased` | Pipeline Closer (`/`), Administration (`/admin`) |
 | **Fond Sombre (Dark Mode)** | `bg-zinc-950 text-zinc-100 min-h-screen antialiased` | Connexion (`/login`), Activation (`/invite/:code`), Landing Agence (`/landing`), Rapport QA |
 | **Topbar Globale** | `bg-zinc-950 text-white sticky top-0 z-30 border-b border-zinc-800/80 shadow-sm` | Barre de navigation principale (`max-w-7xl mx-auto px-3 sm:px-6 py-2`) |
-| **Sous-barre Sticky** | `bg-white border-b border-zinc-200/80 px-4 sm:px-6 py-2.5 shadow-sm sticky top-[49px] z-20` | Navigation secondaire Admin & Filtres Closer (`max-w-7xl mx-auto`) |
+| **Menu latéral** | `sideNavShell` (`lead-dashboard-web/src/views/sideNav.ts`) : rétractable, groupes en accordéon, tiroir sur mobile | Navigation et filtres du Pipeline Closer et de l'Administration |
 | **Carte Standard (Clair)** | `bg-white rounded-2xl shadow-sm border border-zinc-200/80 p-5` | Blocs KPIs, sections Admin, sections Ma Journée |
 | **Carte Kanban** | `bg-white rounded-xl shadow-sm border border-zinc-200/80 p-3.5 hover:shadow-md hover:border-zinc-300` | Fiche prospect dans les colonnes Kanban |
 
@@ -54,7 +54,7 @@ Ce document constitue la référence du Design System appliqué à l'ensemble de
 
 ## 6. Composants UI Réutilisables (`lead-dashboard-web/src/views/components.ts`)
 
-Pour éviter toute divergence entre le rendu serveur (SSR), les différentes cartes (`backlogCard`, `calendarCard`, `admin.ts`) et les mises à jour DOM côté client (Sidepanel), tous les composants partagés sont centralisés dans [`components.ts`](file:///Users/loicalcantara/Workspace/Business/detect_opportunity/lead-dashboard-web/src/views/components.ts) :
+Pour éviter toute divergence entre le rendu serveur (SSR), les différentes cartes (`backlogCard`, `calendarCard`, `admin.ts`) et les mises à jour DOM côté client (Sidepanel), tous les composants partagés sont centralisés dans [`components.ts`](lead-dashboard-web/src/views/components.ts) :
 
 - **`getDemoAccessState(lead)`** : Source unique de vérité calculant l'état d'accès à la démo (`isRevoked`, `isExpired`, `canOpenDemo`, `canRevoke`, libellés des badges et boutons).
 - **`renderCardDemoSlot(lead, variant)`** & **`renderClientDemoSlotHelperScript()`** : Rendu unifié de l'emplacement Démo (`compact` sur Kanban/Liste, `button` sur Ma Journée & Agenda) partagé entre SSR et JavaScript client (`data-card-demo-slot` + `data-demo-variant`).

@@ -72,7 +72,7 @@ Point d'entrée : `npm run prep` ou job `prep_only`. Code : `lead-engine-cli/src
 3. Pousse immédiatement le lead au CRM en `status = pending_generation` (onglet « file de génération » de l'admin,
    masqué du Kanban).
 4. **Humain + agent** : on demande à Antigravity « Génère les démos et battlecards des leads en attente » ; il suit
-   `.agents/skills/leadengine/SKILL.md` et écrit `demo.html` + `battlecard.json`.
+   `docs/agents/file-de-generation.md` et écrit `demo.html` + `battlecard.json`.
 5. `npm run sync-queue[:prod]` : pour chaque dossier complet, normalise la battlecard, repousse le lead (statut
    `demo_ready`) et déplace le dossier dans `queue/completed/`.
 
@@ -179,7 +179,7 @@ Flags : `--prod` / `--remote` (→ `REMOTE_APP_URL_PROD` ou `https://lead-dashbo
 **Dashboard (`.dev.vars` / secrets Pages)** : `SYNC_SECRET_TOKEN`, `PUBLIC_APP_URL`, `TELEGRAM_BOT_TOKEN`,
 `TELEGRAM_CHAT_ID`, `DISCORD_WEBHOOK_URL`, `STRIPE_SECRET_KEY`, `STRIPE_AMOUNT_CENTS`, `STRIPE_PRODUCT_NAME`,
 `AUTO_ASSIGN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Bindings : `DB` (D1 `lead-dashboard-db`), `AI`.
-`SESSION_SECRET` et `WHITELIST_EMAILS` (cités dans `DEPLOYMENT_GUIDE.md`) **ne sont lus nulle part** ; la whitelist
+`SESSION_SECRET` et `WHITELIST_EMAILS` (cités par l'ancien guide de déploiement) **ne sont lus nulle part** ; la whitelist
 est la table `users`.
 
 ## 10. Commandes

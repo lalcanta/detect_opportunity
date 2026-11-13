@@ -1,71 +1,13 @@
 ---
 name: leadengine
-description: Automatisation complète d'acquisition de leads, démos Tailwind et battlecards closers avec Antigravity CLI (0€ coût API externe).
+description: Traite la file de génération LeadEngine (lead-engine-cli/queue/pending) — écrit les demo.html et battlecard.json manquants puis synchronise vers le CRM. À utiliser pour générer les démos et battlecards en attente.
 ---
 
-# Skill : LeadEngine Antigravity CLI
+# LeadEngine — traitement de la file de génération
 
-Ce skill permet de piloter l'acquisition, la création de démos Tailwind haute conversion et la synchronisation CRM en **0€ de coût API externe**, en confiant les générations créatives et stratégiques directement à Antigravity.
+Suis la procédure de `docs/agents/file-de-generation.md` (lis-la en entier), avec :
 
-## Workflow en 3 étapes :
-
-### 1. Préparation locale (Playwright - 0 LLM)
-Lance la cartographie Google Maps, l'inspection de site, l'extraction de logo, et la création du flyer PDF dans `queue/pending/<leadId>/` :
-```bash
-npm run prep -- --query "plombier" --city "Bordeaux" --limit 5
-```
-Ou avec coordonnées géographiques précises :
-```bash
-npm run prep -- --query "électricien" --city "Lyon" --limit 10 --lat 45.7640 --lng 4.8357 --radius 15
-```
-
-### 2. Génération Antigravity (0€ coût token API)
-Quand l'utilisateur demande :
-> "Génère les démos et battlecards des leads en attente"
-
-Antigravity exécute :
-1. Scanne `lead-engine-cli/queue/pending/` (le manifeste `pending_manifest.json` n'est qu'un index, purgé par `sync-queue`).
-2. Pour chaque lead `leadDir = lead-engine-cli/queue/pending/<id>` :
-   - Lit `meta.json`, `prompt_demo.md`, et `prompt_battlecard.md`.
-   - Inspecte `screenshot.png` si présent pour analyser les faiblesses du site actuel.
-   - Écrit `leadDir/demo.html` en appliquant rigoureusement le skill `.agents/skills/artisan-frontend-craft/SKILL.md` :
-     - Code HTML5 complet avec CDN Tailwind (aucun template générique).
-     - Respect de l'archétype métier (Matière & Bâtiment, Bouche & Gourmand, Urgence & Vélocité, ou Studio Déco).
-     - Palette et typographie adaptées au secteur (fond chaleureux/minéral/technique).
-     - Au moins 1 composant interactif signature (Avant/Après rénovation, indicateur d'ouverture live, ou simulateur 3 étapes).
-     - Sticky bottom call bar mobile (`tel:`, WhatsApp).
-     - Preuve sociale (vrais avis Google Maps) et grille de prestations locale.
-   - Écrit `leadDir/battlecard.json` :
-     - Script d'appel closer mot-à-mot.
-     - Objections et répliques.
-     - Message WhatsApp de closing avec le lien démo.
-     - Audit critique et arguments ROI.
-   - Lead `audit_qa_trackers` : `demo.html` (rapport) est déjà généré ; écrire `battlecard.json` avec un
-     `coldEmail` (`subject`, `body`) obligatoire, en citant uniquement les traceurs de `audit_facts.json`.
-     Sans `coldEmail`, `sync-queue` laisse le lead en attente.
-   - Lead dont `meta.json` indique `primary_channel` = `email` ou `contact_form` : suivre `prompt_battlecard.md`
-     (message écrit) ; `coldEmail` (`subject`, `body`) est obligatoire. Pour `contact_form`, texte brut de
-     900 caractères maximum, collé tel quel dans le formulaire du prospect.
-
-### 3. Synchronisation Cloud CRM (1 commande)
-Une fois les fichiers `demo.html` et `battlecard.json` écrits :
-```bash
-# Pour synchroniser vers Cloudflare Pages (Production) :
-LEADENGINE_AGENT=antigravity npm run sync-queue:prod
-
-# Pour synchroniser vers le serveur local (http://localhost:8788) :
-LEADENGINE_AGENT=antigravity npm run sync-queue
-```
-Les leads sont poussés dans le Cloud CRM via `/api/sync` et déplacés dans `queue/completed/<leadId>/`.
-Les closers retrouvent immédiatement les fiches dans le Kanban avec démo interactive, flyer PDF prêt à l'emploi et battlecard d'appel.
-
-### 4. Mode MCP Direct ("Génère mes X / toutes mes démos")
-Quand l'utilisateur demande :
-> "Génère mes X démos" ou "Génère toutes mes démos"
-
-L'agent (Antigravity, Claude, Cursor) utilise les outils du serveur MCP `leadengine` :
-1. `leadengine_list_tasks` pour récupérer les fiches cibles.
-2. Pour chaque lead, `leadengine_get_task_context` : le MCP fournit directement la fiche complète ET le brief de direction artistique sur-mesure (archétype métier, typographies Google Fonts, palette Tailwind exacte, et le composant interactif signature clé en main).
-3. L'agent rédige le code HTML5 complet avec la plus haute exigence esthétique.
-4. `leadengine_submit_assets` pour valider, injecter le bandeau prospect interactif et publier instantanément dans la base Cloudflare D1 de production.
-
+- **Valeur de `LEADENGINE_AGENT`** : `antigravity`.
+- **Préparer de nouveaux leads** si on te le demande, depuis la racine du dépôt :
+  `npm run prep -- --query "plombier" --city "Bordeaux" --limit 5` (ajouter `--lat … --lng … --radius …` pour une
+  zone précise).

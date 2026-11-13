@@ -35,8 +35,13 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Gemini / Antigravity local config
-.gemini/
+# Gemini / Antigravity : seul le réglage qui pointe vers AGENTS.md est versionné
+.gemini/*
+!.gemini/settings.json
+
+# Préférences personnelles des agents
+AGENTS.local.md
+CLAUDE.local.md
 
 # Démos de test (à supprimer après comparaison)
 test_demo/

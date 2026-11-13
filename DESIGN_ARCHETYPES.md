@@ -2,9 +2,10 @@
 
 Ce document est le **carnet de bord visuel** du système. Il répertorie la direction artistique de chaque famille de métier pour garantir que chaque démo interactive (`demo.html`) possède une identité propre, crédible et à forte conversion, sans jamais ressembler à un template générique.
 
-> [!TIP]
-> **Comment utiliser ce fichier :**
-> Vous pouvez modifier à tout moment les palettes hexadécimales, typographies ou composants interactifs d'un archétype. Lors de la prochaine génération d'un artisan de ce secteur, Antigravity appliquera vos ajustements exacts.
+> [!IMPORTANT]
+> **Ce fichier décrit, il ne pilote pas.** Les archétypes appliqués aux démos sont codés dans
+> `lead-engine-cli/src/generator/designDirections.ts`, qui fait foi. Modifier une palette ou une police ici ne change
+> aucune démo : faire la modification dans ce fichier de code, puis la reporter ici.
 
 ---
 

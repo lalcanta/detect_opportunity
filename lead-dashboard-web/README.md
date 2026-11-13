@@ -13,17 +13,8 @@ npm run dev                                  # http://localhost:8788
 ```
 
 ## Production
-⚠️ Ne jamais exécuter `seed.sql` en prod : ses jetons sont versionnés. Si c'est déjà arrivé, lancer
-`npm run db:rotate-seed-credentials:remote` (déconnecte ces sessions et régénère les codes d'invitation).
-```bash
-npm run db:init:remote
-# Premier admin (jeton et invitation aléatoires), puis ouvrir /invite/<invite_code> pour choisir le mot de passe :
-npx wrangler d1 execute lead-dashboard-db --remote --command "INSERT INTO users (id, name, email, role, phone_quota_weekly, invite_code, access_token) VALUES ('u_admin', 'Admin', 'vous@domaine.fr', 'admin', 0, 'inv_' || lower(hex(randomblob(16))), 'tok_' || lower(hex(randomblob(24))))"
-npx wrangler d1 execute lead-dashboard-db --remote --command "SELECT invite_code FROM users WHERE id = 'u_admin'"
-npx wrangler pages secret put SYNC_SECRET_TOKEN   # idem STRIPE_SECRET_KEY, TELEGRAM_*, DISCORD_WEBHOOK_URL, PUBLIC_APP_URL
-npm run deploy
-```
-Côté `lead-engine-cli/.env` : `REMOTE_APP_URL=https://<projet>.pages.dev` et le même `SYNC_SECRET_TOKEN`.
+Première installation, secrets et livraison : [`docs/deploiement.md`](../docs/deploiement.md).
+⚠️ Ne jamais exécuter `seed.sql` en prod : ses jetons sont versionnés.
 
 ## Endpoints
 | Route | Accès |

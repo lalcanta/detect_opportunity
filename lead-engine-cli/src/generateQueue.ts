@@ -14,7 +14,10 @@ import type { TokenUsageRecord } from "./types";
  */
 
 const PENDING_DIR = "queue/pending";
-/** Guide de conception lu par l'agent : le modèle API reçoit le même, pour des démos comparables. */
+/**
+ * Guide de conception lu par l'agent : le modèle API reçoit le même, pour des démos comparables.
+ * Chemin relatif au dossier lead-engine-cli ; l'en-tête du guide rappelle qu'il est lu ici.
+ */
 const CRAFT_GUIDE_PATH = "../.agents/skills/artisan-frontend-craft/SKILL.md";
 
 export interface ApiGenerationHooks {
