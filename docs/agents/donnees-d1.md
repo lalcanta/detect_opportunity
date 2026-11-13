@@ -17,7 +17,14 @@ La production n'exécute aucun fichier de migration automatiquement : c'est `ens
    - puis **incrémenter `AUTH_SCHEMA_VERSION`**, sinon les isolats déjà démarrés ne rejouent rien.
 
 Une DDL recopiée porte le commentaire « Doit rester identique à schema.sql » ; toute modification de `schema.sql`
-s'accompagne de la même modification dans la copie.
+s'accompagne de la même modification dans la copie. `lead-dashboard-web/src/tests/schemaSync.test.ts` le vérifie
+dans les deux sens : copies et tables de `auth.ts` identiques à `schema.sql`, `ALTER TABLE` conformes, index présents,
+et toute colonne de `schema.sql` absente du socle d'origine (`BASE_COLUMNS`, à ne jamais allonger) doit avoir son
+`ALTER TABLE`. Seule différence admise : `UNIQUE`, que SQLite refuse dans `ADD COLUMN`.
+
+Le test compare des textes : il ne voit pas qu'une table déjà créée en production garde ses anciennes valeurs par
+défaut (exemple : `scheduled_scans.opportunity_type` vaut encore `'website'` en production). Toujours écrire la valeur
+explicitement à l'insertion.
 
 **Piège** : chaque instruction de `ensureAuthSchema` ignore ses erreurs (`.catch(() => undefined)`). Une DDL fausse
 échoue sans bruit : vérifie la table ou la colonne en local
@@ -36,9 +43,9 @@ lancée à la main en production après sauvegarde :
   npx wrangler d1 export lead-dashboard-db --remote --output=../../backup_prod_$(date +%Y%m%d_%H%M).sql
   ```
   Le fichier part hors du dépôt (il contient des données personnelles) ; vérifie sa taille avant de continuer.
-- **La base s'appelle `lead-dashboard-db`** (liaison `DB`). Le script `db:init:remote` vise un autre nom : ne pas
-  l'utiliser tel quel.
-- **Les scripts `db:migrate:*` n'appliquent que la migration `0001`** : ne pas s'en servir pour les suivantes.
+- **La base s'appelle `lead-dashboard-db`** (liaison `DB`).
+- **Ne rejoue jamais une ancienne migration** : chacune suppose l'état de la base de son époque (`0001` sur la base
+  actuelle supprimerait `primary_channel`, voir l'en-tête de `0004`).
 
 ## Contenu de la base
 

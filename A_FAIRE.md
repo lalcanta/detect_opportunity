@@ -10,7 +10,7 @@ Jeton `CF_API_TOKEN` posé le 2026-11-12, la section Cloudflare de l'onglet Quot
       (`lead-engine-cli/src/workflow/runner.ts`), SIRENE compris sans site ; trace dans `audit_data.workflow_trace`.
       Reste : redémarrer le worker de prod pour qu'il prenne le nouveau code.
 - [x] **Scan de test réel** (dry-run, 1 lead) : Refonte (avec site) et Création (sans site) passent de bout en bout.
-- [ ] **Vérifier l'onglet Besoins en prod** (édition au clic, ajout et retrait de nœuds).
+- [x] **Vérifier l'onglet Besoins en prod** (édition au clic, ajout et retrait de nœuds) : validé le 2026-11-13.
 - [x] **Photos des prospects** : copiées dans le bucket R2 `lead-media` à la synchronisation (ou au premier affichage),
       servies par `/demos/:id/media/:n` ; la démo est réécrite à l'affichage, anciennes démos comprises.
 - [x] **Envoi des emails** en port/adapter (`shared/outreach/email.ts`) : bouton « Envoyer » du closer, file

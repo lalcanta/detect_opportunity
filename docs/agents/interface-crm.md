@@ -6,7 +6,9 @@ des statuts et des besoins) est dans `DESIGN_SYSTEM.md`.
 ## Règles (OBLIGATOIRE)
 
 - **Tailwind v3 par CDN uniquement** : pas de classe propre à v4 (`shadow-xs`, `shadow-2xs`), pas de valeur
-  fractionnaire non prévue (`py-0.2`) ; elles ne produisent aucun style, sans erreur.
+  fractionnaire non prévue (`py-0.2`) ; elles ne produisent aucun style, sans erreur. Les classes v4 les
+  plus courantes sont refusées par `src/tests/tailwindV3.test.ts` (vues, routes, `public/static/`) ; les valeurs
+  fractionnaires ne sont pas contrôlées.
 - **Composants partagés dans `src/views/components.ts`** (statuts, badges de besoin, emplacement de démo) : les
   réutiliser plutôt que recopier des classes, pour que le rendu serveur et les mises à jour client restent identiques.
 - **Navigation latérale** : `sideNavShell` (`src/views/sideNav.ts`), commune au pipeline et à l'administration.

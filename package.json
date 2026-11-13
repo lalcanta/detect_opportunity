@@ -14,9 +14,9 @@
     "worker": "npm --prefix lead-engine-cli run worker --",
     "worker:prod": "npm --prefix lead-engine-cli run worker:prod --",
     "typecheck": "npm --prefix lead-dashboard-web run typecheck && npm --prefix lead-engine-cli run typecheck",
-    "test": "./lead-engine-cli/node_modules/.bin/tsx --test shared/opportunities/*.test.ts lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts",
-    "test:unit": "./lead-engine-cli/node_modules/.bin/tsx --test shared/opportunities/*.test.ts lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts",
+    "test": "./lead-engine-cli/node_modules/.bin/tsx --test shared/*/*.test.ts lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts",
+    "test:unit": "./lead-engine-cli/node_modules/.bin/tsx --test shared/*/*.test.ts lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts",
     "test:functional": "./lead-engine-cli/node_modules/.bin/tsx --test tests/functional.test.ts",
-    "test:all": "./lead-engine-cli/node_modules/.bin/tsx --test shared/opportunities/*.test.ts lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts tests/functional.test.ts"
+    "test:all": "./lead-engine-cli/node_modules/.bin/tsx --test shared/*/*.test.ts lead-engine-cli/src/tests/*.test.ts lead-dashboard-web/src/tests/*.test.ts tests/functional.test.ts"
   }
 }
