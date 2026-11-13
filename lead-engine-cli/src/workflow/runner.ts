@@ -194,7 +194,7 @@ async function inspectPage(modules: ScanModuleId[], d: Dossier, env: WorkflowEnv
   const site = d.lead.website!;
   await env.onSubStep?.(`🔍 Inspection réseau & RGPD à froid (${site.replace(/^https?:\/\//, "").slice(0, 30)})...`);
   try {
-    d.inspection = await inspectSite(env.context, site, { modules, companyName: d.lead.name, city: d.lead.city, phone: d.lead.phone, activity: d.lead.activity });
+    d.inspection = await inspectSite(env.context, site, { modules, companyName: d.lead.name, city: d.lead.city, phone: d.lead.phone, activity: d.lead.activity, searchTerm: d.lead.mapsSearchTerm ?? null });
   } catch (err) {
     log("inspect", `Impossible d'inspecter ${site} : ${(err as Error).message}`);
   }

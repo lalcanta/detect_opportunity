@@ -92,3 +92,30 @@ describe("analyzeSeoHtml", () => {
     assert.equal(r.metaDescription, "Dépannage 24h");
   });
 });
+
+describe("analyzeSeoHtml — métier : catégorie Maps, terme recherché, racines", () => {
+  const plomberie = { activity: "Entreprise de plomberie", city: "Lyon", listingPhone: null };
+  it("« Entreprise de plomberie » reconnaît « Plombier » (racine d'un mot significatif)", () => {
+    assert.equal(analyzeSeoHtml("<title>Plombier à Lyon</title>", plomberie).activityInTitleOrH1, true);
+  });
+  it("terme recherché (sans la ville) reconnu même si la catégorie diffère", () => {
+    const r = analyzeSeoHtml("<h1>Chauffagiste Lyon</h1>", { activity: "Entreprise de chauffage", city: "Lyon", listingPhone: null, searchTerm: "chauffagiste" });
+    assert.equal(r.activityInTitleOrH1, true);
+  });
+  it("sans accents ni casse : « ÉLECTRICITÉ générale » reconnaît « électricien »", () => {
+    const r = analyzeSeoHtml("<title>Votre électricien</title>", { activity: "ÉLECTRICITÉ générale", city: "Lyon", listingPhone: null });
+    assert.equal(r.activityInTitleOrH1, true);
+  });
+  it("mot générique de la catégorie (« Entreprise ») ne suffit pas", () => {
+    const r = analyzeSeoHtml("<title>Entreprise Dupont</title>", plomberie);
+    assert.equal(r.activityInTitleOrH1, false);
+  });
+  it("la ville présente dans le terme recherché ne vaut pas métier", () => {
+    const r = analyzeSeoHtml("<title>Dupont, Toulouse</title>", { activity: "Entreprise de plomberie", city: "Toulouse", listingPhone: null, searchTerm: "plombier Toulouse" });
+    assert.equal(r.activityInTitleOrH1, false);
+    assert.equal(r.cityInTitleOrH1, true);
+  });
+  it("métier réellement absent : toujours absent", () => {
+    assert.equal(analyzeSeoHtml("<title>Dupont & fils, Lyon</title>", plomberie).activityInTitleOrH1, false);
+  });
+});

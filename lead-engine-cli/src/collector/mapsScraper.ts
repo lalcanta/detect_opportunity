@@ -168,6 +168,7 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
       if (!seen) continue;
       lead.mapsRank = seen.rank;
       lead.mapsQuery = searchLabel(seen.subQuery, opts.city, fromCoords);
+      lead.mapsSearchTerm = seen.subQuery;
       lead.mapsCheckedAt = checkedAt;
       lead.competitors = pickCompetitors(openedBySubQuery.get(seen.subQuery) ?? [], seen.rank);
     }

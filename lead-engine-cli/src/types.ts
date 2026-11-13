@@ -33,6 +33,8 @@ export interface MapsLead {
   mapsRank?: number | null;
   /** Recherche Maps telle qu'elle a été lancée */
   mapsQuery?: string | null;
+  /** Terme de cette recherche sans la ville (« plombier »), comparé au titre et au H1 du site */
+  mapsSearchTerm?: string | null;
   /** Date du constat (ISO) */
   mapsCheckedAt?: string | null;
   competitors?: MapsCompetitor[];

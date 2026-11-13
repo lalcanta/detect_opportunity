@@ -12,6 +12,8 @@ export interface ScanModuleContext {
   phone?: string | null;
   /** Métier du lead (catégorie Maps), pour les modules qui le comparent au contenu du site. */
   activity?: string | null;
+  /** Terme recherché sur Maps sans la ville (« plombier »), comparé au contenu du site comme le métier. */
+  searchTerm?: string | null;
   result: SiteInspection;
 }
 

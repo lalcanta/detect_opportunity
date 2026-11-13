@@ -29,6 +29,28 @@ const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 
 const lastDigits = (s: string) => s.replace(/\D/g, "").slice(-9);
 
+/** Mots de catégorie Maps qui ne disent rien du métier (« Entreprise de plomberie », « Électricité générale »). */
+const GENERIC_WORDS = new Set([
+  "entreprise", "societe", "service", "services", "agence", "cabinet", "centre", "magasin", "boutique", "artisan",
+  "professionnel", "professionnelle", "specialiste", "general", "generale", "generaux", "generales", "france",
+]);
+
+/** Suffixes retirés pour comparer les racines (« plomberie » / « plombier », « électricité » / « électricien »). */
+const SUFFIXES = ["ieres", "iere", "iers", "ier", "eries", "erie", "euses", "euse", "eurs", "eur", "iennes", "ienne", "iens", "ien",
+  "istes", "iste", "ites", "ite", "es", "s", "e"];
+
+function root(word: string): string {
+  for (const suf of SUFFIXES) {
+    if (word.endsWith(suf) && word.length - suf.length >= 4) return word.slice(0, -suf.length);
+  }
+  return word;
+}
+
+/** Racines des mots significatifs (5 lettres ou plus, hors mots génériques) d'un terme déjà replié. */
+function significantRoots(folded: string): string[] {
+  return folded.split(/[^a-z0-9]+/).filter((w) => w.length >= 5 && !GENERIC_WORDS.has(w)).map(root);
+}
+
 function collectTypes(node: unknown, out: string[]): void {
   if (Array.isArray(node)) return node.forEach((n) => collectTypes(n, out));
   if (!node || typeof node !== "object") return;
@@ -78,7 +100,16 @@ function findPhones(html: string, telHrefs: string[]): string[] {
 }
 
 /** Lit les signaux de référencement local d'une page, à partir de son HTML seul. */
-export function analyzeSeoHtml(html: string, ctx: { activity: string; city: string; listingPhone: string | null }): SeoOnPage {
+export function analyzeSeoHtml(
+  html: string,
+  ctx: {
+    activity: string;
+    city: string;
+    listingPhone: string | null;
+    /** Terme recherché sur Maps, sans la ville (« plombier ») : le métier tel que le client le tape. */
+    searchTerm?: string | null;
+  },
+): SeoOnPage {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
   const title = titleMatch ? stripTags(titleMatch[1] ?? "") || null : null;
@@ -92,6 +123,15 @@ export function analyzeSeoHtml(html: string, ctx: { activity: string; city: stri
     const t = fold(term).trim();
     return t.length > 0 && heading.includes(t);
   };
+  // Métier : la catégorie Maps ou le terme recherché en entier, ou la racine d'un de leurs mots significatifs
+  // (« Entreprise de plomberie » ↔ « Plombier »).
+  const headingWords = heading.split(/[^a-z0-9]+/).filter(Boolean);
+  const mentionsTrade = (term: string) =>
+    mentions(term) || significantRoots(fold(term)).some((r) => headingWords.some((w) => w.startsWith(r)));
+  // La ville peut figurer dans la sous-requête (« plombier toulouse ») : elle ne doit pas valoir métier.
+  const cityFolded = fold(ctx.city).trim();
+  const searchTerm = cityFolded ? fold(ctx.searchTerm ?? "").split(cityFolded).join(" ") : fold(ctx.searchTerm ?? "");
+  const activityInTitleOrH1 = [ctx.activity, searchTerm].some((t) => t.trim() && mentionsTrade(t));
 
   const listingKey = ctx.listingPhone ? lastDigits(ctx.listingPhone) : "";
   const phoneMatchesListing = listingKey.length >= 9 && phones.length > 0 ? phones.some((p) => lastDigits(p) === listingKey) : null;
@@ -103,7 +143,7 @@ export function analyzeSeoHtml(html: string, ctx: { activity: string; city: stri
     hasLocalBusinessSchema: hasLocalBusinessSchema(html),
     phones,
     hasTelLink: telHrefs.length > 0,
-    activityInTitleOrH1: mentions(ctx.activity),
+    activityInTitleOrH1,
     cityInTitleOrH1: mentions(ctx.city),
     phoneMatchesListing,
   };
@@ -113,8 +153,8 @@ export const seoOnPageModule: ScanModule = {
   id: "seo_onpage",
   label: "Référencement du site",
   description: "Lit le titre, la description, le H1, les données structurées et le téléphone de la page d'accueil.",
-  async afterNavigate({ page, city, phone, activity, result }) {
+  async afterNavigate({ page, city, phone, activity, searchTerm, result }) {
     const html = await page.content();
-    result.seo = analyzeSeoHtml(html, { activity: activity ?? "", city: city ?? "", listingPhone: phone ?? null });
+    result.seo = analyzeSeoHtml(html, { activity: activity ?? "", city: city ?? "", listingPhone: phone ?? null, searchTerm: searchTerm ?? null });
   },
 };
