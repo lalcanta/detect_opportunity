@@ -11,7 +11,16 @@ const LOCAL_BUSINESS_TYPES = new Set([
 ]);
 
 const decode = (s: string) =>
-  s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+  s.replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
+/** Un href mal encodé (`%E0%A4%A`) ne doit pas faire échouer l'analyse. */
+function safeDecodeUri(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
 
 const stripTags = (s: string) => decode(s.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
 
@@ -75,7 +84,7 @@ export function analyzeSeoHtml(html: string, ctx: { activity: string; city: stri
   const title = titleMatch ? stripTags(titleMatch[1] ?? "") || null : null;
   const h1 = h1Match ? stripTags(h1Match[1] ?? "") || null : null;
 
-  const telHrefs = [...html.matchAll(/href=["']tel:([^"']+)["']/gi)].map((m) => decodeURIComponent(m[1] ?? "").trim());
+  const telHrefs = [...html.matchAll(/href=["']tel:([^"']+)["']/gi)].map((m) => safeDecodeUri(m[1] ?? "").trim());
   const phones = findPhones(html, telHrefs);
 
   const heading = fold(`${title ?? ""} ${h1 ?? ""}`);

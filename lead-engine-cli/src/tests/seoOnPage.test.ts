@@ -54,4 +54,41 @@ describe("analyzeSeoHtml", () => {
     const r = analyzeSeoHtml('<a href="tel:0478000000">x</a>', { ...ctx, listingPhone: null });
     assert.equal(r.phoneMatchesListing, null);
   });
+
+  it("ne plante pas sur un lien tel: mal encodé", () => {
+    const r = analyzeSeoHtml('<a href="tel:%E0%A4%A">x</a>', ctx);
+    assert.equal(r.hasTelLink, true);
+  });
+
+  it("ignore un JSON-LD invalide et lit le bloc valide suivant", () => {
+    const html = '<script type="application/ld+json">{oups</script><script type="application/ld+json">{"@type":"LocalBusiness"}</script>';
+    assert.equal(analyzeSeoHtml(html, ctx).hasLocalBusinessSchema, true);
+  });
+
+  it("décode les entités HTML du titre", () => {
+    const r = analyzeSeoHtml("<title>Plombier &amp; Fils &#39;Lyon&#39;</title>", ctx);
+    assert.equal(r.title, "Plombier & Fils 'Lyon'");
+    assert.equal(r.cityInTitleOrH1, true);
+  });
+
+  it("décode &amp; en dernier : &amp;lt; reste &lt;", () => {
+    assert.equal(analyzeSeoHtml("<title>a &amp;lt; b</title>", ctx).title, "a &lt; b");
+  });
+
+  it("prend le premier H1 et retire ses balises", () => {
+    const r = analyzeSeoHtml("<h1>Plombier <span>à <b>Lyon</b></span></h1><h1>Autre</h1>", ctx);
+    assert.equal(r.h1, "Plombier à Lyon");
+  });
+
+  it("dédoublonne les téléphones écrits de deux façons", () => {
+    const r = analyzeSeoHtml('<a href="tel:+33478000000">04 78 00 00 00</a>', ctx);
+    assert.equal(r.phones.length, 1);
+    assert.equal(r.phones[0], "+33478000000");
+    assert.equal(r.phoneMatchesListing, true);
+  });
+
+  it("lit une description entre apostrophes, attributs inversés", () => {
+    const r = analyzeSeoHtml("<meta content='Dépannage 24h' name='description'>", ctx);
+    assert.equal(r.metaDescription, "Dépannage 24h");
+  });
 });
