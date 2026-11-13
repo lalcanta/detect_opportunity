@@ -36,7 +36,7 @@ sauvegarde préalable sont dans `docs/agents/donnees-d1.md`.
 
 ## 3. Secrets et variables du CRM
 
-`lead-dashboard-web/src/types.ts` (`Env`) fait foi. Chaque secret se pose par son propriétaire, depuis
+`lead-dashboard-web/src/types.ts` (`Bindings`) fait foi. Chaque secret se pose par son propriétaire, depuis
 `lead-dashboard-web/` :
 
 ```bash
@@ -49,10 +49,10 @@ sur le dernier déploiement de production).
 | Usage | Variables |
 |---|---|
 | Indispensable | `SYNC_SECRET_TOKEN` (identique côté worker), `PUBLIC_APP_URL` |
-| Génération côté CRM | `GEMINI_API_KEY` |
+| Génération côté CRM | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY` |
 | Alertes « lead chaud » | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `DISCORD_WEBHOOK_URL` |
 | Paiement | `STRIPE_SECRET_KEY`, `STRIPE_AMOUNT_CENTS`, `STRIPE_PRODUCT_NAME` |
-| Connexion Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| Connexion Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` |
 | Suivi de consommation Cloudflare (onglet Quotas) | `CF_ACCOUNT_ID`, `CF_API_TOKEN` |
 | Envoi d'emails | `EMAIL_PROVIDER`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, `EMAIL_DAILY_LIMIT`, `RESEND_API_KEY`, `BREVO_API_KEY` (procédure : `A_FAIRE.md`) |
 | Attribution automatique | `AUTO_ASSIGN` |

@@ -4,8 +4,7 @@ description: Système de direction artistique et de design frontend Tailwind CSS
 ---
 
 > **Lu par le code** : `lead-engine-cli/src/generateQueue.ts` injecte ce fichier, par son chemin, dans les prompts de
-> génération des démos. Ne pas le déplacer ni le renommer sans modifier ce code (un fichier introuvable est ignoré
-> sans erreur).
+> génération des démos. Le déplacer ou le renommer impose de modifier `CRAFT_GUIDE_PATH`.
 
 # Skill : Artisan Frontend Craft (Tailwind CSS Sur-Mesure)
 

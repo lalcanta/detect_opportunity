@@ -1,5 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync, unlinkSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Config } from "./config";
 import type { ModelRouter } from "./llm/modelRouter";
 import { DEMO_SYSTEM_PROMPT, finalizeDemoHtml } from "./generator/demoGenerator";
@@ -16,9 +18,12 @@ import type { TokenUsageRecord } from "./types";
 const PENDING_DIR = "queue/pending";
 /**
  * Guide de conception lu par l'agent : le modèle API reçoit le même, pour des démos comparables.
- * Chemin relatif au dossier lead-engine-cli ; l'en-tête du guide rappelle qu'il est lu ici.
+ * Résolu depuis ce fichier (indépendant du dossier courant) ; l'en-tête du guide rappelle qu'il est lu ici.
  */
-const CRAFT_GUIDE_PATH = "../.agents/skills/artisan-frontend-craft/SKILL.md";
+export const CRAFT_GUIDE_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../.agents/skills/artisan-frontend-craft/SKILL.md",
+);
 
 export interface ApiGenerationHooks {
   onProgress?: (processed: number, total: number, message: string) => Promise<boolean | void>;
@@ -119,7 +124,9 @@ export async function generateQueuedLeadsViaApi(
   if (router.isZeroCostMode()) {
     throw new Error("Coupe-circuit 0 € actif : aucune génération par API possible. Désactivez-le dans l'onglet Modèles ou laissez l'agent traiter la file.");
   }
-  const craftGuide = existsSync(CRAFT_GUIDE_PATH) ? await readFile(CRAFT_GUIDE_PATH, "utf-8") : null;
+  // Sans guide, les démos perdraient leurs règles (honnêteté, archétypes) : on refuse plutôt que de dégrader en silence.
+  if (!existsSync(CRAFT_GUIDE_PATH)) throw new Error(`Guide de design des démos introuvable : ${CRAFT_GUIDE_PATH}`);
+  const craftGuide = await readFile(CRAFT_GUIDE_PATH, "utf-8");
 
   const ready: string[] = [];
   for (let i = 0; i < ids.length; i++) {

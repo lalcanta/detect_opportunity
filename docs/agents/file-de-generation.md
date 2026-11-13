@@ -42,7 +42,7 @@ File vide → réponds en une ligne (« file vide ») et arrête-toi : pas de sy
 Si au moins un lead a été complété :
 
 ```bash
-LEADENGINE_AGENT=<agent> npm run sync-queue:prod   # vers le CRM local : npm run sync-queue -- --local
+LEADENGINE_AGENT=<agent> npm run sync-queue:prod   # CRM local : LEADENGINE_AGENT=<agent> npm run sync-queue -- --local
 ```
 
 `LEADENGINE_AGENT` trace dans le CRM quel agent a généré la démo et la battlecard (« Généré par ») ; sa valeur est

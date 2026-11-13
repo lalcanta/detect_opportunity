@@ -70,12 +70,13 @@ npm run test:functional               # tests HTTP, démarrent leur serveur sur 
   Actions. Attends la CI verte avant de fusionner.
 - **Le worker de production tourne en continu sur le Mac** et garde l'ancien code : après une fusion qui touche
   `lead-engine-cli/` ou `shared/`, le redémarrer (`npm run worker:prod`).
+- **Options des scripts de la racine** : ils relaient leurs arguments au CLI (`npm run prep -- --query … --city …`)
+  grâce au `--` final de chaque script de `package.json` ; un script relais ajouté sans ce `--` perd ses options.
 - **`npm test` racine ne lance pas `shared/outreach/*.test.ts`**, donc la CI non plus : lance-les à part.
-- **Guide de design des démos introuvable = démos sans consignes, sans erreur** : `generateQueue.ts` lit le fichier
-  par chemin relatif et continue s'il manque. Ne le déplace pas sans modifier le code.
 - **Modifier une définition de besoin dans le code ne change pas la production** : la base fait foi.
-- **Bucket R2 absent en local** : `npm run dev:web` ne lie pas `MEDIA` ; ajouter `--r2=MEDIA` pour tester les photos
-  (sans bucket, la route redirige vers l'image d'origine).
+- **Liaisons absentes en local** : avec `--d1=DB` en ligne de commande (`npm run dev:web`), wrangler ignore celles de
+  `wrangler.toml` : ni `MEDIA` (R2) ni `AI`. Sans bucket, la route des photos redirige vers l'image d'origine ; pour
+  tester les photos, lancer avec `--r2=MEDIA` (voir `lead-dashboard-web/AGENTS.md`).
 
 ## Avant de livrer
 

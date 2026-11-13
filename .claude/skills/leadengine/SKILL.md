@@ -9,7 +9,7 @@ argument-hint: "[local]  (par défaut : synchronisation vers la prod)"
 Suis la procédure de `docs/agents/file-de-generation.md` (lis-la en entier), avec :
 
 - **Valeur de `LEADENGINE_AGENT`** : `claude-code`.
-- **Argument `local`** : synchronise vers le CRM local (`npm run sync-queue -- --local`) au lieu de la production.
+- **Argument `local`** : synchronise vers le CRM local (`LEADENGINE_AGENT=claude-code npm run sync-queue -- --local`) au lieu de la production.
 
 ## Passage régulier
 
