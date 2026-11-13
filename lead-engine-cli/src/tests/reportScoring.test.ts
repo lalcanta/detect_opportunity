@@ -199,3 +199,16 @@ describe("cas limites et couverture", () => {
     }
   });
 });
+
+describe("visibilityScore — prospect sans fiche Maps (scan par liste de domaines)", () => {
+  const noListing = lead({ noMapsListing: true, mapsRank: null, competitors: [], rating: null, reviewsCount: null, activity: "Agence / Digital", city: "France", phone: null });
+  it("note, avis, critères de fiche et mots-clés retirés, pas notés 0", () => {
+    const r = visibilityScore(noListing, insp({ seo: seo({ activityInTitleOrH1: false, cityInTitleOrH1: false, phoneMatchesListing: null }) }));
+    for (const id of ["position", "rating", "reviews_count", "listing_site", "listing_category", "site_keywords"]) {
+      assert.ok(ids(r.removed).includes(id), `${id} retiré`);
+      assert.ok(!ids(r.criteria).includes(id), `${id} absent des critères notés`);
+    }
+    assert.ok(ids(r.criteria).includes("site_mobile"));
+    assert.equal(r.score, 100);
+  });
+});

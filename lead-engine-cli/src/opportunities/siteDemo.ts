@@ -19,7 +19,8 @@ export function siteDemoFocus(def: OpportunityDefinition): DemoFocus | null {
 
 /**
  * Faut-il joindre une démo de site au bilan ? `always` / `never` tranchent ; `auto` (défaut) :
- * - visibilité : pas de site, site non adapté au mobile, métier ou ville absent du titre et du H1, ou chargement > 3 s ;
+ * - visibilité : pas de site, site non adapté au mobile, métier ou ville absent du titre et du H1 (prospect avec fiche
+ *   Maps seulement), ou chargement > 3 s ;
  * - acquisition : ni lien `tel:` ni formulaire, site non adapté au mobile, ou chargement > 3 s.
  */
 export function needsSiteDemo(def: OpportunityDefinition, lead: MapsLead, inspection: SiteInspection | null): boolean {
@@ -32,7 +33,8 @@ export function needsSiteDemo(def: OpportunityDefinition, lead: MapsLead, inspec
   if (def.proof.kind === "visibility_report") {
     if (!lead.website) return true;
     const seo = i?.seo;
-    const keywordsMissing = Boolean(seo && (!seo.activityInTitleOrH1 || !seo.cityInTitleOrH1));
+    // Sans fiche Maps, métier et ville sont de remplissage : leur absence du titre ne prouve rien.
+    const keywordsMissing = Boolean(!lead.noMapsListing && seo && (!seo.activityInTitleOrH1 || !seo.cityInTitleOrH1));
     return notMobile(i) || keywordsMissing || isSlow(i);
   }
   // `contactForm` : null = cherché sans succès, undefined = non cherché (critère ignoré).

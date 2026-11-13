@@ -37,6 +37,8 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
   const query = lead.mapsQuery?.trim() || null;
   const forQuery = query ? ` pour la recherche « ${escapeHtml(query)} »` : "";
   const rank = typeof lead.mapsRank === "number" ? lead.mapsRank : null;
+  const listing = !lead.noMapsListing;
+  const noListing = "non mesuré : aucune fiche Google Maps relevée pour ce prospect";
 
   const header = `<header class="border-b border-zinc-800/80 bg-zinc-950/90">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-start justify-between gap-4">
@@ -75,7 +77,7 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
   const avgRating = avg(ratings);
   const avgReviews = avg(reviews);
   const fmt = (v: number | null, d = 1) => (v === null ? "—" : v.toFixed(d).replace(".", ","));
-  sections.push(renderCard("Vos avis",
+  sections.push(renderCard("Vos avis", !listing ? `<ul>${renderCheck("Avis Google", null, noListing)}</ul>` :
     renderTable(
       ["", "Note", "Avis"],
       [
@@ -88,7 +90,7 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
   const hasSite = !!lead.website;
   // Sans site, la démo complémentaire se propose sous la fiche (il n'y a pas de carte « Votre site »).
   const demoNoSite = hasSite ? "" : renderSiteDemoLink(siteDemoUrl);
-  sections.push(renderCard("Votre fiche",
+  sections.push(renderCard("Votre fiche", !listing ? `<ul>${renderCheck("Fiche Google Maps", null, noListing)}</ul>` :
     `<ul class="space-y-2.5">${[
       renderCheck("Site web relié", hasSite, hasSite ? "la fiche renvoie vers votre site" : lead.listingUrl ? "pas de site : la fiche renvoie vers une page d'annuaire ou de réseau social" : "pas de site relié à la fiche"),
       renderCheck("Catégorie affichée", lead.activity?.trim() ? true : false, lead.activity?.trim() || "aucune catégorie renseignée"),
@@ -100,8 +102,9 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
       v === null || v === undefined ? [null, unknown] : v ? [true, yes] : [false, no];
     const items: string[] = [];
     if (s) {
-      items.push(renderCheck("Métier dans le titre ou le H1", s.activityInTitleOrH1, s.activityInTitleOrH1 ? "présent" : "absent"));
-      items.push(renderCheck("Ville dans le titre ou le H1", s.cityInTitleOrH1, s.cityInTitleOrH1 ? "présente" : "absente"));
+      // Sans fiche Maps, métier et ville ne sont pas connus : rien à chercher dans le titre.
+      items.push(renderCheck("Métier dans le titre ou le H1", listing ? s.activityInTitleOrH1 : null, !listing ? "non mesuré" : s.activityInTitleOrH1 ? "présent" : "absent"));
+      items.push(renderCheck("Ville dans le titre ou le H1", listing ? s.cityInTitleOrH1 : null, !listing ? "non mesuré" : s.cityInTitleOrH1 ? "présente" : "absente"));
       items.push(renderCheck("Description de la page", !!s.metaDescription, s.metaDescription ? "présente" : "absente"));
       const [pOk, pTxt] = yn(s.phoneMatchesListing, "identique à la fiche", "différent de la fiche");
       items.push(renderCheck("Téléphone", pOk, pTxt));

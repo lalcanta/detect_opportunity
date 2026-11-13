@@ -257,3 +257,24 @@ describe("actions du bilan", () => {
     assert.ok(!h.includes("Trois actions"));
   });
 });
+
+describe("bilan visibilité — prospect sans fiche Maps (scan par liste de domaines)", () => {
+  const noListing = () => lead({ noMapsListing: true, mapsRank: null, mapsQuery: null, competitors: [], rating: null, reviewsCount: null, activity: "Agence / Digital", city: "France", phone: null });
+  const h = () => vis(noListing(), insp({ seo: seo({ activityInTitleOrH1: false, cityInTitleOrH1: false, phoneMatchesListing: null }) }));
+  it("avis et fiche « non mesuré », sans catégorie ni lien de fiche inventés", () => {
+    const html = h();
+    assert.ok(html.includes("Vos avis") && html.includes("Votre fiche"));
+    assert.ok(!html.includes("Agence / Digital"));
+    assert.ok(!html.includes("la fiche renvoie vers votre site"));
+    assert.ok(!html.includes("0/15"));
+    const avis = html.slice(html.indexOf("Vos avis"), html.indexOf("Votre fiche"));
+    assert.ok(avis.includes("non mesuré"));
+    const fiche = html.slice(html.indexOf("Votre fiche"), html.indexOf("Votre site"));
+    assert.ok(fiche.includes("non mesuré"));
+  });
+  it("métier et ville du titre « non mesuré », jamais « absent »", () => {
+    const site = h().slice(h().indexOf("Votre site"));
+    assert.ok(/Métier dans le titre ou le H1<\/span> <span class="text-zinc-400">— non mesuré/.test(site));
+    assert.ok(/Ville dans le titre ou le H1<\/span> <span class="text-zinc-400">— non mesuré/.test(site));
+  });
+});

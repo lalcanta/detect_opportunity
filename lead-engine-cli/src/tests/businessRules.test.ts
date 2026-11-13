@@ -196,6 +196,7 @@ describe("RÈGLES MÉTIER : Moteur Local & CLI (lead-engine-cli)", () => {
       assert.equal(leads[0]?.name, "Digidop");
       assert.equal(leads[0]?.website, "https://digidop.fr");
       assert.equal(leads[1]?.name, "Acme Studio");
+      assert.ok(leads.every((l) => l.noMapsListing === true), "absence de fiche Maps marquée explicitement");
     });
 
     it("doit retourner null pour une requête métier Google Maps classique", () => {

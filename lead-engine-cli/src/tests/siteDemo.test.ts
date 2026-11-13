@@ -83,6 +83,14 @@ describe("needsSiteDemo — visibilité locale", () => {
   });
 });
 
+describe("needsSiteDemo — prospect sans fiche Maps", () => {
+  it("métier et ville inventés (scan par domaines) : pas de démo sur les mots-clés", () => {
+    const l = lead({ noMapsListing: true, activity: "Agence / Digital", city: "France", mapsRank: null, mapsQuery: null });
+    assert.equal(needsSiteDemo(seo, l, goodSite({ seo: seoOk({ activityInTitleOrH1: false, cityInTitleOrH1: false }) })), false);
+    assert.equal(needsSiteDemo(seo, l, goodSite({ isResponsive: false })), true);
+  });
+});
+
 describe("needsSiteDemo — acquisition", () => {
   it("site sans défaut : pas de démo", () => {
     assert.equal(needsSiteDemo(ads, lead(), goodSite()), false);

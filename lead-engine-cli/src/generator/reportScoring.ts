@@ -54,6 +54,8 @@ function speedPoints(ms: number | null | undefined, max: number): number | null 
 export function visibilityScore(lead: MapsLead, inspection: SiteInspection | null): ScoreResult {
   const all: ScoreCriterion[] = [];
   const competitors = lead.competitors ?? [];
+  // Sans fiche Maps, note, avis et fiche ne sont pas mesurés, et métier/ville sont de remplissage.
+  const listing = !lead.noMapsListing;
 
   all.push(crit("position", "Position sur Google Maps", 35,
     typeof lead.mapsRank === "number" ? positionPoints(lead.mapsRank) : null));
@@ -73,17 +75,17 @@ export function visibilityScore(lead: MapsLead, inspection: SiteInspection | nul
     if (avgReviews !== null) reviews = lead.reviewsCount >= avgReviews ? 15 : lead.reviewsCount >= avgReviews / 2 ? 8 : 0;
     else reviews = lead.reviewsCount >= 50 ? 15 : lead.reviewsCount >= 20 ? 8 : 0;
   }
-  all.push(crit("rating", "Note Google", 15, rating));
-  all.push(crit("reviews_count", "Nombre d'avis", 15, reviews));
+  all.push(crit("rating", "Note Google", 15, listing ? rating : null));
+  all.push(crit("reviews_count", "Nombre d'avis", 15, listing ? reviews : null));
 
-  all.push(crit("listing_site", "Site relié à la fiche", 6, lead.website ? 6 : null));
-  all.push(crit("listing_category", "Catégorie de la fiche", 4, lead.activity?.trim() ? 4 : 0));
+  all.push(crit("listing_site", "Site relié à la fiche", 6, listing && lead.website ? 6 : null));
+  all.push(crit("listing_category", "Catégorie de la fiche", 4, listing ? (lead.activity?.trim() ? 4 : 0) : null));
 
   if (!lead.website) {
     all.push(crit("site", "Site web", 25, 0));
   } else {
     const seo = inspection?.seo;
-    const kw = seo ? (seo.activityInTitleOrH1 ? 1 : 0) + (seo.cityInTitleOrH1 ? 1 : 0) : null;
+    const kw = seo && listing ? (seo.activityInTitleOrH1 ? 1 : 0) + (seo.cityInTitleOrH1 ? 1 : 0) : null;
     all.push(crit("site_keywords", "Métier et ville dans le titre", 7, kw === null ? null : kw === 2 ? 7 : kw === 1 ? 3 : 0));
     all.push(crit("site_description", "Description de la page", 3, seo ? (seo.metaDescription ? 3 : 0) : null));
     all.push(crit("site_phone", "Même téléphone que la fiche", 4, seo ? boolPoints(seo.phoneMatchesListing, 4) : null));

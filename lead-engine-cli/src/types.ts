@@ -21,6 +21,11 @@ export interface MapsLead {
   city: string;
   phone: string | null;
   website: string | null;
+  /**
+   * Aucune fiche Google Maps derrière ce prospect (scan par liste de domaines) : métier, ville, note et avis sont
+   * absents ou de remplissage, donc jamais notés ni comparés au site.
+   */
+  noMapsListing?: boolean;
   /** Lien de la fiche qui n'est pas un site propre (réseau social, annuaire) ; non inspecté. */
   listingUrl?: string | null;
   rating: number | null;

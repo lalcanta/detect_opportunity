@@ -62,6 +62,7 @@ export async function buildBilanQueueFiles(p: {
       checkedAt: lead.mapsCheckedAt ?? null,
       rating: lead.rating ?? null,
       reviewsCount: lead.reviewsCount ?? null,
+      noMapsListing: lead.noMapsListing === true,
     },
     competitors: [...(lead.competitors ?? [])].sort((a, b) => a.rank - b.rank),
     ...(competitorPixels ? { competitorPixels } : {}),

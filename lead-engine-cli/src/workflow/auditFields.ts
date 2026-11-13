@@ -10,6 +10,7 @@ export function mapsSeoAuditFields(lead: MapsLead, inspection: SiteInspection | 
     maps_rank: lead.mapsRank ?? null,
     maps_query: lead.mapsQuery ?? null,
     maps_checked_at: lead.mapsCheckedAt ?? null,
+    no_maps_listing: lead.noMapsListing === true,
     competitors: lead.competitors ?? [],
     seo: inspection?.seo ?? null,
     competitor_pixels: competitorPixels,

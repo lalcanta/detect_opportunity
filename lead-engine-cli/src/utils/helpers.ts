@@ -123,6 +123,7 @@ export function parseDirectDomainLeads(query: string, city: string = "France"): 
       recentReviews: [],
       mapsUrl: fullUrl,
       placeId: null,
+      noMapsListing: true,
     });
   }
 

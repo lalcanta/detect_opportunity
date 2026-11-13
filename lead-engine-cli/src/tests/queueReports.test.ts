@@ -58,6 +58,17 @@ describe("queueReports — bilan de visibilité", () => {
   });
 });
 
+describe("queueReports — prospect sans fiche Maps", () => {
+  it("les constats et audit_data disent qu'aucune fiche n'a été relevée", async () => {
+    const { mapsSeoAuditFields } = await import("../workflow/auditFields");
+    const l = { ...lead, noMapsListing: true, mapsRank: null, mapsQuery: null, competitors: [], website: "https://x.fr" };
+    const files = await buildBilanQueueFiles({ def: getOpportunityOrDefault("seo_local"), lead: l, inspection: null, leadId: "d1", remoteAppUrl: APP });
+    assert.equal((files!.auditFacts as Record<string, any>).maps.noMapsListing, true);
+    assert.equal(mapsSeoAuditFields(l, null, null).no_maps_listing, true);
+    assert.equal(mapsSeoAuditFields(lead, null, null).no_maps_listing, false);
+  });
+});
+
 describe("queueReports — bilan d'acquisition", () => {
   const def = getOpportunityOrDefault("ads_acquisition");
 
