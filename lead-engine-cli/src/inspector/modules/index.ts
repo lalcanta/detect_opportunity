@@ -1,7 +1,8 @@
-import { trackersModule, classifyTrackerUrl, detectCmpFromHtml } from "./trackersModule";
+import { trackersModule, classifyTrackerUrl, detectCmpFromHtml, detectTagIdsInHtml } from "./trackersModule";
 import { techStackModule, detectTechStackFromHtml } from "./techStackModule";
 import { contactsLegalModule, extractCleanEmails, extractKeyPeopleFromText } from "./contactsLegalModule";
 import { socialLinksModule, extractSocialLinksFromHtml } from "./socialLinksModule";
+import { seoOnPageModule, analyzeSeoHtml } from "./seoOnPageModule";
 import { sireneDirigeantModule, lookupCompanySirene, parseSireneApiResponse } from "./sireneDirigeantModule";
 import { brandingVisualModule } from "./brandingVisualModule";
 import { performanceMobileModule } from "./performanceMobileModule";
@@ -23,6 +24,7 @@ export const SCAN_MODULES_REGISTRY: Record<ScanModuleId, ScanModule> = {
   freshness_ssl: freshnessSslModule,
   contacts_legal: contactsLegalModule,
   social_links: socialLinksModule,
+  seo_onpage: seoOnPageModule,
   dirigeant_sirene: sireneDirigeantModule,
   branding_visual: brandingVisualModule,
   perf_mobile: performanceMobileModule,
@@ -38,10 +40,12 @@ export {
   getModulesForOpportunity,
   classifyTrackerUrl,
   detectCmpFromHtml,
+  detectTagIdsInHtml,
   detectTechStackFromHtml,
   extractCleanEmails,
   extractKeyPeopleFromText,
   extractSocialLinksFromHtml,
+  analyzeSeoHtml,
   lookupCompanySirene,
   parseSireneApiResponse,
   detectPaidAdsFromHtml,

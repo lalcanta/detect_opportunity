@@ -5,12 +5,27 @@ export interface Review {
   relativeDate: string;
 }
 
+/** Fiche voisine vue dans la même recherche Maps (données publiques de la liste). */
+export interface MapsCompetitor {
+  name: string;
+  rank: number;
+  rating: number | null;
+  reviewsCount: number | null;
+  website: string | null;
+  category: string | null;
+}
+
 export interface MapsLead {
   name: string;
   activity: string;
   city: string;
   phone: string | null;
   website: string | null;
+  /**
+   * Aucune fiche Google Maps derrière ce prospect (scan par liste de domaines) : métier, ville, note et avis sont
+   * absents ou de remplissage, donc jamais notés ni comparés au site.
+   */
+  noMapsListing?: boolean;
   /** Lien de la fiche qui n'est pas un site propre (réseau social, annuaire) ; non inspecté. */
   listingUrl?: string | null;
   rating: number | null;
@@ -19,6 +34,15 @@ export interface MapsLead {
   mapsUrl: string;
   /** ChIJ... si trouvé, sert au QR code du formulaire d'avis */
   placeId: string | null;
+  /** Rang de la fiche dans la recherche Maps (1 = première affichée) */
+  mapsRank?: number | null;
+  /** Recherche Maps telle qu'elle a été lancée */
+  mapsQuery?: string | null;
+  /** Terme de cette recherche sans la ville (« plombier »), comparé au titre et au H1 du site */
+  mapsSearchTerm?: string | null;
+  /** Date du constat (ISO) */
+  mapsCheckedAt?: string | null;
+  competitors?: MapsCompetitor[];
 }
 
 export interface TrackerRequest {
@@ -38,6 +62,29 @@ export interface ContactFormInfo {
   hasConsentCheckbox: boolean;
   /** Formulaire tiers embarqué (Typeform, HubSpot…), sinon null */
   provider: string | null;
+}
+
+/** Signaux de référencement local lus sur la page d'accueil. */
+export interface SeoOnPage {
+  title: string | null;
+  metaDescription: string | null;
+  h1: string | null;
+  hasLocalBusinessSchema: boolean;
+  phones: string[];
+  hasTelLink: boolean;
+  activityInTitleOrH1: boolean;
+  cityInTitleOrH1: boolean;
+  /** null si la fiche ou le site n'a pas de téléphone. */
+  phoneMatchesListing: boolean | null;
+}
+
+export interface HtmlTagIds {
+  /** Google Analytics (G-, UA-) et Google Tag Manager (GTM-) */
+  analytics: string[];
+  /** Suivi des conversions Google Ads (AW-) */
+  googleAds: string[];
+  /** Pixel Meta (identifiant numérique) */
+  metaPixel: string[];
 }
 
 export interface SiteInspection {
@@ -61,6 +108,11 @@ export interface SiteInspection {
   trackerRequests?: TrackerRequest[];
   /** Bandeau cookies / CMP détecté sur la page (Axeptio, Didomi, Cookiebot...) */
   cmpDetected?: string | null;
+  /**
+   * Identifiants de balises lus dans le HTML (G-, UA-, GTM-, AW-, pixel Meta). Avec un bandeau, les outils ne se
+   * déclenchent qu'après consentement : la visite à froid ne les voit pas, ces identifiants prouvent leur présence.
+   */
+  htmlTagIds?: HtmlTagIds;
   /** Liens réseaux sociaux détectés passivement sur le site (LinkedIn, Facebook, Instagram) */
   socialLinks?: {
     linkedin: string[];
@@ -83,6 +135,8 @@ export interface SiteInspection {
   siteImages?: string[];
   /** Formulaire de contact exploitable (vérification contact_form) ; null si cherché sans succès */
   contactForm?: ContactFormInfo | null;
+  /** Signaux de référencement local lus sur la page (vérification seo_onpage) */
+  seo?: SeoOnPage;
   error?: string;
 }
 
@@ -139,6 +193,8 @@ export interface SyncPayload {
   opportunity_type?: string | null;
   audit_data: Record<string, unknown>;
   demo_html?: string | null;
+  /** Démo de site complémentaire d'un bilan (servie sur /demos/:id/site) */
+  site_demo_html?: string | null;
   flyer_pdf_base64?: string | null;
   battlecard_data?: Battlecard | null;
   token_usage?: TokenUsageRecord[];

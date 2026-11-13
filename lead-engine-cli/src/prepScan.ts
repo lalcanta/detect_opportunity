@@ -11,6 +11,7 @@ import {
   messageToneInstruction,
   findOpportunity,
   getOpportunityOrDefault,
+  isReportProof,
   needsInspectionToQualify,
   opportunityIdOf,
   pitchGeneratorFor,
@@ -21,6 +22,9 @@ import { buildLeadContacts, UnqualifiedLeadError } from "./opportunities/qualify
 import { companyFacts, runLeadWorkflow, type Dossier } from "./workflow/runner";
 import { loadRemoteOpportunities } from "./opportunities/remote";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
+import { mapsSeoAuditFields } from "./workflow/auditFields";
+import { bilanBattlecardRules, buildBilanQueueFiles } from "./queueReports";
+import { siteDemoFocus } from "./opportunities/siteDemo";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
 import { pushLead } from "./sync/pushLead";
 import { leadId, log, parseDirectDomainLeads } from "./utils/helpers";
@@ -235,6 +239,10 @@ export async function runPrepScan(
       const brandColor = inspection?.dominantColors?.[0] || "#1e40af";
       if (dossier.flyerPdf) await writeFile(`${leadDir}/flyer.pdf`, dossier.flyerPdf);
 
+      // Bilans visibilité / acquisition : rapport et pixels des concurrents (requêtes HTTP simples).
+      const bilan = await buildBilanQueueFiles({ def, lead, inspection, leadId: id, remoteAppUrl: cfg.REMOTE_APP_URL });
+      const auditFields = mapsSeoAuditFields(lead, inspection, bilan?.competitorPixels ?? null);
+
       // 3. Récupération des benchmarks sectoriels
       const benchmark = getCompetitorBenchmark(lead.activity);
 
@@ -277,6 +285,7 @@ export async function runPrepScan(
           heroHeadlinePattern: benchmark.conversionBlueprint.hero.headlinePattern,
           mobileWinningPattern: benchmark.conversionBlueprint.mobileWinningPattern,
         },
+        audit_fields: auditFields,
         preparedAt: new Date().toISOString(),
       };
       await writeFile(`${leadDir}/meta.json`, JSON.stringify(meta, null, 2));
@@ -309,6 +318,7 @@ export async function runPrepScan(
             logoUrl: inspection?.logoUrl ?? null,
             trackersFound: inspection?.trackersFound ?? [],
             stack: inspection?.stack ?? [],
+            ...auditFields,
           },
           status: "pending_generation",
           flyer_pdf_base64: flyerPdfBase64,
@@ -345,8 +355,17 @@ export async function runPrepScan(
         );
       }
 
-      // 5. Génération du prompt pour Antigravity CLI (demo.html) adapté au type de besoin
-      const demoFocus = def.proof.kind === "demo_web" ? def.proof.focus : "showcase";
+      // Preuve déterministe (bilans visibilité / acquisition) : le bilan est écrit en demo.html avec ses constats
+      // mesurés ; l'agent n'écrit que la battlecard, et la démo de site complémentaire si elle est demandée.
+      if (bilan) {
+        await writeFile(`${leadDir}/demo.html`, bilan.demoHtml);
+        await writeFile(`${leadDir}/audit_facts.json`, JSON.stringify(bilan.auditFacts, null, 2));
+      }
+
+      // 5. Génération du prompt pour Antigravity CLI (demo.html, ou site_demo.html pour la démo complémentaire d'un bilan)
+      const demoFile = bilan ? "site_demo.html" : "demo.html";
+      const demoPromptFile = bilan ? "prompt_site_demo.md" : "prompt_demo.md";
+      const demoFocus = siteDemoFocus(def) ?? (def.proof.kind === "demo_web" ? def.proof.focus : "showcase");
       const isReviewOffer = demoFocus === "reviews";
       const isSeoOffer = demoFocus === "seo_local";
       const isAdsOffer = demoFocus === "ads_acquisition";
@@ -355,9 +374,9 @@ export async function runPrepScan(
 
       const promptDemo = `# Consigne de Génération Démo Tailwind pour Antigravity (Skill artisan-frontend-craft)
 
-Tu dois générer le fichier \`demo.html\` pour ce prospect.
+Tu dois générer le fichier \`${demoFile}\` pour ce prospect.
 Enregistre le code HTML complet et autonome directement dans :
-\`${leadDir}/demo.html\`
+\`${leadDir}/${demoFile}\`
 
 > **RÈGLE QUALITÉ FRONTEND (CRITIQUE) :**
 > Consulter le skill \`.agents/skills/artisan-frontend-craft/SKILL.md\`.
@@ -406,14 +425,14 @@ ${
 ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rating}★)`).join("\n") || "   - Aucun texte d'avis disponible : N'INVENTE AUCUN AVIS. Affiche la note réelle et un emplacement « Vos avis Google s'afficheront ici »."}
 > **Honnêteté (impératif)** : n'affirme aucun fait absent des données (certification RGE/Qualibat, garantie décennale, assurance, délai d'intervention, prix, années d'expérience, nombre de chantiers, horaires). Présente-les comme des emplacements « à compléter » ou des exemples clairement signalés.
 7. **Formulaire de devis express** (Nom, Téléphone, Type de projet, Envoi immédiat).
-8. Ne pas utiliser de markdown dans le fichier \`demo.html\`, uniquement du code HTML brut commençant par \`<!DOCTYPE html>\`.
+8. Ne pas utiliser de markdown dans le fichier \`${demoFile}\`, uniquement du code HTML brut commençant par \`<!DOCTYPE html>\`.
 9. **Images** : ${
   inspection?.siteImages?.length
     ? `utiliser EN PRIORITÉ ces vraies photos du prospect (son site), en lien direct :\n${inspection.siteImages.map((u) => `   - ${u}`).join("\n")}\n   Ne pas les remplacer par des photos de banque d'images.`
     : "aucune photo du prospect disponible : préférer aplats, dégradés et motifs CSS ; toute photo générique porte la mention « Photo d'exemple »."
 }
 `;
-      await writeFile(`${leadDir}/prompt_demo.md`, promptDemo);
+      if (!bilan || bilan.siteDemoUrl) await writeFile(`${leadDir}/${demoPromptFile}`, promptDemo);
 
       // 6. Génération du prompt pour Antigravity CLI (battlecard.json) adapté au besoin
       const isAsyncQaOffer = pitchGenerator === "tracker_cold_email";
@@ -428,6 +447,7 @@ ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rati
           tone: messageToneInstruction(def.commercial.tone),
           channel: primaryChannel,
           demoUrl: `${cfg.REMOTE_APP_URL}/demos/${id}`,
+          proofLabel: bilan ? (def.proof.kind === "visibility_report" ? "bilan de visibilité locale" : "bilan d'acquisition") : null,
           contactFormUrl: inspection?.contactForm?.url ?? null,
         });
       } else if (isAsyncQaOffer) {
@@ -490,13 +510,7 @@ Enregistre le JSON valide directement dans :
 \`${leadDir}/battlecard.json\`
 
 ## Angle de Vente : ${oppLabel}
-${
-  isReviewOffer
-    ? `Le prospect a actuellement ${lead.reviewsCount || 0} avis Google (${lead.rating || 5}★). L'argumentaire doit se concentrer sur les avis manqués face aux concurrents locaux, la réputation et le pack de collecte d'avis QR / NFC.`
-    : isSeoOffer
-      ? `Le prospect manque de visibilité sur les recherches Google Maps locales. L'argumentaire porte sur le gain de positionnement et les appels générés.`
-      : `Le prospect a besoin d'un site web moderne et rapide convertissant le trafic smartphone en appels téléphoniques.`
-}
+${battlecardSalesAngle(demoFocus, lead)}
 
 ${messageToneInstruction(def.commercial.tone) ? `## Ton\n${messageToneInstruction(def.commercial.tone)}\n\n` : ""}## Format
 FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; ourAdvantages 3 puces de 12 mots maximum ; currentSiteCritique 3 constats courts et vérifiables ; accroche (callScript / openingPitch) 60 mots maximum ; 3 objections, réponses de 2 phrases maximum ; coldEmail.body 120 mots maximum. N'invente ni avis, ni certification, ni chiffre absent des données.
@@ -533,12 +547,13 @@ FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; o
   ],
   "coldEmail": {
     "subject": "Objet d'email personnalisé pour ${lead.name}",
-    "body": "Email court et chaleureux adapté au contexte exact de ${lead.name} (${lead.activity} à ${lead.city}), expliquant les avantages de la démo préparée pour lui par rapport à sa situation actuelle."
+    "body": "Email court et chaleureux adapté au contexte exact de ${lead.name} (${lead.activity} à ${lead.city}), ${bilan ? "présentant le bilan préparé pour lui (lien /demos/" + id + ") et un de ses constats, sans le présenter comme une maquette de site" : "expliquant les avantages de la démo préparée pour lui par rapport à sa situation actuelle"}."
   }
 }
 \`\`\`
 `;
       }
+      if (bilan && isReportProof(def.proof.kind)) promptBattlecard += bilanBattlecardRules({ kind: def.proof.kind, siteDemoUrl: bilan.siteDemoUrl });
       await writeFile(`${leadDir}/prompt_battlecard.md`, promptBattlecard);
 
       preparedLeads.push({
@@ -592,8 +607,22 @@ FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; o
   }
 }
 
+/** « Angle de vente » de la consigne de battlecard, selon l'angle de la preuve (bilan ou démo de site). */
+export function battlecardSalesAngle(focus: string, lead: Pick<MapsLead, "reviewsCount" | "rating">): string {
+  if (focus === "reviews") {
+    return `Le prospect a actuellement ${lead.reviewsCount || 0} avis Google (${lead.rating || 5}★). L'argumentaire doit se concentrer sur les avis manqués face aux concurrents locaux, la réputation et le pack de collecte d'avis QR / NFC.`;
+  }
+  if (focus === "seo_local") {
+    return "Le prospect manque de visibilité sur les recherches Google Maps locales. L'argumentaire porte sur le gain de positionnement et les appels générés.";
+  }
+  if (focus === "ads_acquisition") {
+    return "L'argumentaire porte sur la mesure et la conversion des visiteurs : suivi des conversions, pixels publicitaires et page d'arrivée relevés par le bilan d'acquisition, face aux concurrents de la recherche.";
+  }
+  return "Le prospect a besoin d'un site web moderne et rapide convertissant le trafic smartphone en appels téléphoniques.";
+}
+
 /** Consigne Antigravity pour un premier message écrit (email ou formulaire de contact), hors audit QA. */
-function buildWrittenPitchPrompt(p: {
+export function buildWrittenPitchPrompt(p: {
   lead: MapsLead;
   leadDir: string;
   oppLabel: string;
@@ -602,8 +631,11 @@ function buildWrittenPitchPrompt(p: {
   tone: string;
   channel: ChannelId;
   demoUrl: string;
+  /** Preuve « bilan » : le lien ouvre ce bilan, pas une maquette de site ; null pour une démo de site. */
+  proofLabel?: string | null;
   contactFormUrl: string | null;
 }): string {
+  const link = p.proofLabel ? `le lien du ${p.proofLabel}` : "le lien de la démo";
   const viaForm = p.channel === "contact_form";
   return `# Consigne de Génération du Message Écrit pour Antigravity
 
@@ -617,7 +649,7 @@ ${viaForm ? `Formulaire de contact du site (${p.contactFormUrl ?? "URL dans meta
 ## Offre
 - Type d'offre : ${p.oppLabel}
 - Angle : ${p.pitchFocus}
-- Lien de la démo préparée pour lui : ${p.demoUrl}
+- ${p.proofLabel ? `Lien du ${p.proofLabel} préparé pour lui (un bilan, pas une maquette de site)` : "Lien de la démo préparée pour lui"} : ${p.demoUrl}
 
 ## Prospect
 - Nom : ${p.lead.name}
@@ -627,7 +659,7 @@ ${viaForm ? `Formulaire de contact du site (${p.contactFormUrl ?? "URL dans meta
 - Données d'inspection : voir \`meta.json\` dans le même dossier.
 
 ## Règles
-- Vouvoiement, ${p.tone ? p.tone.charAt(0).toLowerCase() + p.tone.slice(1).replace(/\.$/, "") : "ton chaleureux et professionnel"}, un seul constat précis, le lien de la démo.
+- Vouvoiement, ${p.tone ? p.tone.charAt(0).toLowerCase() + p.tone.slice(1).replace(/\.$/, "") : "ton chaleureux et professionnel"}, un seul constat précis, ${link}.
 - Terminer par une question simple qui appelle une réponse écrite.
 - Pas de promesse chiffrée, pas de jargon.
 - Dernière ligne : « Pour ne plus recevoir de message de notre part, répondez simplement STOP. »

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildQueueBattlecard, pruneManifest, queueGenerationUsage } from "../syncQueue";
+import { buildQueueBattlecard, pruneManifest, queueGenerationUsage, syncQueue, type SyncQueueResult } from "../syncQueue";
+import type { SyncPayload } from "../types";
 
 const APP = "https://app.test";
 
@@ -57,6 +58,104 @@ describe("syncQueue — provenance des leads générés par un agent", () => {
   it("trace l'agent pour la démo et la battlecard, le générateur déterministe pour le rapport QA", () => {
     assert.deepEqual(queueGenerationUsage({ opportunity_type: "website" }, "claude-code").map((u) => u.model), ["agent:claude-code", "agent:claude-code"]);
     assert.deepEqual(queueGenerationUsage({ opportunity_type: "audit_qa_trackers" }, "antigravity").map((u) => u.model), ["deterministe:tracker_report", "agent:antigravity"]);
+    assert.deepEqual(queueGenerationUsage({ opportunity_type: "seo_local" }, "claude-code").map((u) => u.model), ["deterministe:visibility_report", "agent:claude-code"]);
+    assert.deepEqual(queueGenerationUsage({ opportunity_type: "ads_acquisition" }, "claude-code").map((u) => u.model), ["deterministe:acquisition_report", "agent:claude-code"]);
     assert.equal(queueGenerationUsage({ opportunity_type: "website" }, undefined)[0]!.model, "agent:inconnu");
+  });
+});
+
+describe("syncQueue — dossiers de bilan et démo de site complémentaire", () => {
+  const mkLead = async (id: string, files: Record<string, string>, opp = "seo_local", channel = "email") => {
+    const dir = path.join("queue", "pending", id);
+    await mkdir(dir, { recursive: true });
+    const meta = { id, company_name: `Entreprise ${id}`, opportunity_type: opp, primary_channel: channel };
+    await writeFile(path.join(dir, "meta.json"), JSON.stringify(meta));
+    for (const [name, content] of Object.entries(files)) await writeFile(path.join(dir, name), content);
+  };
+  const BC = JSON.stringify({ coldEmail: { subject: "S", body: "B" } });
+
+  const runSync = async (): Promise<{ result: SyncQueueResult; payloads: SyncPayload[] }> => {
+    const root = await mkdtemp(path.join(tmpdir(), "lead-sync-"));
+    const prevCwd = process.cwd();
+    const prevFetch = globalThis.fetch;
+    const prevEnv = { url: process.env.REMOTE_APP_URL, tok: process.env.SYNC_SECRET_TOKEN };
+    const payloads: SyncPayload[] = [];
+    process.chdir(root);
+    process.env.REMOTE_APP_URL = "https://app.test";
+    process.env.SYNC_SECRET_TOKEN = "token-de-test-1234";
+    globalThis.fetch = (async (_u: unknown, init?: RequestInit) => {
+      payloads.push(JSON.parse(String(init?.body)) as SyncPayload);
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+    try {
+      await (globalThis as { __seed?: () => Promise<void> }).__seed?.();
+      return { result: await syncQueue({ quiet: true }), payloads };
+    } finally {
+      process.chdir(prevCwd);
+      globalThis.fetch = prevFetch;
+      process.env.REMOTE_APP_URL = prevEnv.url;
+      process.env.SYNC_SECRET_TOKEN = prevEnv.tok;
+    }
+  };
+
+  const withQueue = async (seed: () => Promise<void>) => {
+    (globalThis as { __seed?: () => Promise<void> }).__seed = seed;
+    try {
+      return await runSync();
+    } finally {
+      delete (globalThis as { __seed?: () => Promise<void> }).__seed;
+    }
+  };
+
+  it("synchronise un bilan complet sans démo de site demandée, sans site_demo_html", async () => {
+    const { result, payloads } = await withQueue(() => mkLead("b1", { "demo.html": "<!DOCTYPE html><p>bilan</p>", "battlecard.json": BC }));
+    assert.deepEqual(result.synced, ["b1"]);
+    assert.equal(payloads[0]!.site_demo_html ?? null, null);
+  });
+
+  it("reprend dans audit_data les données Maps, SEO et concurrents écrites par prep dans meta.json", async () => {
+    const fields = { maps_rank: 4, maps_query: "plombier Lyon", maps_checked_at: "2026-11-13T09:00:00.000Z", competitors: [{ name: "C", rank: 1 }], seo: { title: "T" }, competitor_pixels: null };
+    const { payloads } = await withQueue(async () => {
+      await mkLead("b4", { "demo.html": "<!DOCTYPE html><p>bilan</p>", "battlecard.json": BC });
+      const metaPath = path.join("queue", "pending", "b4", "meta.json");
+      const meta = JSON.parse(await readFile(metaPath, "utf-8"));
+      await writeFile(metaPath, JSON.stringify({ ...meta, audit_fields: fields }));
+    });
+    const ad = payloads[0]!.audit_data as Record<string, unknown>;
+    for (const [k, v] of Object.entries(fields)) assert.deepEqual(ad[k], v, k);
+  });
+
+  it("laisse en attente un bilan dont prompt_site_demo.md n'a pas son site_demo.html, avec la raison", async () => {
+    const { result, payloads } = await withQueue(() =>
+      mkLead("b2", { "demo.html": "<!DOCTYPE html><p>bilan</p>", "battlecard.json": BC, "prompt_site_demo.md": "consigne" }),
+    );
+    assert.deepEqual(result.synced, []);
+    assert.equal(payloads.length, 0);
+    assert.deepEqual(result.waiting, [{ id: "b2", reason: "site_demo.html manquant (consigne : prompt_site_demo.md)" }]);
+  });
+
+  it("joint site_demo_html au payload quand prompt_site_demo.md et site_demo.html sont là", async () => {
+    const { result, payloads } = await withQueue(() =>
+      mkLead("b3", {
+        "demo.html": "<!DOCTYPE html><p>bilan</p>",
+        "battlecard.json": BC,
+        "prompt_site_demo.md": "consigne",
+        "site_demo.html": "<!DOCTYPE html><p>site</p>",
+      }),
+    );
+    assert.deepEqual(result.synced, ["b3"]);
+    assert.match(payloads[0]!.site_demo_html ?? "", /<p>site<\/p>/);
+    assert.match(payloads[0]!.demo_html ?? "", /bilan/);
+  });
+
+  it("garde le comportement des offres existantes : démo web et rapport QA sans site_demo_html", async () => {
+    const { result, payloads } = await withQueue(async () => {
+      await mkLead("w1", { "demo.html": "<!DOCTYPE html><p>demo</p>", "battlecard.json": JSON.stringify({ openingPitch: "Bonjour" }) }, "website", "phone");
+      await mkLead("q1", { "demo.html": "<!DOCTYPE html><p>qa</p>", "battlecard.json": BC }, "audit_qa_trackers");
+      await mkLead("q2", { "demo.html": "<!DOCTYPE html><p>qa</p>", "battlecard.json": JSON.stringify({ auditSummary: "x" }) }, "audit_qa_trackers");
+    });
+    assert.deepEqual(result.synced.sort(), ["q1", "w1"]);
+    assert.deepEqual(result.waiting, [{ id: "q2", reason: "coldEmail absent de battlecard.json (message écrit attendu)" }]);
+    assert.ok(payloads.every((p) => (p.site_demo_html ?? null) === null));
   });
 });

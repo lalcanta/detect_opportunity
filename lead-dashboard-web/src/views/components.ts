@@ -1,4 +1,4 @@
-import { CHANNEL_LABELS, isChannelId, onOpportunitiesChange, opportunityIdOf } from "../../../shared/opportunities";
+import { CHANNEL_LABELS, findOpportunity, isChannelId, isReportProof, onOpportunitiesChange, opportunityIdOf } from "../../../shared/opportunities";
 import { OPPORTUNITY_TYPES, type BadgeTone } from "../types";
 import type { LeadRow } from "../types";
 import { esc, icon, type IconName } from "./layout";
@@ -364,4 +364,90 @@ function renderClientCardDemoSlotInner(leadId, state, variant) {
   return '<a href="/demos/' + leadId + '" target="_blank" rel="noopener" class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs inline-flex items-center gap-1 hover:underline transition-colors" title="Ouvrir la démo" onclick="event.stopPropagation()"><span>Démo</span>${arrowIcon}</a>';
 }
 `;
+}
+
+/** Lien de la bibliothèque publicitaire Meta pour un nom d'entreprise (fiche du closer uniquement, jamais dans le bilan). */
+export function metaAdLibraryUrl(companyName: string): string {
+  return `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=FR&q=${encodeURIComponent(companyName)}`;
+}
+
+interface ReportCompetitor {
+  name?: unknown;
+  rank?: unknown;
+  rating?: unknown;
+  reviewsCount?: unknown;
+}
+
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+/**
+ * Bloc « Bilan » de la fiche du closer, pour un lead dont la preuve est un bilan (visibilité ou acquisition) :
+ * rang et recherche Maps telle que lancée, concurrents mieux placés, liens vers le bilan et la démo de site
+ * complémentaire, et pour un bilan d'acquisition la bibliothèque publicitaire Meta. Vide pour un autre lead, ou un
+ * lead sans constat Maps (ancien lead du même besoin). Rendu côté serveur ; le panneau l'insère tel quel.
+ */
+export function renderReportBrief(
+  lead: Pick<LeadRow, "id" | "company_name" | "opportunity_type" | "audit_data" | "has_site_demo">,
+  origin: string,
+): string {
+  const proof = findOpportunity(opportunityIdOf(lead.opportunity_type))?.proof.kind;
+  if (!proof || !isReportProof(proof)) return "";
+  let audit: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = lead.audit_data ? JSON.parse(lead.audit_data) : null;
+    audit = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    audit = null;
+  }
+  if (!audit || (!str(audit.maps_query) && !Array.isArray(audit.competitors))) return "";
+
+  const rank = num(audit.maps_rank);
+  const query = str(audit.maps_query);
+  const checked = formatScanDate(str(audit.maps_checked_at) || null);
+  const competitors = (Array.isArray(audit.competitors) ? (audit.competitors as ReportCompetitor[]) : [])
+    .filter((c) => c && typeof c === "object" && str(c.name))
+    .filter((c) => rank === null || (num(c.rank) ?? Infinity) < rank)
+    .sort((a, b) => (num(a.rank) ?? Infinity) - (num(b.rank) ?? Infinity))
+    .slice(0, 5);
+
+  // Sans recherche Maps (scan par liste de domaines), la position n'a pas été mesurée : rien ne dit qu'il est absent.
+  const rankMeasured = !!query && audit.no_maps_listing !== true;
+  const rankText = rank !== null ? (rank === 1 ? "1er sur Maps" : `${rank}e sur Maps`) : rankMeasured ? "Hors des résultats relevés" : "Position non mesurée";
+  const search = query ? `pour « ${query} »` : "recherche non relevée";
+  const rows = competitors
+    .map((c) => {
+      const r = num(c.rank);
+      const rating = num(c.rating);
+      const reviews = num(c.reviewsCount);
+      return `<li class="flex items-center justify-between gap-2 py-1">
+        <span class="min-w-0 truncate"><span class="text-zinc-400 font-mono">${r === null ? "–" : esc(r)}.</span> <span class="font-semibold text-zinc-900">${esc(str(c.name))}</span></span>
+        <span class="shrink-0 text-amber-700">★ ${rating === null ? "–" : esc(String(rating).replace(".", ","))} <span class="text-zinc-400">(${reviews === null ? "?" : esc(reviews)} avis)</span></span>
+      </li>`;
+    })
+    .join("");
+  const above = competitors.length
+    ? `<p class="text-[11px] font-bold text-zinc-500">${rank === null ? "Concurrents affichés" : "Devant lui"}</p><ul class="text-xs divide-y divide-zinc-100">${rows}</ul>`
+    : rank === 1
+      ? `<p class="text-xs text-emerald-700 font-semibold">En tête de la recherche : aucun concurrent devant.</p>`
+      : `<p class="text-xs text-zinc-500">Aucun concurrent relevé.</p>`;
+
+  const link = (href: string, label: string, extra = "") =>
+    `<a href="${esc(href)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-zinc-200 bg-white text-xs font-semibold text-zinc-800 hover:bg-zinc-50"${extra}>${icon("external", "w-3 h-3")} ${esc(label)}</a>`;
+  const base = origin.replace(/\/+$/, "");
+  const links = [
+    link(`${base}/demos/${encodeURIComponent(lead.id)}`, "Voir le bilan"),
+    lead.has_site_demo ? link(`${base}/demos/${encodeURIComponent(lead.id)}/site`, "Démo de site") : "",
+    proof === "acquisition_report" ? link(metaAdLibraryUrl(lead.company_name), "Voir ses publicités Meta", ' data-meta-ads=""') : "",
+  ].join("");
+
+  return `<section class="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 space-y-2" data-report-brief="${esc(proof)}">
+    <div class="flex flex-wrap items-baseline justify-between gap-x-2">
+      <p class="text-[11px] font-extrabold uppercase tracking-wider text-zinc-500">Bilan</p>
+      ${checked ? `<p class="text-[11px] text-zinc-500">constat du ${esc(checked)}</p>` : ""}
+    </div>
+    <p class="text-sm text-zinc-800"><b class="text-zinc-950">${esc(rankText)}</b> <span class="text-zinc-600">${esc(search)}</span></p>
+    ${above}
+    <div class="flex flex-wrap gap-1.5 pt-1">${links}</div>
+  </section>`;
 }

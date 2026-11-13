@@ -30,6 +30,6 @@ Resend et Brevo interdisent la prospection à froid dans leurs conditions : pour
   ```
 - Worker, pour SMTP (dans le `.env` de `lead-engine-cli`, puis redémarrer le worker) : `SMTP_HOST`, `SMTP_PORT`
   (587 ou 465), `SMTP_USER`, `SMTP_PASS`. L'adresse `SMTP_USER` doit pouvoir envoyer en tant que `EMAIL_FROM`.
-- [ ] **Générateurs dédiés** pour Référencement local et Publicité (en brouillon tant que la démo n'est qu'un angle).
+- [x] **Générateurs dédiés** pour Référencement local et Publicité : bilans de visibilité et d'acquisition + démo de site conditionnelle. Reste à activer les deux besoins (onglet Besoins) : décision de Loïc après relecture des bilans de test.
 - [ ] **Vérification par captures** à ajouter au skill `leadengine`.
 - [ ] Mettre à jour wrangler 3 → 4 (avertissement à chaque commande).

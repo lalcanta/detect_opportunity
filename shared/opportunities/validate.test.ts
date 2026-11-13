@@ -117,6 +117,22 @@ describe("validateOpportunityDefinition", () => {
     assert.ok(r.ok && r.def.commercial.pitchFocus === d.label);
   });
 
+  it("valide les bilans et leur démo complémentaire", () => {
+    const seo = clone(CODE_OPPORTUNITIES.find((o) => o.id === "seo_local")!);
+    assert.equal(seo.proof.kind, "visibility_report");
+    assert.equal(seo.complementDemo, "auto");
+    assert.ok(errorsOf({ ...seo, proof: { ...seo.proof, generator: "llm_demo" } }).some((e) => e.includes("visibility_report")));
+    const ads = clone(CODE_OPPORTUNITIES.find((o) => o.id === "ads_acquisition")!);
+    assert.ok(errorsOf({ ...ads, proof: { ...ads.proof, generator: "tracker_report" } }).some((e) => e.includes("acquisition_report")));
+    assert.ok(errorsOf({ ...seo, complementDemo: "parfois" }).some((e) => e.startsWith("démo complémentaire")));
+    const never = validateOpportunityDefinition({ ...seo, complementDemo: "never" });
+    assert.ok(never.ok && never.def.complementDemo === "never");
+    const none = { ...seo };
+    delete none.complementDemo;
+    const r = validateOpportunityDefinition(none);
+    assert.ok(r.ok && r.def.complementDemo === undefined);
+  });
+
   it("refuse un module, un statut ou une preuve inconnus", () => {
     assert.ok(errorsOf({ ...website(), scanModules: ["inconnu"] }).some((e) => e.includes("valeur inconnue")));
     assert.ok(errorsOf({ ...website(), status: "en_pause" }).length > 0);

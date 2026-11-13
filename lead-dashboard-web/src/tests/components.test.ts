@@ -4,7 +4,9 @@ import {
   getDemoAccessState,
   renderAuditScoreBadge,
   renderCardDemoSlot,
+  metaAdLibraryUrl,
   renderOpportunityBadge,
+  renderReportBrief,
   renderStatusPill,
 } from "../views/components";
 import { adminPage } from "../views/admin";
@@ -135,5 +137,87 @@ describe("Reusable UI Components (lead-dashboard-web/src/views/components.ts)", 
       });
       assertValidInlineScripts(html, `closerPage(view=${view})`);
     }
+  });
+});
+
+describe("bloc Bilan de la fiche du closer (renderReportBrief)", () => {
+  const audit = {
+    maps_rank: 3,
+    maps_query: "plombier Foix",
+    maps_checked_at: "2026-11-12T09:00:00.000Z",
+    competitors: [
+      { name: "Plomberie <b>Martin</b>", rank: 1, rating: 4.8, reviewsCount: 120, website: "https://martin.fr", category: "Plombier" },
+      { name: "Durand & fils", rank: 2, rating: 4.5, reviewsCount: 40, website: null, category: "Plombier" },
+      { name: "Après lui", rank: 4, rating: 4.9, reviewsCount: 300, website: null, category: "Plombier" },
+    ],
+  };
+  const lead = (opportunity_type: string, extra: Record<string, unknown> = {}) => ({
+    id: "abc",
+    company_name: "Plomberie Dupont & Cie",
+    opportunity_type,
+    audit_data: JSON.stringify(audit),
+    has_site_demo: 0,
+    ...extra,
+  });
+
+  it("montre le rang, la recherche telle que lancée et les concurrents devant, échappés", () => {
+    const html = renderReportBrief(lead("seo_local"), "https://crm.test/");
+    assert.match(html, /3e sur Maps/);
+    assert.match(html, /« plombier Foix »/);
+    assert.match(html, /constat du 12\/11\/2026/);
+    assert.match(html, /Plomberie &lt;b&gt;Martin&lt;\/b&gt;/);
+    assert.match(html, /Durand &amp; fils/);
+    assert.match(html, /\(120 avis\)/);
+    assert.doesNotMatch(html, /Après lui/);
+    assert.match(html, /href="https:\/\/crm\.test\/demos\/abc"/);
+    assert.doesNotMatch(html, /\/demos\/abc\/site/);
+    assert.doesNotMatch(html, /facebook\.com/);
+  });
+
+  it("lien vers la démo de site seulement quand elle existe", () => {
+    assert.match(renderReportBrief(lead("seo_local", { has_site_demo: 1 }), "https://crm.test"), /href="https:\/\/crm\.test\/demos\/abc\/site"/);
+  });
+
+  it("lien vers la bibliothèque Meta pour le bilan d'acquisition uniquement", () => {
+    const html = renderReportBrief(lead("ads_acquisition"), "https://crm.test");
+    assert.ok(html.includes(`href="${metaAdLibraryUrl("Plomberie Dupont & Cie").replace(/&/g, "&amp;")}"`));
+    assert.equal(
+      metaAdLibraryUrl("Plomberie Dupont & Cie"),
+      "https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=FR&q=Plomberie%20Dupont%20%26%20Cie",
+    );
+    assert.match(html, /Voir ses publicités Meta/);
+  });
+
+  it("rien pour un autre besoin ou un lead sans constat Maps", () => {
+    assert.equal(renderReportBrief(lead("website_redesign"), "https://crm.test"), "");
+    assert.equal(renderReportBrief(lead("seo_local", { audit_data: JSON.stringify({ summary: "ancien" }) }), "https://crm.test"), "");
+    assert.equal(renderReportBrief(lead("seo_local", { audit_data: "pas du json" }), "https://crm.test"), "");
+  });
+
+  it("en tête de la recherche, ou absent des résultats", () => {
+    const first = renderReportBrief(lead("seo_local", { audit_data: JSON.stringify({ ...audit, maps_rank: 1, competitors: [audit.competitors[2]] }) }), "https://crm.test");
+    assert.match(first, /1er sur Maps/);
+    assert.match(first, /aucun concurrent devant/);
+    const absent = renderReportBrief(lead("seo_local", { audit_data: JSON.stringify({ ...audit, maps_rank: null }) }), "https://crm.test");
+    assert.match(absent, /Hors des résultats relevés/);
+    assert.match(absent, /Après lui/);
+  });
+
+  it("scan par liste de domaines (ni recherche ni rang) : position non mesurée, jamais « hors des résultats »", () => {
+    const domains = renderReportBrief(lead("seo_local", { audit_data: JSON.stringify({ maps_rank: null, maps_query: null, competitors: [], no_maps_listing: true }) }), "https://crm.test");
+    assert.match(domains, /Position non mesurée/);
+    assert.doesNotMatch(domains, /Hors des résultats relevés/);
+  });
+});
+
+describe("catalogue de l'onglet Besoins", () => {
+  it("fournit les preuves « bilan » et le choix de la démo complémentaire", async () => {
+    const { needsTab } = await import("../views/needs");
+    const json = /<script type="application\/json" id="needs-catalog">([\s\S]*?)<\/script>/.exec(needsTab())![1]!;
+    const catalog = JSON.parse(json) as { reportProofs: string[]; complementDemo: { id: string; label: string }[]; proof: Record<string, { label: string }>; nodes: { id: string }[] };
+    assert.deepEqual(catalog.reportProofs, ["visibility_report", "acquisition_report"]);
+    assert.deepEqual(catalog.complementDemo.map((m) => [m.id, m.label]), [["auto", "Automatique"], ["always", "Toujours"], ["never", "Jamais"]]);
+    assert.equal(catalog.proof.visibility_report!.label, "Bilan de visibilité");
+    assert.ok(catalog.nodes.some((n) => n.id === "site_demo"));
   });
 });

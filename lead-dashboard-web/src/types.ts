@@ -11,6 +11,7 @@ import {
   type BusinessModel,
   type OpportunityDefinition as SharedOpportunityDefinition,
   type OpportunityId,
+  type ProofKind,
 } from "../../shared/opportunities";
 
 export type Role = "admin" | "closer";
@@ -124,7 +125,7 @@ export interface OpportunityDefinition {
   /** Prérequis de contact en clair (ex. « email ou formulaire de contact »). */
   contactRequirement: string;
   businessModel: BusinessModel;
-  proofType: "demo_web" | "audit_report";
+  proofType: ProofKind;
   pitchType: "phone_battlecard" | "cold_email";
   pitchFocus: string;
 }
@@ -246,6 +247,8 @@ export interface LeadRow {
   contact_form_url?: string | null;
   /** JSON : captcha, champs, fournisseur du formulaire */
   contact_form_meta?: string | null;
+  /** 1 si une démo de site complémentaire est servie sur /demos/:id/site (lu sans charger le HTML) */
+  has_site_demo?: number | null;
   created_at: string;
   assignee_name?: string | null;
   locker_name?: string | null;
@@ -279,6 +282,8 @@ export interface SyncBody {
   opportunity_type?: string | null;
   audit_data?: Record<string, unknown>;
   demo_html?: string | null;
+  /** Démo de site complémentaire d'un bilan, servie sur /demos/:id/site */
+  site_demo_html?: string | null;
   flyer_pdf_base64?: string | null;
   battlecard_data?: Battlecard | null;
   status?: LeadStatus | null;

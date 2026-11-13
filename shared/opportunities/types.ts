@@ -13,6 +13,7 @@ export const SCAN_MODULE_IDS = [
   "freshness_ssl",
   "contacts_legal",
   "social_links",
+  "seo_onpage",
   "dirigeant_sirene",
   "branding_visual",
   "perf_mobile",
@@ -97,7 +98,7 @@ export const MESSAGE_TONES = ["warm", "direct", "expert"] as const;
 export type MessageTone = (typeof MESSAGE_TONES)[number];
 
 /** Générateurs de preuve implémentés dans lead-engine-cli. */
-export const PROOF_GENERATOR_IDS = ["llm_demo", "tracker_report"] as const;
+export const PROOF_GENERATOR_IDS = ["llm_demo", "tracker_report", "visibility_report", "acquisition_report"] as const;
 export type ProofGeneratorId = (typeof PROOF_GENERATOR_IDS)[number];
 
 export type ProofDefinition =
@@ -116,7 +117,33 @@ export type ProofDefinition =
       kind: "audit_report";
       generator: "tracker_report";
       interestCta: string;
+    }
+  | {
+      /** Bilan de visibilité locale (position Maps, avis, fiche, site), déterministe. */
+      kind: "visibility_report";
+      generator: "visibility_report";
+      interestCta: string;
+    }
+  | {
+      /** Bilan d'acquisition (suivi, pixels, page d'arrivée, concurrents), déterministe. */
+      kind: "acquisition_report";
+      generator: "acquisition_report";
+      interestCta: string;
     };
+
+export type ProofKind = ProofDefinition["kind"];
+
+/** Preuves « bilan », qui peuvent être suivies d'une démo de site complémentaire. */
+export const REPORT_PROOF_KINDS = ["visibility_report", "acquisition_report"] as const;
+export const isReportProof = (kind: ProofKind): kind is (typeof REPORT_PROOF_KINDS)[number] =>
+  (REPORT_PROOF_KINDS as readonly string[]).includes(kind);
+
+/**
+ * Démo de site complémentaire d'un bilan : `auto` (défaut) la produit quand le site est en cause (règles dans
+ * lead-engine-cli/src/opportunities/siteDemo.ts), `always` toujours, `never` jamais.
+ */
+export const COMPLEMENT_DEMO_MODES = ["auto", "always", "never"] as const;
+export type ComplementDemoMode = (typeof COMPLEMENT_DEMO_MODES)[number];
 
 /** Générateurs de message implémentés dans lead-engine-cli. */
 export const PITCH_GENERATOR_IDS = ["llm_phone_battlecard", "llm_cold_email", "tracker_cold_email"] as const;
@@ -160,6 +187,8 @@ export interface OpportunityDefinition {
   /** Vérifications lancées pendant l'inspection du site. */
   scanModules: readonly ScanModuleId[];
   proof: ProofDefinition;
+  /** Démo de site en complément d'un bilan ; absent = `auto`. Sans effet pour une autre preuve. */
+  complementDemo?: ComplementDemoMode;
   pitch: PitchByChannel;
   /** Génère le flyer PDF (QR code vers le formulaire d'avis Google). */
   flyer: boolean;

@@ -1,6 +1,6 @@
 import { logActivity } from "../services/activities";
 import { DEFAULT_OPPORTUNITY_ID, getOpportunityOrDefault, isChannelId, opportunityIdOf, type ChannelId } from "../../../shared/opportunities";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { AppEnv, SyncBody } from "../types";
 import { bearerMatches, ensureAuthSchema, generateRandomHex, getSessionUser, requireUser } from "../auth";
 import { assignRoundRobin } from "../services/assign";
@@ -95,8 +95,8 @@ publicRoutes.post("/api/sync", async (c) => {
     c.env.DB.prepare(
       `INSERT INTO leads (id, company_name, activity, city, phone, email, website_url, google_rating,
          google_reviews_count, audit_data, demo_html, flyer_pdf_url, flyer_pdf_base64, battlecard_data, created_at, opportunity_type, status,
-         primary_channel, siren)
-       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
+         primary_channel, siren, site_demo_html)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)
        ON CONFLICT(id) DO UPDATE SET
          company_name = excluded.company_name, activity = excluded.activity, city = excluded.city,
          phone = COALESCE(excluded.phone, leads.phone), email = COALESCE(excluded.email, leads.email),
@@ -112,6 +112,7 @@ publicRoutes.post("/api/sync", async (c) => {
          primary_channel = CASE WHEN excluded.status = 'unqualified' AND leads.status != 'unqualified'
                                 THEN leads.primary_channel ELSE COALESCE(excluded.primary_channel, leads.primary_channel) END,
          siren = COALESCE(excluded.siren, leads.siren),
+         site_demo_html = COALESCE(excluded.site_demo_html, leads.site_demo_html),
          status = CASE
            WHEN leads.status = 'pending_generation' THEN excluded.status
            WHEN leads.status = 'unqualified' AND excluded.status != 'unqualified' THEN excluded.status
@@ -137,6 +138,7 @@ publicRoutes.post("/api/sync", async (c) => {
       targetStatus,
       primaryChannel,
       siren,
+      body.site_demo_html ?? null,
     ),
   ];
   if (contacts.length > 0) {
@@ -301,37 +303,21 @@ export function renderInteractiveDemoFloatingBar(opts: {
 </div>`;
 }
 
-/** GET /demos/:id — rendu public de la démo HTML (vérifie la révocation, l'expiration auto et injecte le bandeau interactif). */
-publicRoutes.get("/demos/:id", async (c) => {
-  await ensureAuthSchema(c.env.DB);
-  const id = c.req.param("id");
-  const row = await c.env.DB.prepare(
-    "SELECT company_name, demo_html, demo_revoked, demo_expires_at, opportunity_type, audit_data FROM leads WHERE id = ?",
-  )
-    .bind(id)
-    .first<{
-      company_name: string;
-      demo_html: string | null;
-      demo_revoked?: number | null;
-      demo_expires_at?: string | null;
-      opportunity_type?: string | null;
-      audit_data?: string | null;
-    }>();
-  if (!row?.demo_html) return c.text("Démo introuvable", 404);
-
-  if (isDemoExpiredOrRevoked(row)) {
-    return c.html(renderExpiredDemoHtml(row.company_name), 410, {
-      "Cache-Control": "no-store",
-      "X-Robots-Tag": "noindex, nofollow",
-    });
-  }
-
-  let finalDemoHtml = row.demo_html;
+/**
+ * Transforme le HTML d'une démo avant diffusion : logo extrait, photos R2, no-referrer, aperçu muet (closer connecté)
+ * ou pixel d'ouverture. Partagée par `/demos/:id` et `/demos/:id/site`.
+ */
+export function prepareDemoHtml(
+  html: string,
+  opts: { id: string; auditData: string | null | undefined; mediaEnabled: boolean; internalPreview: boolean },
+): string {
+  const { id, auditData, mediaEnabled, internalPreview } = opts;
+  let finalDemoHtml = html;
 
   // Récupération et injection du logo extrait si placeholder présent
-  if (row.audit_data && finalDemoHtml.includes("%%CLIENT_REAL_LOGO_URL%%")) {
+  if (auditData && finalDemoHtml.includes("%%CLIENT_REAL_LOGO_URL%%")) {
     try {
-      const parsedAudit = JSON.parse(row.audit_data);
+      const parsedAudit = JSON.parse(auditData);
       if (parsedAudit.logoUrl) {
         finalDemoHtml = finalDemoHtml.replaceAll("%%CLIENT_REAL_LOGO_URL%%", parsedAudit.logoUrl);
       }
@@ -341,9 +327,9 @@ publicRoutes.get("/demos/:id", async (c) => {
   }
 
   // Photos et logo du prospect servis depuis leur copie R2 (voir services/leadMedia.ts).
-  if (c.env.MEDIA && row.audit_data) {
+  if (mediaEnabled && auditData) {
     try {
-      finalDemoHtml = rewriteMediaUrls(finalDemoHtml, id, mediaSources(JSON.parse(row.audit_data)));
+      finalDemoHtml = rewriteMediaUrls(finalDemoHtml, id, mediaSources(JSON.parse(auditData)));
     } catch {
       // audit illisible : liens d'origine conservés
     }
@@ -357,7 +343,6 @@ publicRoutes.get("/demos/:id", async (c) => {
   // Closer/admin connecté : la vue ne doit ni passer le lead en « chaud » ni déclencher d'alerte.
   // Le pixel peut viser une autre origine (remoteAppUrl) sans le cookie : on le neutralise aussi côté
   // navigateur en marquant la démo comme déjà vue (clé lue par injectTracker).
-  const internalPreview = (await getSessionUser(c)) !== null;
   if (internalPreview) {
     const muteTracker = `<script>try{sessionStorage.setItem(${JSON.stringify(`seen_${id}`)},"1")}catch(e){}</script>`;
     finalDemoHtml = /<head[^>]*>/i.test(finalDemoHtml)
@@ -368,6 +353,41 @@ publicRoutes.get("/demos/:id", async (c) => {
   // Pixel d'ouverture : toutes les démos doivent en avoir un, y compris celles écrites en mode prep (Antigravity)
   // ou via MCP, qui ne passent pas par le générateur full_auto (audit 1.4). Jamais pour un aperçu interne.
   if (!internalPreview) finalDemoHtml = injectOpenTracker(finalDemoHtml, id);
+  return finalDemoHtml;
+}
+
+/** Diffuse la démo stockée dans `column` (404 si vide, 410 si révoquée/expirée, sinon HTML préparé + barre d'intérêt). */
+async function serveDemo(c: Context<AppEnv>, column: "demo_html" | "site_demo_html"): Promise<Response> {
+  await ensureAuthSchema(c.env.DB);
+  const id = c.req.param("id") ?? "";
+  const row = await c.env.DB.prepare(
+    `SELECT company_name, ${column} AS html, demo_revoked, demo_expires_at, opportunity_type, audit_data FROM leads WHERE id = ?`,
+  )
+    .bind(id)
+    .first<{
+      company_name: string;
+      html: string | null;
+      demo_revoked?: number | null;
+      demo_expires_at?: string | null;
+      opportunity_type?: string | null;
+      audit_data?: string | null;
+    }>();
+  if (!row?.html) return c.text("Démo introuvable", 404);
+
+  if (isDemoExpiredOrRevoked(row)) {
+    return c.html(renderExpiredDemoHtml(row.company_name), 410, {
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow",
+    });
+  }
+
+  const internalPreview = (await getSessionUser(c)) !== null;
+  const finalDemoHtml = prepareDemoHtml(row.html, {
+    id,
+    auditData: row.audit_data,
+    mediaEnabled: Boolean(c.env.MEDIA),
+    internalPreview,
+  });
 
   const barHtml = renderInteractiveDemoFloatingBar({
     leadId: id,
@@ -385,7 +405,13 @@ publicRoutes.get("/demos/:id", async (c) => {
     "Cache-Control": "no-store",
     "X-Robots-Tag": "noindex, nofollow",
   });
-});
+}
+
+/** GET /demos/:id — rendu public de la démo HTML (vérifie la révocation, l'expiration auto et injecte le bandeau interactif). */
+publicRoutes.get("/demos/:id", (c) => serveDemo(c, "demo_html"));
+
+/** GET /demos/:id/site — démo de site complémentaire d'un bilan : même rendu, même suivi d'ouverture que la démo du lead. */
+publicRoutes.get("/demos/:id/site", (c) => serveDemo(c, "site_demo_html"));
 
 /**
  * GET /demos/:id/media/:key — photo ou logo du prospect copié dans R2 (copié au premier affichage s'il manque).

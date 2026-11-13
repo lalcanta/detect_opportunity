@@ -6,11 +6,13 @@ import type {
   BadgeTone,
   BusinessModel,
   ChannelId,
+  ComplementDemoMode,
   DemoFocus,
   DemoHighlight,
   MessageTone,
   OpportunityStatus,
   PitchGeneratorId,
+  ProofKind,
   ScanModuleId,
   WebsiteRequirement,
 } from "./types";
@@ -25,6 +27,7 @@ export const SCAN_MODULE_CATALOG: Record<ScanModuleId, CatalogEntry> = {
   contacts_legal: { label: "Email et mentions légales", description: "Cherche les emails et le nom du dirigeant sur l'accueil, la page contact et les mentions légales." },
   contact_form: { label: "Formulaire de contact", description: "Repère un formulaire de contact utilisable et ses champs." },
   social_links: { label: "Réseaux sociaux", description: "Relève les liens Facebook, Instagram, LinkedIn… présents sur le site." },
+  seo_onpage: { label: "Référencement du site", description: "Lit le titre, la description, le H1, les données structurées et le téléphone de la page d'accueil." },
   dirigeant_sirene: { label: "Dirigeant (SIRENE)", description: "Retrouve le SIREN et le dirigeant dans la base SIRENE." },
   perf_mobile: { label: "Affichage mobile", description: "Vérifie l'affichage sur téléphone (390 px) et les débordements." },
   freshness_ssl: { label: "HTTPS et fraîcheur", description: "Contrôle le certificat HTTPS, l'année du copyright et les images cassées." },
@@ -51,9 +54,17 @@ export const PITCH_GENERATOR_CATALOG: Record<PitchGeneratorId, CatalogEntry> = {
   tracker_cold_email: { label: "Email d'audit", description: "Email qui cite les traceurs mesurés et le lien du rapport." },
 };
 
-export const PROOF_CATALOG: Record<"demo_web" | "audit_report", CatalogEntry> = {
+export const PROOF_CATALOG: Record<ProofKind, CatalogEntry> = {
   demo_web: { label: "Démo de site", description: "Site de démonstration personnalisé, hébergé et suivi." },
   audit_report: { label: "Rapport d'audit", description: "Rapport des traceurs mesurés, sans modèle de langage." },
+  visibility_report: { label: "Bilan de visibilité", description: "Position sur Google Maps, avis, fiche et site face aux concurrents, sans modèle de langage." },
+  acquisition_report: { label: "Bilan d'acquisition", description: "Suivi des conversions, pixels et page d'arrivée face aux concurrents, sans modèle de langage." },
+};
+
+export const COMPLEMENT_DEMO_CATALOG: Record<ComplementDemoMode, CatalogEntry> = {
+  auto: { label: "Automatique", description: "Démo de site jointe au bilan quand le prospect n'a pas de site, ou que le site est lent, mal adapté au mobile ou mal référencé (visibilité) / sans numéro cliquable ni formulaire (acquisition)." },
+  always: { label: "Toujours", description: "Démo de site jointe à chaque bilan." },
+  never: { label: "Jamais", description: "Bilan seul." },
 };
 
 export const DEMO_FOCUS_CATALOG: Record<DemoFocus, CatalogEntry> = {
@@ -113,6 +124,8 @@ export const INTEREST_CTA_PRESETS: readonly string[] = [
   "Ce design me plaît, on en discute",
   "Je veux être rappelé",
   "Ce rapport m'intéresse",
+  "Je veux améliorer ma visibilité, on en parle",
+  "Je veux en discuter",
 ];
 
 /** Paliers proposés pour les critères de la fiche Maps. */

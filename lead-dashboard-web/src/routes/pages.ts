@@ -154,6 +154,7 @@ const LEAD_COLUMNS = `l.id, l.company_name, l.activity, l.city, l.phone, l.email
   l.locked_by, l.locked_until, l.demo_viewed_count, l.last_demo_viewed_at, l.demo_revoked, l.demo_expires_at, l.status, l.callback_scheduled_at, l.call_notes, l.opportunity_type, l.created_at,
   l.primary_channel,
   l.siren,
+  (l.site_demo_html IS NOT NULL AND l.site_demo_html != '') AS has_site_demo,
   (SELECT group_concat(t.task || '|' || t.model || '|' || COALESCE(t.requested_model, ''), ';') FROM token_usage t WHERE t.lead_id = l.id) AS generated_by,
   (SELECT d.company_name || ' · ' || COALESCE(d.city, '') FROM leads d WHERE l.siren IS NOT NULL AND d.siren = l.siren AND d.id != l.id AND d.status != 'unqualified' LIMIT 1) AS duplicate_of,
   (SELECT lc.value FROM lead_contacts lc WHERE lc.lead_id = l.id AND lc.kind = 'contact_form' ORDER BY lc.is_primary DESC, lc.id LIMIT 1) AS contact_form_url,

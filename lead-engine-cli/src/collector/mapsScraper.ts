@@ -2,8 +2,9 @@ import { fetchPlacesReviews, placesReviewsEnabled } from "./placesReviews";
 import { describeRejection, evaluateRequirements, getOpportunityOrDefault } from "../../../shared/opportunities";
 import { ownWebsiteOrNull } from "./websiteClassifier";
 import type { BrowserContext, Page } from "playwright";
-import type { MapsLead, Review } from "../types";
+import type { MapsCompetitor, MapsLead, Review } from "../types";
 import { log } from "../utils/helpers";
+import { pickCompetitors, searchLabel } from "./mapsRanking";
 
 export interface ScrapeOptions {
   query: string;
@@ -45,6 +46,8 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
     const targetCandidates = Math.max(targetQualified * 3, 60);
 
     const allUrls = new Set<string>();
+    // Rang affiché par sous-requête : la première sous-requête qui voit une URL fixe son rang.
+    const placeSeen = new Map<string, { subQuery: string; rank: number }>();
     const zoom = Math.max(10, Math.min(17, Math.round(16 - Math.log2((opts.radius_km || 5) * 1.5))));
 
     for (let qIdx = 0; qIdx < subQueries.length; qIdx++) {
@@ -64,7 +67,10 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
 
       const remainingCandidates = targetCandidates - allUrls.size;
       const urls = await collectPlaceUrls(page, remainingCandidates, opts.interactive);
-      urls.forEach((u) => allUrls.add(u));
+      urls.forEach((u, i) => {
+        allUrls.add(u);
+        if (!placeSeen.has(u)) placeSeen.set(u, { subQuery: sq, rank: i + 1 });
+      });
       await opts.onProgress?.(`Collecte Maps : ${allUrls.size} potentiels repérés sur la zone (objectif : ${targetQualified} qualifiés)...`, 0, allUrls.size);
     }
 
@@ -73,6 +79,10 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
     await opts.onProgress?.(`Extraction détaillée des fiches Maps (${potentialCount} potentiels repérés sur la zone, objectif : ${targetQualified} qualifiés)...`, 0, potentialCount);
 
     const qualifiedLeads: MapsLead[] = [];
+    const fromCoords = opts.lat != null && opts.lng != null;
+    // Fiches déjà ouvertes, par sous-requête (aucune navigation en plus)
+    const openedBySubQuery = new Map<string, MapsCompetitor[]>();
+    const leadSource = new Map<MapsLead, { subQuery: string; rank: number }>();
     let pIdx = 0;
     for (const url of allUrls) {
       if (qualifiedLeads.length >= targetQualified) {
@@ -88,6 +98,19 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
       try {
         const lead = await scrapePlace(page, url, opts);
         if (lead) {
+          const seen = placeSeen.get(url);
+          if (seen) {
+            const opened = openedBySubQuery.get(seen.subQuery) ?? [];
+            opened.push({
+              name: lead.name,
+              rank: seen.rank,
+              rating: lead.rating,
+              reviewsCount: lead.reviewsCount,
+              website: lead.website,
+              category: lead.activity,
+            });
+            openedBySubQuery.set(seen.subQuery, opened);
+          }
           // Prérequis de l'opportunité connus sur la fiche (téléphone, site) ; email et formulaire seront vérifiés après inspection.
           const check = evaluateRequirements(
             def,
@@ -127,6 +150,7 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
             lead.recentReviews = await fetchPlacesReviews(lead.name, lead.city);
           }
           qualifiedLeads.push(lead);
+          if (seen) leadSource.set(lead, seen);
           await opts.onProgress?.(
             `✔ Prospect retenu : "${lead.name}" (${lead.phone ? `📞 ${lead.phone}` : "📵 sans téléphone"}${lead.website ? " · 🌐 Site existant" : " · 🚫 Sans site"}) → ${qualifiedLeads.length}/${targetQualified} qualifiés (${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,
             qualifiedLeads.length,
@@ -137,6 +161,16 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
         if (err instanceof CaptchaError) throw err;
         log("maps", `Fiche ignorée (${(err as Error).message})`);
       }
+    }
+    const checkedAt = new Date().toISOString();
+    for (const lead of qualifiedLeads) {
+      const seen = leadSource.get(lead);
+      if (!seen) continue;
+      lead.mapsRank = seen.rank;
+      lead.mapsQuery = searchLabel(seen.subQuery, opts.city, fromCoords);
+      lead.mapsSearchTerm = seen.subQuery;
+      lead.mapsCheckedAt = checkedAt;
+      lead.competitors = pickCompetitors(openedBySubQuery.get(seen.subQuery) ?? [], seen.rank);
     }
     return { qualifiedLeads, potentialCount };
   } finally {

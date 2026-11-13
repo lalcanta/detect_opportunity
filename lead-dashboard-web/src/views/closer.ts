@@ -12,6 +12,7 @@ import {
   renderGoogleRatingBadge,
   renderOpportunityBadge,
   renderChannelBadge,
+  renderReportBrief,
   formatScanDate,
 } from "./components";
 
@@ -72,6 +73,11 @@ export function describeGeneration(raw?: string | null): string[] {
     seen.set(task, requested ? `${who} — repli, ${requested} indisponible` : who);
   }
   return [...seen.entries()].map(([task, who]) => `${TASK_LABELS[task] ?? task} : ${who}`);
+}
+
+/** JSON inséré dans un <script> : « < » échappé, pour qu'aucune donnée (site du prospect, fiche Maps) ne ferme la balise. */
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
 function parseFormMeta(raw?: string | null): { captcha: string } {
@@ -666,6 +672,7 @@ ${sideNavShell({
           <p id="sp_audit_summary" class="text-sm leading-relaxed text-zinc-800"></p>
           <p id="sp_key_people_badge" class="hidden text-[13px] text-zinc-700"></p>
         </section>
+        <div id="sp_report_brief" class="hidden"></div>
         <section class="rounded-xl bg-indigo-50 border border-indigo-200 p-4 space-y-2">
           <div class="flex items-center justify-between gap-2">
             <p class="text-[11px] font-extrabold uppercase tracking-wider text-indigo-800">Accroche · 30 secondes</p>
@@ -983,9 +990,9 @@ var $ = function (id) { return document.getElementById(id); };
 // 0. DONNÉES EN CACHE & MAP DES LEADS
 // ========================================================
 var IS_ADMIN = ${isAdmin};
-var ALL_OPPORTUNITIES = ${JSON.stringify(OPPORTUNITY_TYPES)};
-var EMAIL_TEMPLATES = ${JSON.stringify(EMAIL_TEMPLATES)};
-var LEADS_MAP = ${JSON.stringify(
+var ALL_OPPORTUNITIES = ${scriptJson(OPPORTUNITY_TYPES)};
+var EMAIL_TEMPLATES = ${scriptJson(EMAIL_TEMPLATES)};
+var LEADS_MAP = ${scriptJson(
   leads.reduce((acc, l) => {
     acc[l.id] = {
       id: l.id,
@@ -1012,6 +1019,7 @@ var LEADS_MAP = ${JSON.stringify(
       demo_expires_at: l.demo_expires_at || "",
       demo_url: `${origin}/demos/${l.id}`,
       flyer_url: l.flyer_pdf_url || "",
+      report_brief: renderReportBrief(l, origin),
       audit: parseAudit(l.audit_data),
       battlecard: parseCard(l.battlecard_data),
       tpl_vars: buildTemplateVars({
@@ -1027,7 +1035,7 @@ var LEADS_MAP = ${JSON.stringify(
   }, {} as Record<string, unknown>),
 )};
 
-var COLUMNS_MAP = ${JSON.stringify(
+var COLUMNS_MAP = ${scriptJson(
   COLUMNS.reduce((acc, c) => {
     acc[c.key] = { label: c.label, icon: c.icon, badgeBg: c.badgeBg };
     return acc;
@@ -1554,6 +1562,13 @@ function openSidepanel(id) {
     ? lead.battlecard.closerBrief
     : ((lead.audit && lead.audit.summary) ? lead.audit.summary : 'Aucun commentaire disponible.');
   auditSummary.textContent = briefText;
+
+  // Bilan (visibilité, acquisition) : fragment rendu côté serveur (renderReportBrief), vide pour les autres leads.
+  var reportBrief = $('sp_report_brief');
+  if (reportBrief) {
+    reportBrief.innerHTML = lead.report_brief || '';
+    reportBrief.classList.toggle('hidden', !lead.report_brief);
+  }
 
   var kpBadge = $('sp_key_people_badge');
   var keyPeopleArr = (lead.audit && Array.isArray(lead.audit.key_people)) ? lead.audit.key_people : [];

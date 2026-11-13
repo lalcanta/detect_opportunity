@@ -5,13 +5,14 @@ import { fileURLToPath } from "node:url";
 import type { Config } from "./config";
 import type { ModelRouter } from "./llm/modelRouter";
 import { DEMO_SYSTEM_PROMPT, finalizeDemoHtml } from "./generator/demoGenerator";
-import { API_LOCK_FILE, API_USAGE_FILE, syncQueue } from "./syncQueue";
+import { API_LOCK_FILE, API_USAGE_FILE, SITE_DEMO_FILE, SITE_DEMO_PROMPT_FILE, syncQueue } from "./syncQueue";
 import { log, stripCodeFences } from "./utils/helpers";
 import type { TokenUsageRecord } from "./types";
 
 /**
  * Génération par API des leads préparés (queue/pending) : le worker remplit les mêmes fichiers que l'agent
- * (demo.html, battlecard.json) à partir des consignes prompt_demo.md / prompt_battlecard.md, puis synchronise.
+ * (demo.html, site_demo.html d'un bilan, battlecard.json) à partir des consignes prompt_demo.md / prompt_site_demo.md /
+ * prompt_battlecard.md, puis synchronise.
  * Déclenché depuis l'onglet File d'attente du dashboard (job « generate »).
  */
 
@@ -70,27 +71,59 @@ async function readUsage(dir: string): Promise<TokenUsageRecord[]> {
   }
 }
 
-/** Remplit les fichiers manquants d'un lead de la file. Lève une erreur lisible si la génération échoue. */
-async function generateOne(id: string, cfg: Config, router: ModelRouter, craftGuide: string | null, step: (m: string) => Promise<void>): Promise<void> {
-  const dir = `${PENDING_DIR}/${id}`;
+/** Démo (`demo.html`, ou `site_demo.html` d'un bilan) écrite par API à partir de sa consigne d'agent. */
+async function generateDemoFile(p: {
+  dir: string;
+  id: string;
+  cfg: Config;
+  router: ModelRouter;
+  craftGuide: string | null;
+  usage: TokenUsageRecord[];
+  logoUrl: string | null;
+  promptFile: string;
+  outFile: string;
+}): Promise<void> {
+  const { dir } = p;
+  const screenshot = existsSync(`${dir}/screenshot.png`) ? await readFile(`${dir}/screenshot.png`) : null;
+  const { text } = await p.router.generate({
+    task: "demo",
+    prompt: buildApiDemoPrompt(await readFile(`${dir}/${p.promptFile}`, "utf-8"), p.craftGuide),
+    system: DEMO_SYSTEM_PROMPT,
+    images: screenshot ? [imageOf(screenshot)] : undefined,
+    usageSink: p.usage,
+  });
+  const html = finalizeDemoHtml(text, { leadId: p.id, logoUrl: p.logoUrl, remoteAppUrl: p.cfg.REMOTE_APP_URL });
+  if (!/<html[\s>]/i.test(html) || html.length < 2000) throw new Error(`démo inexploitable (${html.length} caractères)`);
+  await writeFile(`${dir}/${p.outFile}`, html);
+  await writeFile(`${dir}/${API_USAGE_FILE}`, JSON.stringify(p.usage, null, 2));
+}
+
+/**
+ * Remplit les fichiers manquants d'un lead de la file. Lève une erreur lisible si la génération échoue.
+ * `dir` : dossier du lead (par défaut dans queue/pending), paramétrable pour les tests.
+ */
+export async function generateOne(
+  id: string,
+  cfg: Config,
+  router: ModelRouter,
+  craftGuide: string | null,
+  step: (m: string) => Promise<void>,
+  dir = `${PENDING_DIR}/${id}`,
+): Promise<void> {
   const meta = JSON.parse(await readFile(`${dir}/meta.json`, "utf-8")) as { company_name?: string; logoUrl?: string | null };
   const usage = await readUsage(dir);
+  const demo = { dir, id, cfg, router, craftGuide, usage, logoUrl: meta.logoUrl ?? null };
 
   if (!existsSync(`${dir}/demo.html`)) {
     if (!existsSync(`${dir}/prompt_demo.md`)) throw new Error("prompt_demo.md absent");
     await step("🎨 Génération de la démo par API...");
-    const screenshot = existsSync(`${dir}/screenshot.png`) ? await readFile(`${dir}/screenshot.png`) : null;
-    const { text } = await router.generate({
-      task: "demo",
-      prompt: buildApiDemoPrompt(await readFile(`${dir}/prompt_demo.md`, "utf-8"), craftGuide),
-      system: DEMO_SYSTEM_PROMPT,
-      images: screenshot ? [imageOf(screenshot)] : undefined,
-      usageSink: usage,
-    });
-    const html = finalizeDemoHtml(text, { leadId: id, logoUrl: meta.logoUrl ?? null, remoteAppUrl: cfg.REMOTE_APP_URL });
-    if (!/<html[\s>]/i.test(html) || html.length < 2000) throw new Error(`démo inexploitable (${html.length} caractères)`);
-    await writeFile(`${dir}/demo.html`, html);
-    await writeFile(`${dir}/${API_USAGE_FILE}`, JSON.stringify(usage, null, 2));
+    await generateDemoFile({ ...demo, promptFile: "prompt_demo.md", outFile: "demo.html" });
+  }
+
+  // Démo de site complémentaire d'un bilan : sans elle, sync-queue laisse le lead en attente.
+  if (existsSync(`${dir}/${SITE_DEMO_PROMPT_FILE}`) && !existsSync(`${dir}/${SITE_DEMO_FILE}`)) {
+    await step("🎨 Génération de la démo de site complémentaire par API...");
+    await generateDemoFile({ ...demo, promptFile: SITE_DEMO_PROMPT_FILE, outFile: SITE_DEMO_FILE });
   }
 
   if (!existsSync(`${dir}/battlecard.json`)) {

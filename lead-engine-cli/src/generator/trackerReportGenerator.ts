@@ -1,5 +1,6 @@
 import type { MapsLead, SiteInspection } from "../types";
 import { escapeHtml } from "../utils/helpers";
+import { renderReportPage } from "./reportLayout";
 
 export interface TrackerReportInput {
   leadId: string;
@@ -67,22 +68,7 @@ export function generateTrackerReportHtml(input: TrackerReportInput): string {
     ? stack.map((s) => `<span class="px-2.5 py-1 rounded-md text-xs font-mono bg-zinc-800/90 text-zinc-200 border border-zinc-700">${escapeHtml(s)}</span>`).join(" ")
     : `<span class="text-xs text-zinc-500 font-mono">Stack standard HTML/JS</span>`;
 
-  return `<!DOCTYPE html>
-<html lang="fr" class="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow">
-  <title>[QA Network Report] ${escapeHtml(domain)} — Audit Traceurs & CMP</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-    .font-mono { font-family: 'JetBrains Mono', monospace; }
-  </style>
-</head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen antialiased selection:bg-indigo-500 selection:text-white">
-  <!-- Topbar QA -->
+  const header = `<!-- Topbar QA -->
   <header class="border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur sticky top-0 z-30">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
       <div class="flex items-center gap-3">
@@ -95,10 +81,10 @@ export function generateTrackerReportHtml(input: TrackerReportInput): string {
         Inspecté le ${escapeHtml(inspectedAt)}
       </div>
     </div>
-  </header>
+  </header>`;
 
-  <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-    <!-- En-tête du constat -->
+  const sections = [
+    `    <!-- En-tête du constat -->
     <section class="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-6 space-y-5">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1.5">
@@ -212,10 +198,14 @@ export function generateTrackerReportHtml(input: TrackerReportInput): string {
       </div>
     </section>`
         : ""
-    }
-  </main>
+    }`,
+  ];
 
-  <img src="${escapeHtml(remoteAppUrl)}/api/tracker/open?leadId=${escapeHtml(leadId)}" width="1" height="1" alt="" style="position:absolute;left:-9999px" />
-</body>
-</html>`;
+  return renderReportPage({
+    title: `[QA Network Report] ${domain} — Audit Traceurs & CMP`,
+    leadId,
+    remoteAppUrl,
+    header,
+    sections,
+  });
 }

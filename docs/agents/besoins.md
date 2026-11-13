@@ -11,6 +11,12 @@
   `INSERT OR IGNORE` au premier accès (`seedIfEmpty`, `lead-dashboard-web/src/services/opportunityStore.ts`).
   Modifier un fichier `definitions/*.ts` d'un besoin déjà en base ne change rien en production : faire la
   modification dans l'onglet Besoins, ou dans les deux si la valeur initiale doit suivre.
+- **Exception unique, la bascule des bilans** (décision du 13/11/2026, « écrase au besoin ») : `migrateReportProofs`
+  (même fichier), lancée avant la première lecture des définitions, remplace les lignes `seo_local` et
+  `ads_acquisition` encore en démo de site (`proof.kind === "demo_web"`) par la définition du code, même modifiées
+  dans l'onglet. Elle ne passe qu'une fois au total : l'entrée `changed_by = "code-migration"` qu'elle laisse dans
+  l'historique la marque comme faite. Un retour à la démo de site fait ensuite depuis l'onglet Besoins (historique,
+  « Reprendre cette version ») est donc conservé.
 
 ## Ajouter un besoin
 
@@ -36,5 +42,24 @@ canaux) : le créer dans l'onglet Besoins, en brouillon.
 Les nœuds déclarent les clés qu'ils lisent et écrivent (`shared/opportunities/workflow.ts`) ; l'ordre et les vagues
 parallèles s'en déduisent (`workflowWaves`), le worker les exécute (`lead-engine-cli/src/workflow/runner.ts`).
 Un nouveau nœud déclare ses prérequis : ne jamais coder un ordre à la main.
+
+Les preuves « bilan » (`visibility_report`, `acquisition_report`) sont suivies du nœud `site_demo` : une démo de site
+(générateur `llm_demo`, angle du bilan) jointe au bilan selon `complementDemo` (`auto` par défaut, `always`, `never`).
+Dans l'onglet Besoins, le choix se fait sur la carte « Démo de site complémentaire » du graphe (Automatique /
+Toujours / Jamais) ; `public/static/besoins.js` recopie l'ordre de `workflowNodeIds` (`nodeIdsOf`), à tenir identique.
+Les règles de `auto` sont dans `lead-engine-cli/src/opportunities/siteDemo.ts` (`needsSiteDemo`) ; le bilan, produit
+avant, cite `/demos/:id/site` quand la démo sera produite.
+
+Types de preuve (`proof.kind`) : `demo_web` (démo de site), `visibility_report` (bilan de visibilité locale : position
+Maps, concurrents listés, avis, SEO de la page, score sur 100), `acquisition_report` (bilan d'acquisition : pixels,
+consentement, page d'arrivée, concurrents, score sur 100), `audit_report` (rapport traceurs). Les bilans ne citent que des données
+publiques relevées à la date du constat (recherche Maps rejouée telle quelle, aucun chiffre inventé) ; le score
+détaille ses points dans un « détail du score ». Un prospect sans fiche Maps (scan par liste de domaines :
+`MapsLead.noMapsListing`, `audit_data.no_maps_listing`) n'a ni note, ni avis, ni fiche, ni métier et ville connus : ces
+critères (et « métier et ville dans le titre ») sont non mesurés, retirés du score, et ne déclenchent pas la démo.
+Bilan d'acquisition avec bandeau de consentement : la visite à froid ne voit pas les outils retardés jusqu'à l'accord ;
+les identifiants lus dans le HTML (`SiteInspection.htmlTagIds` : G-, UA-, GTM-, AW-, pixel Meta) les donnent
+« présent (déclenché après consentement) » ; sans identifiant, le critère est non mesuré, jamais « aucun ». Google Ads
+n'est retenu que sur un identifiant AW- (ni AdSense ni DoubleClick).
 
 Décisions métier sur les besoins (prérequis, canaux, emails) : `docs/PLAN_REFONTE_LEADS.md` §6 (10/11/2026).

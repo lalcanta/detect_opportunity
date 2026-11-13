@@ -4,7 +4,8 @@
  * Le workflow d'un besoin est un graphe de nœuds qui complètent un dossier partagé (catalogue C.nodes, miroir de
  * shared/opportunities/workflow.ts). Chaque nœud déclare les clés qu'il lit et écrit : ajouter un nœud ajoute ses
  * prérequis, en retirer un retire ce qui en dépend. Les nœuds se déduisent des champs du besoin (scanModules,
- * channels, pitch, proof, flyer) et y sont réécrits : la validation du serveur reste la référence.
+ * channels, pitch, proof, flyer) et y sont réécrits : la validation du serveur reste la référence. La démo
+ * complémentaire d'un bilan (nœud site_demo) suit la preuve ; elle se règle par complementDemo, pas dans le graphe.
  *
  * Données : GET /api/admin/opportunities ; validation en direct : POST /api/admin/opportunities/validate ;
  * enregistrement : POST /api/admin/opportunities. Catalogue : <script id="needs-catalog">.
@@ -42,6 +43,8 @@
   var DEFAULT_PROOF = {
     demo_web: { kind: "demo_web", generator: "llm_demo", focus: "showcase", interestCta: "Ce site me plaît, on en discute" },
     audit_report: { kind: "audit_report", generator: "tracker_report", interestCta: "Ce rapport m'intéresse" },
+    visibility_report: { kind: "visibility_report", generator: "visibility_report", interestCta: "Je veux améliorer ma visibilité, on en parle" },
+    acquisition_report: { kind: "acquisition_report", generator: "acquisition_report", interestCta: "Je veux en discuter" },
   };
 
   var state = {
@@ -140,11 +143,26 @@
     return "channel_" + c;
   }
 
-  /** Nœuds d'un besoin : même ordre que workflowNodeIds côté serveur. */
+  function isReport(kind) {
+    return has(C.reportProofs, kind);
+  }
+  function complementMode(d) {
+    return d.complementDemo || "auto";
+  }
+  function complementLabel(d) {
+    var m = find(C.complementDemo, function (x) { return x.id === complementMode(d); });
+    return m ? m.label : complementMode(d);
+  }
+
+  /**
+   * Nœuds d'un besoin : copie de workflowNodeIds (shared/opportunities/workflow.ts), à tenir identique. Les nœuds,
+   * modules, générateurs et preuves « bilan » viennent du catalogue servi par needs.ts ; seul l'ordre est recopié.
+   */
   function nodeIdsOf(d) {
     var ids = ["maps_search", "maps_filter"];
     C.modules.forEach(function (m) { if (has(d.scanModules, m.id)) ids.push(m.id); });
     ids.push("qualify", d.proof.kind);
+    if (isReport(d.proof.kind)) ids.push("site_demo");
     if (d.flyer) ids.push("flyer");
     var gens = d.channels.map(function (c) { return d.pitch[c]; });
     C.pitch.forEach(function (p) { if (has(gens, p.id)) ids.push(p.id); });
@@ -283,10 +301,17 @@
   function applyIds(d, ids, website) {
     d.requirements.website = website;
     d.scanModules = C.modules.map(function (m) { return m.id; }).filter(function (m) { return has(ids, m); });
-    var proofKind = has(ids, "audit_report") ? "audit_report" : "demo_web";
+    var proofNode = find(ids, function (id) { return nodeOf(id).binding.kind === "proof"; });
+    var proofKind = proofNode ? nodeOf(proofNode).binding.proof : "demo_web";
     if (d.proof.kind !== proofKind) {
       state.proofStash[d.proof.kind] = clone(d.proof);
       d.proof = clone(state.proofStash[proofKind] || DEFAULT_PROOF[proofKind]);
+    }
+    if (isReport(proofKind)) {
+      if (!d.complementDemo) d.complementDemo = state.proofStash.complementDemo || "auto";
+    } else if (d.complementDemo) {
+      state.proofStash.complementDemo = d.complementDemo;
+      delete d.complementDemo;
     }
     d.flyer = has(ids, "flyer");
     var chans = d.channels.filter(function (c) { return has(ids, channelNode(c)); });
@@ -542,6 +567,8 @@
           return (C.focus[d.proof.focus] ? C.focus[d.proof.focus].label : "") + (hl ? " · " + hl + " point" + (hl > 1 ? "s" : "") + " fort" + (hl > 1 ? "s" : "") : "");
         }
         return "Sans modèle de langage";
+      case "site_demo":
+        return complementLabel(d);
       case "flyer":
         return "QR code avis Google";
     }
@@ -587,6 +614,7 @@
     return C.nodes.filter(function (n) {
       if (n.stage !== stage || n.binding.kind === "fixed" || has(ids, n.id)) return false;
       if (n.binding.kind === "pitch" || n.binding.kind === "proof") return false; // remplacés depuis leur fiche
+      if (n.binding.kind === "site_demo") return false; // suit le bilan, réglé dans sa fiche
       return true;
     });
   }
@@ -609,7 +637,7 @@
         var miss = missingOf(id, ids, website);
         var sel = state.node === id;
         var dim = state.node && NODE[state.node] && !sel && !rel[id];
-        var removable = edit && !isFixed(id) && n.binding.kind !== "proof" && n.binding.kind !== "pitch";
+        var removable = edit && !isFixed(id) && n.binding.kind !== "proof" && n.binding.kind !== "pitch" && n.binding.kind !== "site_demo";
         var color = STAGE_COLOR[n.stage];
         return (
           '<div class="nd-card' + (sel ? " nd-sel" : "") + (rel[id] ? " nd-rel" : "") + (dim ? " nd-dim" : "") + (miss.length ? " nd-miss" : "") + '" data-node="' + id + '" data-card="' + id + '" tabindex="0" role="button" aria-pressed="' + sel + '" aria-label="' + esc(n.label + " : " + nodeSummary(d, id)) + '">' +
@@ -823,7 +851,8 @@
         ctaField(d)
       );
     }
-    if (id === "audit_report") return ctaField(d);
+    if (id === "audit_report" || isReport(id)) return ctaField(d);
+    if (id === "site_demo") return complementField(d);
     if (n.binding.kind === "pitch") {
       return (
         field("Ton des messages", seg("data-set", "commercial.tone", [["", "Par défaut"]].concat(C.messageTones.map(function (t) { return [t.id, t.label]; })), d.commercial.tone || ""), d.commercial.tone ? find(C.messageTones, function (t) { return t.id === d.commercial.tone; }).description : "Chaleureux et professionnel.") +
@@ -832,6 +861,14 @@
     }
     if (id === "maps_search") return '<p class="text-xs text-zinc-600">La requête (métier) et la zone se choisissent au lancement du scan, dans l\'onglet Scanner.</p>';
     return "";
+  }
+  function complementField(d) {
+    var m = find(C.complementDemo, function (x) { return x.id === complementMode(d); });
+    return field(
+      "Démo de site jointe au bilan",
+      seg("data-set", "complementDemo", C.complementDemo.map(function (x) { return [x.id, x.label]; }), complementMode(d)),
+      m ? m.description : "",
+    );
   }
   function ctaField(d) {
     var presets = C.ctaPresets;
@@ -856,7 +893,12 @@
       (d.proof.highlights || []).forEach(function (h) { var x = find(C.highlights, function (e) { return e.id === h; }); if (x) lines.push("Met en avant : " + x.label); });
       lines.push("Bouton d'intérêt : « " + d.proof.interestCta + " »");
     }
-    if (id === "audit_report") lines.push("Bouton d'intérêt : « " + d.proof.interestCta + " »");
+    if (id === "audit_report" || isReport(id)) lines.push("Bouton d'intérêt : « " + d.proof.interestCta + " »");
+    if (id === "site_demo") {
+      lines.push("Démo jointe : " + complementLabel(d).toLowerCase());
+      var cm = find(C.complementDemo, function (x) { return x.id === complementMode(d); });
+      if (cm) lines.push(cm.description);
+    }
     if (n.binding.kind === "pitch" && d.commercial.pitchFocus) lines.push("Angle : " + d.commercial.pitchFocus);
     if (!lines.length) return "";
     return '<ul class="text-xs text-zinc-700 space-y-1">' + lines.map(function (l) { return '<li class="flex gap-2"><span class="mt-1.5 w-1 h-1 rounded-full bg-zinc-400 shrink-0"></span><span>' + esc(l) + "</span></li>"; }).join("") + "</ul>";
@@ -905,7 +947,8 @@
       "</ul>" +
       '<div class="mt-4 pt-3 border-t border-zinc-100 text-xs text-zinc-600 space-y-1">' +
       '<p><b class="text-zinc-900">Premier contact :</b> ' + esc(d.channels.map(channelLabel).join(", puis ") || "aucun canal") + "</p>" +
-      '<p><b class="text-zinc-900">Preuve :</b> ' + esc(d.proof.kind === "demo_web" ? C.proof.demo_web.label + " (" + C.focus[d.proof.focus].label.toLowerCase() + ")" : C.proof.audit_report.label) + "</p>" +
+      '<p><b class="text-zinc-900">Preuve :</b> ' + esc(d.proof.kind === "demo_web" ? C.proof.demo_web.label + " (" + C.focus[d.proof.focus].label.toLowerCase() + ")" : C.proof[d.proof.kind] ? C.proof[d.proof.kind].label : d.proof.kind) + "</p>" +
+      (isReport(d.proof.kind) ? '<p><b class="text-zinc-900">Démo de site jointe :</b> ' + esc(complementLabel(d).toLowerCase()) + "</p>" : "") +
       (hl.length ? '<p><b class="text-zinc-900">Met en avant :</b> ' + esc(hl.join(", ").toLowerCase()) + "</p>" : "") +
       '<p><b class="text-zinc-900">Ton :</b> ' + esc(d.commercial.tone ? toneLabel(d.commercial.tone) : "par défaut") + "</p>" +
       '<p><b class="text-zinc-900">Modèle :</b> ' + esc(C.businessModel[d.commercial.businessModel].label) + "</p>" +
