@@ -75,6 +75,11 @@ export function describeGeneration(raw?: string | null): string[] {
   return [...seen.entries()].map(([task, who]) => `${TASK_LABELS[task] ?? task} : ${who}`);
 }
 
+/** JSON inséré dans un <script> : « < » échappé, pour qu'aucune donnée (site du prospect, fiche Maps) ne ferme la balise. */
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 function parseFormMeta(raw?: string | null): { captcha: string } {
   if (!raw) return { captcha: "" };
   try {
@@ -985,9 +990,9 @@ var $ = function (id) { return document.getElementById(id); };
 // 0. DONNÉES EN CACHE & MAP DES LEADS
 // ========================================================
 var IS_ADMIN = ${isAdmin};
-var ALL_OPPORTUNITIES = ${JSON.stringify(OPPORTUNITY_TYPES)};
-var EMAIL_TEMPLATES = ${JSON.stringify(EMAIL_TEMPLATES)};
-var LEADS_MAP = ${JSON.stringify(
+var ALL_OPPORTUNITIES = ${scriptJson(OPPORTUNITY_TYPES)};
+var EMAIL_TEMPLATES = ${scriptJson(EMAIL_TEMPLATES)};
+var LEADS_MAP = ${scriptJson(
   leads.reduce((acc, l) => {
     acc[l.id] = {
       id: l.id,
@@ -1030,7 +1035,7 @@ var LEADS_MAP = ${JSON.stringify(
   }, {} as Record<string, unknown>),
 )};
 
-var COLUMNS_MAP = ${JSON.stringify(
+var COLUMNS_MAP = ${scriptJson(
   COLUMNS.reduce((acc, c) => {
     acc[c.key] = { label: c.label, icon: c.icon, badgeBg: c.badgeBg };
     return acc;
