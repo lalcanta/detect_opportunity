@@ -15,8 +15,9 @@ parlent que dans un sens : le worker interroge le CRM et lui pousse ses résulta
    (Workers & Pages → `lead-dashboard` → Deployments) que le commit fusionné est bien le déploiement de production.
 5. Si la fusion touche `lead-engine-cli/` ou `shared/` : redémarrer le worker (§4).
 
-Non vérifié depuis le dépôt : la construction d'aperçus pour les branches de PR (réglage Pages « Branch
-deployments »).
+Chaque PR reçoit aussi un **déploiement d'aperçu** Pages (check « Cloudflare Pages » de la PR, avec son lien). Il
+partage la base D1 et le bucket R2 de production, faute de liaisons distinctes pour les aperçus dans `wrangler.toml` :
+n'y teste rien de destructif.
 
 **Retour arrière** : dans Deployments, « Rollback » sur le déploiement précédent, puis `git revert` du commit fautif
 par une PR. Le schéma D1 n'est pas annulé par un retour arrière (voir `docs/agents/donnees-d1.md`).
