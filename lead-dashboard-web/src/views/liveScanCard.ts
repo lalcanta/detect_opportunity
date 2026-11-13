@@ -1,9 +1,49 @@
-/** Carte « scan en direct » de l'onglet Scanner, rendue au chargement puis renvoyée par `/api/admin/scans?card=1`. */
+/**
+ * Carte « scan en direct » et lignes de la table des jobs de l'onglet Scanner : rendues au chargement de la page, puis
+ * renvoyées telles quelles par `GET /api/admin/scans/live` pour l'actualisation sans rechargement.
+ */
 import type { ScanJob } from "../routes/scans";
+import { opportunityBadgeMeta } from "./components";
+import { jobModeBadge } from "./jobMode";
 import { esc, icon } from "./layout";
 
+const SCAN_STATUS_BADGE: Record<ScanJob["status"], string> = {
+  queued: "bg-zinc-100 text-zinc-700",
+  running: "bg-blue-100 text-blue-700 animate-pulse font-bold",
+  done: "bg-emerald-100 text-emerald-800 font-bold",
+  failed: "bg-rose-100 text-rose-800 font-bold",
+  cancelled: "bg-amber-100 text-amber-800",
+};
+
+export const isActiveScan = (s: ScanJob): boolean => s.status === "queued" || s.status === "running";
+
+/** Lignes du `<tbody id="scans_tbody">` de la table des jobs. */
+export function renderScanRows(scans: ScanJob[]): string {
+  if (!scans.length) return `<tr><td colspan="8" class="text-zinc-400 py-6 text-center">Aucun job de scan dans la file</td></tr>`;
+  return scans
+    .map((s) => {
+      const o = opportunityBadgeMeta(s.opportunity_type);
+      const filterTag = s.website_filter && s.website_filter !== "all" ? ` <span class="text-[9px] opacity-75">(${s.website_filter === "no_website" ? "sans site" : "avec site"})</span>` : "";
+      const isGen = s.job_type === "generate";
+      return `<tr class="hover:bg-zinc-50">
+              <td class="py-3 font-mono font-bold text-zinc-400">${s.id}</td>
+              <td class="py-3 font-semibold text-zinc-800">${esc(s.query)} · ${esc(s.city)}${isGen ? "" : ` <span class="text-xs text-zinc-400 font-normal">(${s.lead_limit} max${s.use_cdp ? ", CDP" : ""})</span>`}</td>
+              <td class="py-3">${isGen ? '<span class="text-zinc-400">—</span>' : `<span class="px-2 py-0.5 rounded text-[11px] font-semibold border ${o.cls}">${o.label}${filterTag}</span>`}</td>
+              <td class="py-3">${jobModeBadge(s)}</td>
+              <td class="py-3"><span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ${SCAN_STATUS_BADGE[s.status] ?? ""}">${esc(s.status)}</span></td>
+              <td class="py-3 font-mono text-zinc-700 font-medium">${s.processed}/${s.total || "?"}</td>
+              <td class="py-3 text-xs text-zinc-500 max-w-xs truncate" title="${esc(s.message || "")}">${esc(s.message || "–")}</td>
+              <td class="py-3 flex items-center gap-1.5 whitespace-nowrap">
+                ${isActiveScan(s) ? `<button data-cancel="${s.id}" class="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md px-2.5 py-1 font-semibold">Annuler</button>` : `<span class="text-xs text-zinc-400 font-medium">Terminé</span>`}
+                <button type="button" class="btn-view-scan-logs text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-md px-2 py-1 font-semibold inline-flex items-center gap-1 shadow-sm transition-colors" data-scan-id="${s.id}" data-scan-title="${esc(s.query)} · ${esc(s.city)}">📋 Logs</button>
+              </td>
+            </tr>`;
+    })
+    .join("");
+}
+
 export function renderLiveScanCard(scans: ScanJob[]): string {
-  const active = scans.find((s) => s.status === "running" || s.status === "queued");
+  const active = scans.find(isActiveScan);
   if (!active) {
     const latest = scans[0];
     if (latest && latest.status === "done" && latest.finished_at) {
@@ -148,7 +188,7 @@ export function renderLiveScanCard(scans: ScanJob[]): string {
       <div class="flex items-center justify-between text-xs">
         <span class="text-cyan-300 font-semibold inline-flex items-center gap-1.5">
           <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-          <span id="live_scan_step_label">Opération en cours sur le prospect :</span>
+          <span id="live_scan_step_label">${isRunning ? "Opération en cours sur le prospect :" : "En attente :"}</span>
         </span>
         <span id="live_scan_pct" class="font-mono text-cyan-200 font-semibold">
           ${pct}%
@@ -170,7 +210,7 @@ export function renderLiveScanCard(scans: ScanJob[]): string {
           <span>Actualisation en direct (auto-refresh 2.5s)</span>
         </span>
         <span id="live_scan_status_text" class="font-medium text-zinc-400">
-          ${isRunning ? "Worker local actif sur votre Mac" : "En attente du worker local..."}
+          ${isRunning ? "Worker local actif sur votre Mac" : "En attente de prise en charge par le worker"}
         </span>
       </div>
     </div>

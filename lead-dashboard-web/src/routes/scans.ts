@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { bearerMatches, requireUser } from "../auth";
 import { jobModeBadge } from "../views/jobMode";
-import { renderLiveScanCard } from "../views/liveScanCard";
+import { isActiveScan, renderLiveScanCard, renderScanRows } from "../views/liveScanCard";
 import { readStoredOpportunities } from "../services/opportunityStore";
 
 export const scanRoutes = new Hono<AppEnv>();
@@ -137,12 +137,14 @@ export async function busyGenerationLeadIds(db: D1Database): Promise<Set<string>
   return out;
 }
 
-scanRoutes.get("/api/admin/scans", requireUser("admin"), async (c) => {
+scanRoutes.get("/api/admin/scans", requireUser("admin"), async (c) =>
+  c.json((await listScans(c.env.DB)).map((s) => ({ ...s, mode_badge: jobModeBadge(s) }))),
+);
+
+/** Actualisation de l'onglet Scanner sans rechargement : fragments rendus par les mêmes fonctions que la page. */
+scanRoutes.get("/api/admin/scans/live", requireUser("admin"), async (c) => {
   const scans = await listScans(c.env.DB);
-  const list = scans.map((s) => ({ ...s, logs: undefined, mode_badge: jobModeBadge(s) }));
-  // `?card=1` : la carte « scan en direct » rendue côté serveur, pour l'actualiser sans recharger la page.
-  if (c.req.query("card") === "1") return c.json({ scans: list, card: renderLiveScanCard(scans) });
-  return c.json(list);
+  return c.json({ active: scans.some(isActiveScan), card: renderLiveScanCard(scans), rows: renderScanRows(scans) });
 });
 
 scanRoutes.post("/api/admin/scans/:id/cancel", requireUser("admin"), async (c) => {
@@ -156,7 +158,15 @@ scanRoutes.post("/api/admin/scans/:id/cancel", requireUser("admin"), async (c) =
 });
 
 export async function listScans(db: D1Database): Promise<ScanJob[]> {
-  const r = await db.prepare("SELECT * FROM scan_jobs ORDER BY id DESC LIMIT 15").all<ScanJob>();
+  // Sans `logs` (volumineux, lu à la demande par /api/admin/scans/:id/logs) : la liste est relue toutes les 2,5 s.
+  const r = await db
+    .prepare(
+      `SELECT id, query, city, lead_limit, use_cdp, lat, lng, radius_km, opportunity_type, website_filter, execution_mode,
+              job_type, lead_ids, effective_mode, opportunity_version, status, requested_by, created_at, started_at,
+              finished_at, processed, total, message
+       FROM scan_jobs ORDER BY id DESC LIMIT 15`,
+    )
+    .all<ScanJob>();
   return r.results;
 }
 
