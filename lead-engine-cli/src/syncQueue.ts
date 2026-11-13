@@ -42,6 +42,9 @@ interface QueueMeta {
   contacts?: LeadContact[];
 }
 
+/** Démo de site complémentaire d'un bilan : consigne écrite par prep, démo écrite par l'agent. */
+export const SITE_DEMO_PROMPT_FILE = "prompt_site_demo.md";
+export const SITE_DEMO_FILE = "site_demo.html";
 export const MANIFEST_PATH = "queue/pending_manifest.json";
 
 /**
@@ -110,10 +113,11 @@ export function buildQueueBattlecard(
 /** Consommations à 0 € qui tracent qui a généré la démo et la battlecard d'un lead de la file. */
 export function queueGenerationUsage(meta: Pick<QueueMeta, "opportunity_type">, agent = process.env.LEADENGINE_AGENT): TokenUsageRecord[] {
   const who = `agent:${(agent || "inconnu").trim().slice(0, 40) || "inconnu"}`;
-  const deterministicDemo = getOpportunityOrDefault(meta.opportunity_type).proof.generator === "tracker_report";
+  const generator = getOpportunityOrDefault(meta.opportunity_type).proof.generator;
+  const deterministicDemo = generator === "tracker_report" || generator === "visibility_report" || generator === "acquisition_report";
   const zero = { inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
   return [
-    { task: "demo", model: deterministicDemo ? "deterministe:tracker_report" : who, ...zero },
+    { task: "demo", model: deterministicDemo ? `deterministe:${generator}` : who, ...zero },
     { task: "battlecard", model: who, ...zero },
   ];
 }
@@ -213,6 +217,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
 
     const hasDemo = existsSync(demoPath);
     const hasBattlecard = existsSync(battlecardPath);
+    const siteDemoPath = `${dir}/${SITE_DEMO_FILE}`;
 
     if (!hasDemo || !hasBattlecard) {
       const missing = [];
@@ -224,8 +229,18 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
       continue;
     }
 
+    // Démo de site complémentaire d'un bilan : demandée par prompt_site_demo.md, attendue en site_demo.html.
+    if (existsSync(`${dir}/${SITE_DEMO_PROMPT_FILE}`) && !existsSync(siteDemoPath)) {
+      const reason = `${SITE_DEMO_FILE} manquant (consigne : ${SITE_DEMO_PROMPT_FILE})`;
+      log("sync-queue", `⏳ ${id} : en attente de génération (${reason})`);
+      result.waiting.push({ id, reason });
+      waitingCount++;
+      continue;
+    }
+
     try {
       const meta = JSON.parse(await readFile(metaPath, "utf-8"));
+      const siteDemoHtml = existsSync(siteDemoPath) ? stripDesignPlan(await readFile(siteDemoPath, "utf-8")) : null;
       const demoHtml = stripDesignPlan(await readFile(demoPath, "utf-8"));
       const battlecardRaw = await readFile(battlecardPath, "utf-8");
       const rawBc = JSON.parse(stripCodeFences(battlecardRaw)) as RawBattlecardFile;
@@ -288,6 +303,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
           report_url: `${cfg.REMOTE_APP_URL}/demos/${meta.id}`,
         },
         demo_html: demoHtml,
+        ...(siteDemoHtml ? { site_demo_html: siteDemoHtml } : {}),
         flyer_pdf_base64: flyerPdfBase64,
         battlecard_data: battlecard,
         // Provenance : consommations API (génération lancée depuis le dashboard), sinon l'agent (LEADENGINE_AGENT)

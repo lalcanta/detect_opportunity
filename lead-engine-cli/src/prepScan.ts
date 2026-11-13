@@ -21,6 +21,8 @@ import { buildLeadContacts, UnqualifiedLeadError } from "./opportunities/qualify
 import { companyFacts, runLeadWorkflow, type Dossier } from "./workflow/runner";
 import { loadRemoteOpportunities } from "./opportunities/remote";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
+import { bilanBattlecardRules, buildBilanQueueFiles } from "./queueReports";
+import { siteDemoFocus } from "./opportunities/siteDemo";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
 import { pushLead } from "./sync/pushLead";
 import { leadId, log, parseDirectDomainLeads } from "./utils/helpers";
@@ -345,8 +347,18 @@ export async function runPrepScan(
         );
       }
 
-      // 5. Génération du prompt pour Antigravity CLI (demo.html) adapté au type de besoin
-      const demoFocus = def.proof.kind === "demo_web" ? def.proof.focus : "showcase";
+      // Preuve déterministe (bilans visibilité / acquisition) : le bilan est écrit en demo.html avec ses constats
+      // mesurés ; l'agent n'écrit que la battlecard, et la démo de site complémentaire si elle est demandée.
+      const bilan = await buildBilanQueueFiles({ def, lead, inspection, leadId: id, remoteAppUrl: cfg.REMOTE_APP_URL });
+      if (bilan) {
+        await writeFile(`${leadDir}/demo.html`, bilan.demoHtml);
+        await writeFile(`${leadDir}/audit_facts.json`, JSON.stringify(bilan.auditFacts, null, 2));
+      }
+
+      // 5. Génération du prompt pour Antigravity CLI (demo.html, ou site_demo.html pour la démo complémentaire d'un bilan)
+      const demoFile = bilan ? "site_demo.html" : "demo.html";
+      const demoPromptFile = bilan ? "prompt_site_demo.md" : "prompt_demo.md";
+      const demoFocus = siteDemoFocus(def) ?? (def.proof.kind === "demo_web" ? def.proof.focus : "showcase");
       const isReviewOffer = demoFocus === "reviews";
       const isSeoOffer = demoFocus === "seo_local";
       const isAdsOffer = demoFocus === "ads_acquisition";
@@ -355,9 +367,9 @@ export async function runPrepScan(
 
       const promptDemo = `# Consigne de Génération Démo Tailwind pour Antigravity (Skill artisan-frontend-craft)
 
-Tu dois générer le fichier \`demo.html\` pour ce prospect.
+Tu dois générer le fichier \`${demoFile}\` pour ce prospect.
 Enregistre le code HTML complet et autonome directement dans :
-\`${leadDir}/demo.html\`
+\`${leadDir}/${demoFile}\`
 
 > **RÈGLE QUALITÉ FRONTEND (CRITIQUE) :**
 > Consulter le skill \`.agents/skills/artisan-frontend-craft/SKILL.md\`.
@@ -406,14 +418,14 @@ ${
 ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rating}★)`).join("\n") || "   - Aucun texte d'avis disponible : N'INVENTE AUCUN AVIS. Affiche la note réelle et un emplacement « Vos avis Google s'afficheront ici »."}
 > **Honnêteté (impératif)** : n'affirme aucun fait absent des données (certification RGE/Qualibat, garantie décennale, assurance, délai d'intervention, prix, années d'expérience, nombre de chantiers, horaires). Présente-les comme des emplacements « à compléter » ou des exemples clairement signalés.
 7. **Formulaire de devis express** (Nom, Téléphone, Type de projet, Envoi immédiat).
-8. Ne pas utiliser de markdown dans le fichier \`demo.html\`, uniquement du code HTML brut commençant par \`<!DOCTYPE html>\`.
+8. Ne pas utiliser de markdown dans le fichier \`${demoFile}\`, uniquement du code HTML brut commençant par \`<!DOCTYPE html>\`.
 9. **Images** : ${
   inspection?.siteImages?.length
     ? `utiliser EN PRIORITÉ ces vraies photos du prospect (son site), en lien direct :\n${inspection.siteImages.map((u) => `   - ${u}`).join("\n")}\n   Ne pas les remplacer par des photos de banque d'images.`
     : "aucune photo du prospect disponible : préférer aplats, dégradés et motifs CSS ; toute photo générique porte la mention « Photo d'exemple »."
 }
 `;
-      await writeFile(`${leadDir}/prompt_demo.md`, promptDemo);
+      if (!bilan || bilan.siteDemoUrl) await writeFile(`${leadDir}/${demoPromptFile}`, promptDemo);
 
       // 6. Génération du prompt pour Antigravity CLI (battlecard.json) adapté au besoin
       const isAsyncQaOffer = pitchGenerator === "tracker_cold_email";
@@ -539,6 +551,7 @@ FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; o
 \`\`\`
 `;
       }
+      if (bilan) promptBattlecard += bilanBattlecardRules({ siteDemoUrl: bilan.siteDemoUrl });
       await writeFile(`${leadDir}/prompt_battlecard.md`, promptBattlecard);
 
       preparedLeads.push({

@@ -15,7 +15,7 @@ import { generateTrackerReportHtml } from "../generator/trackerReportGenerator";
 import { generateVisibilityReportHtml } from "../generator/visibilityReportGenerator";
 import { auditSite } from "../inspector/siteAuditor";
 import type { ModelRouter } from "../llm/modelRouter";
-import { needsSiteDemo } from "./siteDemo";
+import { siteDemoUrl } from "./siteDemo";
 import type { Battlecard, MapsLead, SiteAudit, SiteInspection, TokenUsageRecord } from "../types";
 
 export interface GenerationContext {
@@ -42,7 +42,7 @@ export interface ProofResult {
 
 /** Adresse de la démo complémentaire citée par le bilan, ou null si elle ne sera pas produite. */
 function siteDemoUrlFor(ctx: GenerationContext): string | null {
-  return needsSiteDemo(ctx.def, ctx.lead, ctx.inspection) ? `${ctx.remoteAppUrl}/demos/${ctx.leadId}/site` : null;
+  return siteDemoUrl(ctx.def, ctx.lead, ctx.inspection, ctx.remoteAppUrl, ctx.leadId);
 }
 
 export type ProofGenerator = (ctx: GenerationContext) => Promise<ProofResult>;

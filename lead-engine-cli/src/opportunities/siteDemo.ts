@@ -39,3 +39,14 @@ export function needsSiteDemo(def: OpportunityDefinition, lead: MapsLead, inspec
   const noContactPath = i?.seo !== undefined && !i.seo.hasTelLink && i.contactForm === null;
   return noContactPath || notMobile(i) || isSlow(i);
 }
+
+/** Adresse de la démo complémentaire citée par le bilan, ou null si elle ne sera pas produite (partagée par le worker et la file locale). */
+export function siteDemoUrl(
+  def: OpportunityDefinition,
+  lead: MapsLead,
+  inspection: SiteInspection | null,
+  remoteAppUrl: string,
+  leadId: string,
+): string | null {
+  return needsSiteDemo(def, lead, inspection) ? `${remoteAppUrl}/demos/${leadId}/site` : null;
+}
