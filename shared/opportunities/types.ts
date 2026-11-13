@@ -13,6 +13,7 @@ export const SCAN_MODULE_IDS = [
   "freshness_ssl",
   "contacts_legal",
   "social_links",
+  "seo_onpage",
   "dirigeant_sirene",
   "branding_visual",
   "perf_mobile",

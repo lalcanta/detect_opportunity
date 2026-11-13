@@ -45,6 +45,8 @@ export interface InspectSiteOptions {
   city?: string | null;
   /** Téléphone de la fiche Maps : sa présence sur la page confirme que le site est celui du prospect. */
   phone?: string | null;
+  /** Métier du lead, pour les modules de référencement. */
+  activity?: string | null;
 }
 
 /**
@@ -86,7 +88,7 @@ export async function inspectSite(
     (globalThis as any).__name = (fn: any) => fn;
     (window as any).__name = (fn: any) => fn;
   });
-  const ctx = { page, url, companyName: opts.companyName, city: opts.city, phone: opts.phone, result };
+  const ctx = { page, url, companyName: opts.companyName, city: opts.city, phone: opts.phone, activity: opts.activity, result };
 
   try {
     // 1. Hooks avant navigation (ex: écouteurs réseau à froid pour traceurs RGPD)

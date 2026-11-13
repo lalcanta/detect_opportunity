@@ -10,6 +10,8 @@ export interface ScanModuleContext {
   companyName?: string;
   city?: string | null;
   phone?: string | null;
+  /** Métier du lead (catégorie Maps), pour les modules qui le comparent au contenu du site. */
+  activity?: string | null;
   result: SiteInspection;
 }
 

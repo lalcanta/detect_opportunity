@@ -57,6 +57,20 @@ export interface ContactFormInfo {
   provider: string | null;
 }
 
+/** Signaux de référencement local lus sur la page d'accueil. */
+export interface SeoOnPage {
+  title: string | null;
+  metaDescription: string | null;
+  h1: string | null;
+  hasLocalBusinessSchema: boolean;
+  phones: string[];
+  hasTelLink: boolean;
+  activityInTitleOrH1: boolean;
+  cityInTitleOrH1: boolean;
+  /** null si la fiche ou le site n'a pas de téléphone. */
+  phoneMatchesListing: boolean | null;
+}
+
 export interface SiteInspection {
   url: string;
   title?: string | null;
@@ -100,6 +114,8 @@ export interface SiteInspection {
   siteImages?: string[];
   /** Formulaire de contact exploitable (vérification contact_form) ; null si cherché sans succès */
   contactForm?: ContactFormInfo | null;
+  /** Signaux de référencement local lus sur la page (vérification seo_onpage) */
+  seo?: SeoOnPage;
   error?: string;
 }
 

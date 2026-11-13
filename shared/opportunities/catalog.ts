@@ -25,6 +25,7 @@ export const SCAN_MODULE_CATALOG: Record<ScanModuleId, CatalogEntry> = {
   contacts_legal: { label: "Email et mentions légales", description: "Cherche les emails et le nom du dirigeant sur l'accueil, la page contact et les mentions légales." },
   contact_form: { label: "Formulaire de contact", description: "Repère un formulaire de contact utilisable et ses champs." },
   social_links: { label: "Réseaux sociaux", description: "Relève les liens Facebook, Instagram, LinkedIn… présents sur le site." },
+  seo_onpage: { label: "Référencement du site", description: "Lit le titre, la description, le H1, les données structurées et le téléphone de la page d'accueil." },
   dirigeant_sirene: { label: "Dirigeant (SIRENE)", description: "Retrouve le SIREN et le dirigeant dans la base SIRENE." },
   perf_mobile: { label: "Affichage mobile", description: "Vérifie l'affichage sur téléphone (390 px) et les débordements." },
   freshness_ssl: { label: "HTTPS et fraîcheur", description: "Contrôle le certificat HTTPS, l'année du copyright et les images cassées." },
