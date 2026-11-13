@@ -15,9 +15,10 @@ par une équipe de téléprospecteurs dans un CRM hébergé sur Cloudflare.
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) : composants, modes d'exécution, cycle de vie d'un lead, API, configuration
 - [`docs/AUDIT_2026-11.md`](docs/AUDIT_2026-11.md) : incohérences et bugs connus, avec priorités
-- [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) : déploiement Cloudflare Pages (voir l'audit §6 pour les écarts)
+- [`docs/deploiement.md`](docs/deploiement.md) : livraison par PR, Cloudflare Pages, secrets, worker de production
 - [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) / [`DESIGN_ARCHETYPES.md`](DESIGN_ARCHETYPES.md) : UI du CRM / direction artistique des démos
-- [`.agents/skills/leadengine/SKILL.md`](.agents/skills/leadengine/SKILL.md) : workflow « 0 € » avec Antigravity
+- [`AGENTS.md`](AGENTS.md) : instructions des agents IA (règles, pièges, définition de « fini »), lues par Claude Code, Gemini et Antigravity
+- [`docs/agents/file-de-generation.md`](docs/agents/file-de-generation.md) : génération « 0 € » des démos par un agent
 
 ## Démarrage rapide
 

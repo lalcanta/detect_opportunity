@@ -3,6 +3,9 @@ name: artisan-frontend-craft
 description: Système de direction artistique et de design frontend Tailwind CSS sur-mesure pour démos d'artisans locaux (bâtiment, bouche, urgence, décoration, automobile). Génère des démos uniques, immersives et à très forte conversion sans aucun effet de template répétitif.
 ---
 
+> **Lu par le code** : `lead-engine-cli/src/generateQueue.ts` injecte ce fichier, par son chemin, dans les prompts de
+> génération des démos. Le déplacer ou le renommer impose de modifier `CRAFT_GUIDE_PATH`.
+
 # Skill : Artisan Frontend Craft (Tailwind CSS Sur-Mesure)
 
 Ce skill est activé dès la création ou la refonte de la démo interactive (`demo.html`) d'un artisan ou commerce local. Il garantit que chaque site possède **une âme, une palette chromatique unique et des composants interactifs originaux**, rompant définitivement avec les modèles génériques répétitifs.

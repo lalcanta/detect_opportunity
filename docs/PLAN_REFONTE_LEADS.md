@@ -245,6 +245,8 @@ La migration doit mettre à jour **dans le même déploiement** tout le code qui
 
 ## 4. Ajouter une opportunité
 
+> **Obsolète** (les définitions vivent désormais en base) : procédure à jour dans `docs/agents/besoins.md`.
+
 1. Créer `shared/opportunities/<id>.ts` en `status: "draft"` et l'enregistrer dans `index.ts`.
 2. Réutiliser un générateur de preuve ou de message existant, ou en écrire un. Les prompts du mode agent vont dans
    `prompts/<id>/demo.md` et `prompts/<id>/battlecard.md` ; `prepScan` les lit au lieu de ses libellés en dur.

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildApiBattlecardPrompt, buildApiDemoPrompt } from "../generateQueue";
+import { CRAFT_GUIDE_PATH, buildApiBattlecardPrompt, buildApiDemoPrompt } from "../generateQueue";
 import { queueUsageFor } from "../syncQueue";
 import { effectiveModeOf, parseLeadIds } from "../worker";
 
@@ -39,5 +39,12 @@ describe("génération API de la file", () => {
     writeFileSync(join(dir, "generation_usage.json"), JSON.stringify([{ task: "demo", model: "gemini-3.5-flash-lite", inputTokens: 10, outputTokens: 20, thinkingTokens: 0 }]));
     const api = await queueUsageFor(dir, { opportunity_type: "website" });
     assert.equal(api[0]!.model, "gemini-3.5-flash-lite");
+  });
+});
+
+describe("guide de design des démos", () => {
+  it("existe là où la génération par API le lit, avec sa règle d'honnêteté", () => {
+    assert.ok(existsSync(CRAFT_GUIDE_PATH), CRAFT_GUIDE_PATH);
+    assert.match(readFileSync(CRAFT_GUIDE_PATH, "utf-8"), /Règle d'honnêteté/);
   });
 });
