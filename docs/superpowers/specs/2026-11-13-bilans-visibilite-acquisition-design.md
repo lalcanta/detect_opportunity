@@ -99,6 +99,10 @@ critère non mesurable est retiré du total (le score est ramené sur 100), jama
 critère « site relié » de la fiche est alors retiré pour ne pas pénaliser deux fois. Un artisan sans site ne peut donc
 pas dépasser 75/100.
 
+**Détail du score au survol** (demande de Loïc, 13/11/2026) : sur les deux bilans, survoler le score (ou le toucher sur
+mobile) affiche sa composition — chaque critère avec ses points obtenus sur son maximum, et la liste des critères
+retirés faute de mesure. Le prospect comme le closer voient ainsi d'où vient le chiffre.
+
 ### 4.3 Bilan « acquisition » (`ads_acquisition`, site requis)
 
 1. **En-tête** : entreprise, date, score /100.
