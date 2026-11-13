@@ -20,9 +20,9 @@ Si `AGENTS.local.md` existe à la racine, lis-le aussi : il contient les préfé
 ```bash
 npm --prefix lead-engine-cli install && npm --prefix lead-dashboard-web install
 npm run dev:web                       # CRM local sur http://localhost:8788 (D1 dans /tmp/lead-d1-state)
-npm run worker                        # worker branché sur le CRM local ; worker:prod pour la production
+npm run worker                        # worker vers REMOTE_APP_URL du .env ; worker:prod pour la production
 npm run prep -- --query "plombier" --city "Lyon" --limit 5   # préparation sans LLM, dépose dans queue/pending
-npm run sync-queue                    # pousse les dossiers complétés (sync-queue:prod pour la production)
+npm run sync-queue                    # pousse les dossiers complétés vers REMOTE_APP_URL (sync-queue:prod : production)
 npm run typecheck && npm test         # ce que lance la CI
 npm --prefix lead-dashboard-web test  # dashboard : tsc + tests
 ./lead-engine-cli/node_modules/.bin/tsx --test shared/outreach/*.test.ts   # absents de `npm test` (voir Pièges)
