@@ -37,4 +37,9 @@ Les nœuds déclarent les clés qu'ils lisent et écrivent (`shared/opportunitie
 parallèles s'en déduisent (`workflowWaves`), le worker les exécute (`lead-engine-cli/src/workflow/runner.ts`).
 Un nouveau nœud déclare ses prérequis : ne jamais coder un ordre à la main.
 
+Les preuves « bilan » (`visibility_report`, `acquisition_report`) sont suivies du nœud `site_demo` : une démo de site
+(générateur `llm_demo`, angle du bilan) jointe au bilan selon `complementDemo` (`auto` par défaut, `always`, `never`).
+Les règles de `auto` sont dans `lead-engine-cli/src/opportunities/siteDemo.ts` (`needsSiteDemo`) ; le bilan, produit
+avant, cite `/demos/:id/site` quand la démo sera produite.
+
 Décisions métier sur les besoins (prérequis, canaux, emails) : `docs/PLAN_REFONTE_LEADS.md` §6 (10/11/2026).

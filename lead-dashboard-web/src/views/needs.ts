@@ -86,7 +86,7 @@ export function opportunityPicker(hiddenId: string, selectedId: string): string 
         <span class="min-w-0">
           <span class="block text-xs font-bold text-zinc-900">${esc(ot.label)}</span>
           <span class="block text-[11px] text-zinc-600 mt-0.5">${esc(siteLabel[ot.websiteRequirement] ?? "")} · exige ${esc(ot.contactRequirement)}</span>
-          <span class="block text-[11px] text-zinc-500">${ot.proofType === "demo_web" ? "Démo de site" : "Rapport d'audit"} · ${ot.channel === "vocal_closer" ? "appel" : "message écrit"}</span>
+          <span class="block text-[11px] text-zinc-500">${esc(PROOF_CATALOG[ot.proofType]?.label ?? "Preuve")} · ${ot.channel === "vocal_closer" ? "appel" : "message écrit"}</span>
         </span>
       </label>`;
     })

@@ -6,11 +6,13 @@ import type {
   BadgeTone,
   BusinessModel,
   ChannelId,
+  ComplementDemoMode,
   DemoFocus,
   DemoHighlight,
   MessageTone,
   OpportunityStatus,
   PitchGeneratorId,
+  ProofKind,
   ScanModuleId,
   WebsiteRequirement,
 } from "./types";
@@ -52,9 +54,17 @@ export const PITCH_GENERATOR_CATALOG: Record<PitchGeneratorId, CatalogEntry> = {
   tracker_cold_email: { label: "Email d'audit", description: "Email qui cite les traceurs mesurés et le lien du rapport." },
 };
 
-export const PROOF_CATALOG: Record<"demo_web" | "audit_report", CatalogEntry> = {
+export const PROOF_CATALOG: Record<ProofKind, CatalogEntry> = {
   demo_web: { label: "Démo de site", description: "Site de démonstration personnalisé, hébergé et suivi." },
   audit_report: { label: "Rapport d'audit", description: "Rapport des traceurs mesurés, sans modèle de langage." },
+  visibility_report: { label: "Bilan de visibilité", description: "Position sur Google Maps, avis, fiche et site face aux concurrents, sans modèle de langage." },
+  acquisition_report: { label: "Bilan d'acquisition", description: "Suivi des conversions, pixels et page d'arrivée face aux concurrents, sans modèle de langage." },
+};
+
+export const COMPLEMENT_DEMO_CATALOG: Record<ComplementDemoMode, CatalogEntry> = {
+  auto: { label: "Si le site est en cause", description: "Démo de site jointe au bilan quand le prospect n'a pas de site, ou que le site est lent, mal adapté au mobile ou mal référencé (visibilité) / sans numéro cliquable ni formulaire (acquisition)." },
+  always: { label: "Toujours", description: "Démo de site jointe à chaque bilan." },
+  never: { label: "Jamais", description: "Bilan seul." },
 };
 
 export const DEMO_FOCUS_CATALOG: Record<DemoFocus, CatalogEntry> = {
@@ -114,6 +124,8 @@ export const INTEREST_CTA_PRESETS: readonly string[] = [
   "Ce design me plaît, on en discute",
   "Je veux être rappelé",
   "Ce rapport m'intéresse",
+  "Je veux améliorer ma visibilité, on en parle",
+  "Je veux en discuter",
 ];
 
 /** Paliers proposés pour les critères de la fiche Maps. */

@@ -109,6 +109,11 @@ describe("bilan visibilité", () => {
     assert.ok(h.includes("pas de site"));
     assert.ok(!h.includes("Temps de chargement"));
   });
+  it("sans site : le lien vers la démo complémentaire est proposé sous la fiche", () => {
+    const h = vis(lead({ website: null }), null, "https://app.test/demos/x/site");
+    assert.ok(h.includes('href="https://app.test/demos/x/site"'));
+    assert.ok(!vis(lead({ website: null }), null).includes("Voir à quoi pourrait ressembler votre site"));
+  });
   it("concurrent hostile échappé partout (tableau et infobulle)", () => {
     const evil = 'Dupont <b>&"';
     const h = vis(lead({ competitors: [comp(evil, 1, 4.9, 10)] }));

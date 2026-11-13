@@ -22,7 +22,12 @@ import {
 } from "./index";
 
 /** Générateur de preuve attendu pour chaque type de preuve. */
-const PROOF_GENERATOR_BY_KIND = { demo_web: "llm_demo", audit_report: "tracker_report" } as const;
+const PROOF_GENERATOR_BY_KIND = {
+  demo_web: "llm_demo",
+  audit_report: "tracker_report",
+  visibility_report: "visibility_report",
+  acquisition_report: "acquisition_report",
+} as const;
 
 describe("Registre des opportunités", () => {
   it("a des identifiants uniques en snake_case", () => {

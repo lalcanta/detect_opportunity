@@ -7,6 +7,7 @@ import {
   BADGE_TONES,
   BUSINESS_MODELS,
   CHANNEL_IDS,
+  COMPLEMENT_DEMO_MODES,
   DEMO_FOCUSES,
   DEMO_HIGHLIGHTS,
   MESSAGE_TONES,
@@ -114,8 +115,14 @@ export function validateOpportunityDefinition(raw: unknown): ValidationResult {
   } else if (proof.kind === "audit_report") {
     if (proof.generator !== "tracker_report") errors.push("un rapport d'audit utilise le générateur tracker_report");
     proofDef = { kind: "audit_report", generator: "tracker_report", interestCta: String(proof.interestCta ?? "").trim() };
+  } else if (proof.kind === "visibility_report" || proof.kind === "acquisition_report") {
+    if (proof.generator !== proof.kind) errors.push(`un bilan ${proof.kind === "visibility_report" ? "de visibilité" : "d'acquisition"} utilise le générateur ${proof.kind}`);
+    proofDef = { kind: proof.kind, generator: proof.kind, interestCta: String(proof.interestCta ?? "").trim() } as OpportunityDefinition["proof"];
   } else {
-    errors.push("type de preuve inconnu (démo de site ou rapport d'audit)");
+    errors.push("type de preuve inconnu (démo de site, rapport d'audit, bilan de visibilité ou d'acquisition)");
+  }
+  if (raw.complementDemo !== undefined && !oneOf(COMPLEMENT_DEMO_MODES, raw.complementDemo)) {
+    errors.push("démo complémentaire : automatique, toujours ou jamais");
   }
 
   const pitchRaw = isObj(raw.pitch) ? raw.pitch : {};
@@ -174,6 +181,7 @@ export function validateOpportunityDefinition(raw: unknown): ValidationResult {
       channels,
       scanModules,
       proof: proofDef,
+      ...(oneOf(COMPLEMENT_DEMO_MODES, raw.complementDemo) ? { complementDemo: raw.complementDemo } : {}),
       pitch,
       flyer: raw.flyer === true,
       commercial: {

@@ -12,9 +12,11 @@ import {
   CHANNEL_IDS,
   PITCH_GENERATOR_IDS,
   SCAN_MODULE_IDS,
+  isReportProof,
   type ChannelId,
   type OpportunityDefinition,
   type PitchGeneratorId,
+  type ProofKind,
   type ScanModuleId,
   type WebsiteRequirement,
 } from "./types";
@@ -38,8 +40,9 @@ export const DATA_KEYS = {
   pixels: { label: "Pixels publicitaires", description: "Google Ads, Meta, TikTok…" },
   traceurs: { label: "Traceurs mesurés", description: "Traceurs tiers déclenchés avant consentement." },
   lead_qualifie: { label: "Lead qualifié", description: "Contacts exigés vérifiés après l'inspection." },
-  preuve: { label: "Preuve", description: "Démo de site ou rapport d'audit." },
-  rapport: { label: "Rapport d'audit", description: "Rapport des traceurs, cité par l'email d'audit." },
+  preuve: { label: "Preuve", description: "Démo de site, rapport d'audit ou bilan." },
+  rapport: { label: "Rapport d'audit", description: "Rapport mesuré sans modèle de langage (traceurs ou bilan), cité par l'email d'audit." },
+  demo_site: { label: "Démo de site complémentaire", description: "Démo de site jointe au bilan quand le site est en cause." },
   flyer: { label: "Flyer", description: "PDF avec QR code vers les avis Google." },
   script_appel: { label: "Script d'appel", description: "Accroche, arguments et objections pour le closer." },
   message_ecrit: { label: "Message écrit", description: "Email d'approche, aussi collé dans un formulaire." },
@@ -66,7 +69,8 @@ export type NodeBinding =
   | { kind: "module"; module: ScanModuleId }
   | { kind: "channel"; channel: ChannelId }
   | { kind: "pitch"; generator: PitchGeneratorId }
-  | { kind: "proof"; proof: "demo_web" | "audit_report" }
+  | { kind: "proof"; proof: ProofKind }
+  | { kind: "site_demo" }
   | { kind: "flyer" };
 
 export interface WorkflowNodeType {
@@ -162,6 +166,39 @@ export const WORKFLOW_NODES: readonly WorkflowNodeType[] = [
     binding: { kind: "proof", proof: "audit_report" },
   },
   {
+    id: "visibility_report",
+    stage: "produce",
+    label: "Bilan de visibilité",
+    description: "Position sur Google Maps, avis, fiche et site face aux concurrents, sans modèle de langage.",
+    icon: "map-pin",
+    reads: ["lead_qualifie"],
+    optionalReads: ["fiche", "seo", "mobile", "fraicheur"],
+    writes: ["preuve", "rapport"],
+    binding: { kind: "proof", proof: "visibility_report" },
+  },
+  {
+    id: "acquisition_report",
+    stage: "produce",
+    label: "Bilan d'acquisition",
+    description: "Suivi des conversions, pixels, page d'arrivée et pixels des concurrents, sans modèle de langage.",
+    icon: "target",
+    reads: ["lead_qualifie", "site_garanti"],
+    optionalReads: ["fiche", "pixels", "traceurs", "seo", "formulaire", "mobile"],
+    writes: ["preuve", "rapport"],
+    binding: { kind: "proof", proof: "acquisition_report" },
+  },
+  {
+    id: "site_demo",
+    stage: "produce",
+    label: "Démo de site complémentaire",
+    description: "Démo de site jointe au bilan quand le site est en cause (pas de site, mobile, lenteur…).",
+    icon: "sparkles",
+    reads: ["preuve"],
+    optionalReads: ["fiche", "identite", "reseaux"],
+    writes: ["demo_site"],
+    binding: { kind: "site_demo" },
+  },
+  {
     id: "flyer",
     stage: "produce",
     label: "Flyer PDF",
@@ -212,7 +249,7 @@ export const WORKFLOW_NODES: readonly WorkflowNodeType[] = [
     description: "Le lead part dans le CRM au statut « démo prête » et est attribué à un closer.",
     icon: "inbox",
     reads: ["preuve"],
-    optionalReads: ["script_appel", "message_ecrit", "flyer"],
+    optionalReads: ["script_appel", "message_ecrit", "flyer", "demo_site"],
     writes: ["lead_crm"],
     binding: { kind: "fixed" },
   },
@@ -263,6 +300,7 @@ export function workflowNodeIds(def: WorkflowFields): string[] {
   const ids: string[] = ["maps_search", "maps_filter"];
   for (const m of SCAN_MODULE_IDS) if (def.scanModules.includes(m)) ids.push(m);
   ids.push("qualify", def.proof.kind);
+  if (isReportProof(def.proof.kind)) ids.push("site_demo");
   if (def.flyer) ids.push("flyer");
   const generators = new Set(def.channels.map((c) => def.pitch[c]).filter((g): g is PitchGeneratorId => Boolean(g)));
   for (const g of PITCH_GENERATOR_IDS) if (generators.has(g)) ids.push(g);

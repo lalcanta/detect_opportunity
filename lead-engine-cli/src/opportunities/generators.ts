@@ -4,12 +4,18 @@
  */
 import type { BrowserContext } from "playwright";
 import { messageToneInstruction, type ChannelId, type OpportunityDefinition, type PitchGeneratorId, type ProofGeneratorId } from "../../../shared/opportunities";
+import { fetchCompetitorPixels, type CompetitorPixels } from "../collector/competitorPixels";
 import { generateBattlecard } from "../copywriter/battlecard";
 import { generateColdEmailPitch } from "../copywriter/coldEmail";
 import { generateDemoHtml } from "../generator/demoGenerator";
+import { generateAcquisitionReportHtml } from "../generator/acquisitionReportGenerator";
+import { buildReportAudit } from "../generator/reportLayout";
+import { acquisitionScore, visibilityScore } from "../generator/reportScoring";
 import { generateTrackerReportHtml } from "../generator/trackerReportGenerator";
+import { generateVisibilityReportHtml } from "../generator/visibilityReportGenerator";
 import { auditSite } from "../inspector/siteAuditor";
 import type { ModelRouter } from "../llm/modelRouter";
+import { needsSiteDemo } from "./siteDemo";
 import type { Battlecard, MapsLead, SiteAudit, SiteInspection, TokenUsageRecord } from "../types";
 
 export interface GenerationContext {
@@ -30,6 +36,13 @@ export interface GenerationContext {
 export interface ProofResult {
   audit: SiteAudit;
   demoHtml: string;
+  /** Pixels des sites concurrents (bilan d'acquisition), repris dans `audit_data.competitor_pixels`. */
+  competitorPixels?: CompetitorPixels[];
+}
+
+/** Adresse de la démo complémentaire citée par le bilan, ou null si elle ne sera pas produite. */
+function siteDemoUrlFor(ctx: GenerationContext): string | null {
+  return needsSiteDemo(ctx.def, ctx.lead, ctx.inspection) ? `${ctx.remoteAppUrl}/demos/${ctx.leadId}/site` : null;
 }
 
 export type ProofGenerator = (ctx: GenerationContext) => Promise<ProofResult>;
@@ -78,6 +91,34 @@ export const PROOF_GENERATORS: Record<ProofGeneratorId, ProofGenerator> = {
     const demoHtml = generateTrackerReportHtml({ leadId: ctx.leadId, lead: ctx.lead, inspection: ctx.inspection, remoteAppUrl: ctx.remoteAppUrl });
     ctx.usage.push({ task: "demo", model: "deterministe:tracker_report", inputTokens: 0, outputTokens: 0, thinkingTokens: 0 });
     return { audit, demoHtml };
+  },
+  visibility_report: async (ctx) => {
+    await ctx.onSubStep?.(`🗺️ Génération du bilan de visibilité locale...`);
+    const score = visibilityScore(ctx.lead, ctx.inspection);
+    const demoHtml = generateVisibilityReportHtml({
+      leadId: ctx.leadId,
+      lead: ctx.lead,
+      inspection: ctx.inspection,
+      remoteAppUrl: ctx.remoteAppUrl,
+      siteDemoUrl: siteDemoUrlFor(ctx),
+    });
+    ctx.usage.push({ task: "demo", model: "deterministe:visibility_report", inputTokens: 0, outputTokens: 0, thinkingTokens: 0 });
+    return { audit: buildReportAudit(score, `Bilan de visibilité locale : ${score.score}/100 sur les critères mesurés.`), demoHtml };
+  },
+  acquisition_report: async (ctx) => {
+    await ctx.onSubStep?.(`🎯 Pixels des concurrents & bilan d'acquisition...`);
+    const competitorPixels = await fetchCompetitorPixels(ctx.lead.competitors ?? []);
+    const score = acquisitionScore(ctx.inspection, competitorPixels);
+    const demoHtml = generateAcquisitionReportHtml({
+      leadId: ctx.leadId,
+      lead: ctx.lead,
+      inspection: ctx.inspection,
+      competitorPixels,
+      remoteAppUrl: ctx.remoteAppUrl,
+      siteDemoUrl: siteDemoUrlFor(ctx),
+    });
+    ctx.usage.push({ task: "demo", model: "deterministe:acquisition_report", inputTokens: 0, outputTokens: 0, thinkingTokens: 0 });
+    return { audit: buildReportAudit(score, `Bilan d'acquisition : ${score.score}/100 sur les critères mesurés.`), demoHtml, competitorPixels };
   },
 };
 

@@ -55,6 +55,21 @@ describe("workflow d'un besoin", () => {
     assert.equal(audit.filter((id) => id === "tracker_cold_email").length, 1);
   });
 
+  it("les bilans sont suivis de la démo de site complémentaire", () => {
+    const seo = workflowNodeIds(byId("seo_local"));
+    assert.ok(seo.includes("seo_onpage"));
+    assert.ok(seo.indexOf("visibility_report") >= 0 && seo.indexOf("site_demo") === seo.indexOf("visibility_report") + 1);
+    const ads = workflowNodeIds(byId("ads_acquisition"));
+    assert.ok(ads.indexOf("acquisition_report") >= 0 && ads.indexOf("site_demo") === ads.indexOf("acquisition_report") + 1);
+    assert.ok(!workflowNodeIds(byId("website")).includes("site_demo"));
+    assert.deepEqual(checkWorkflow(byId("seo_local")), []);
+    assert.deepEqual(checkWorkflow(byId("ads_acquisition")), []);
+    const waves = workflowWaves(seo, "optional");
+    const idx = (id: string) => waves.findIndex((w) => w.includes(id));
+    assert.ok(idx("visibility_report") < idx("site_demo"));
+    assert.ok(DATA_KEYS.demo_site.label);
+  });
+
   it("sans site, le filtre ne transmet ni site ni site garanti", () => {
     const keys = availableKeys(["maps_search", "maps_filter"], "forbidden");
     assert.ok(keys.has("telephone") && !keys.has("site") && !keys.has("site_garanti"));

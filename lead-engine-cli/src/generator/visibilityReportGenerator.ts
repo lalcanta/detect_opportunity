@@ -72,11 +72,13 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
     )));
 
   const hasSite = !!lead.website;
+  // Sans site, la démo complémentaire se propose sous la fiche (il n'y a pas de carte « Votre site »).
+  const demoNoSite = hasSite ? "" : renderSiteDemoLink(siteDemoUrl);
   sections.push(renderCard("Votre fiche",
     `<ul class="space-y-2.5">${[
       renderCheck("Site web relié", hasSite, hasSite ? "la fiche renvoie vers votre site" : lead.listingUrl ? "pas de site : la fiche renvoie vers une page d'annuaire ou de réseau social" : "pas de site relié à la fiche"),
       renderCheck("Catégorie affichée", lead.activity?.trim() ? true : false, lead.activity?.trim() || "aucune catégorie renseignée"),
-    ].join("")}</ul>`));
+    ].join("")}</ul>${demoNoSite ? `<div class="pt-2">${demoNoSite}</div>` : ""}`));
 
   if (hasSite) {
     const s = inspection?.seo;

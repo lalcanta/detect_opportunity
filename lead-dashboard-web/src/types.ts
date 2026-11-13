@@ -11,6 +11,7 @@ import {
   type BusinessModel,
   type OpportunityDefinition as SharedOpportunityDefinition,
   type OpportunityId,
+  type ProofKind,
 } from "../../shared/opportunities";
 
 export type Role = "admin" | "closer";
@@ -124,7 +125,7 @@ export interface OpportunityDefinition {
   /** Prérequis de contact en clair (ex. « email ou formulaire de contact »). */
   contactRequirement: string;
   businessModel: BusinessModel;
-  proofType: "demo_web" | "audit_report";
+  proofType: ProofKind;
   pitchType: "phone_battlecard" | "cold_email";
   pitchFocus: string;
 }

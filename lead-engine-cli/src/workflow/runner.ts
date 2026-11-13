@@ -26,7 +26,9 @@ import {
 import { generateFlyerPdf } from "../generator/flyerGenerator";
 import { inspectSite, lookupCompanySirene } from "../inspector/siteInspector";
 import type { ModelRouter } from "../llm/modelRouter";
+import type { CompetitorPixels } from "../collector/competitorPixels";
 import { PITCH_GENERATORS, PROOF_GENERATORS, type GenerationContext } from "../opportunities/generators";
+import { needsSiteDemo, siteDemoFocus } from "../opportunities/siteDemo";
 import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection, UnqualifiedLeadError } from "../opportunities/qualify";
 import { log } from "../utils/helpers";
 import type { Battlecard, MapsLead, SiteAudit, SiteInspection, SyncPayload, TokenUsageRecord } from "../types";
@@ -61,6 +63,10 @@ export interface Dossier {
   primaryChannel: ChannelId | null;
   audit: SiteAudit | null;
   demoHtml: string | null;
+  /** Démo de site complémentaire d'un bilan (nœud `site_demo`). */
+  siteDemoHtml: string | null;
+  /** Pixels des sites concurrents, mesurés par le bilan d'acquisition. */
+  competitorPixels: CompetitorPixels[] | null;
   flyerPdf: Buffer | null;
   battlecard: Battlecard | null;
   usage: TokenUsageRecord[];
@@ -141,9 +147,20 @@ async function runNode(node: WorkflowNodeType, d: Dossier, env: WorkflowEnv): Pr
     }
     case "proof": {
       if (prep) return { skipped: "écrite par la file locale" };
-      const { audit, demoHtml } = await PROOF_GENERATORS[d.def.proof.generator](genContext(d, env));
+      const { audit, demoHtml, competitorPixels } = await PROOF_GENERATORS[d.def.proof.generator](genContext(d, env));
       d.audit = audit;
       d.demoHtml = demoHtml;
+      if (competitorPixels) d.competitorPixels = competitorPixels;
+      return;
+    }
+    case "site_demo": {
+      if (prep) return { skipped: "écrite par la file locale" };
+      const focus = siteDemoFocus(d.def);
+      if (!focus || !needsSiteDemo(d.def, d.lead, d.inspection)) return { skipped: "site non en cause" };
+      // Même générateur que la preuve « démo de site », avec l'angle du bilan ; l'audit du bilan reste celui du lead.
+      const ctx = genContext(d, env);
+      const demoDef: OpportunityDefinition = { ...d.def, proof: { kind: "demo_web", generator: "llm_demo", focus, interestCta: d.def.proof.interestCta } };
+      d.siteDemoHtml = (await PROOF_GENERATORS.llm_demo({ ...ctx, def: demoDef })).demoHtml;
       return;
     }
     case "flyer": {
@@ -200,6 +217,8 @@ export async function runLeadWorkflow(
     primaryChannel: null,
     audit: null,
     demoHtml: null,
+    siteDemoHtml: null,
+    competitorPixels: null,
     flyerPdf: null,
     battlecard: null,
     usage: [],
@@ -213,7 +232,9 @@ export async function runLeadWorkflow(
     const runnable: WorkflowNodeType[] = [];
     for (const id of waves[w]!) {
       const node = workflowNode(id)!;
-      const missing = node.reads.filter((k) => !d.keys.has(k));
+      // En prep, la preuve est écrite plus tard par la file locale : la démo complémentaire le sera aussi.
+      const deferred = env.mode === "prep" && node.binding.kind === "site_demo";
+      const missing = deferred ? [] : node.reads.filter((k) => !d.keys.has(k));
       if (missing.length) d.trace.push({ node: id, wave: w, status: "skipped", ms: 0, note: `manque ${missing.map((k) => `« ${label(k)} »`).join(", ")}` });
       else runnable.push(node);
     }
@@ -315,10 +336,17 @@ export function buildSyncPayload(d: Dossier): SyncPayload {
       is_https: inspection?.isHttps ?? null,
       copyright_year: inspection?.copyrightYear ?? null,
       obsolescence_signals: inspection?.obsolescenceSignals ?? [],
+      maps_rank: lead.mapsRank ?? null,
+      maps_query: lead.mapsQuery ?? null,
+      maps_checked_at: lead.mapsCheckedAt ?? null,
+      competitors: lead.competitors ?? [],
+      seo: inspection?.seo ?? null,
+      competitor_pixels: d.competitorPixels,
       report_url: d.demoUrl,
       workflow_trace: d.trace,
     },
     demo_html: d.demoHtml,
+    site_demo_html: d.siteDemoHtml,
     flyer_pdf_base64: d.flyerPdf ? d.flyerPdf.toString("base64") : null,
     battlecard_data: d.battlecard,
     token_usage: d.usage,
