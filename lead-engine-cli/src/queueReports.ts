@@ -72,18 +72,25 @@ export async function buildBilanQueueFiles(p: {
 }
 
 /** Règles ajoutées à `prompt_battlecard.md` d'un bilan : chiffres tirés de `audit_facts.json` uniquement. */
-export function bilanBattlecardRules(p: { siteDemoUrl: string | null }): string {
+export function bilanBattlecardRules(p: { kind: "visibility_report" | "acquisition_report"; siteDemoUrl: string | null }): string {
+  const visibility = p.kind === "visibility_report";
+  const label = visibility ? "bilan de visibilité locale" : "bilan d'acquisition";
+  const angle = visibility
+    ? "abonnement de visibilité locale (fiche Google, avis, référencement du site)"
+    : "abonnement d'acquisition (suivi des conversions, pixels publicitaires, page d'arrivée)";
+  const stay = visibility ? "la visibilité locale" : "l'acquisition (suivi, pixels, page d'arrivée)";
   return `
 ## Bilan déjà généré : règles du message (impératif)
-- \`demo.html\` (le bilan) est déjà écrit : ne le réécris pas. Cite **uniquement** les faits de \`audit_facts.json\`
+- \`demo.html\` (le ${label}) est déjà écrit : ne le réécris pas. Le lien \`/demos/<id>\` du message ouvre ce bilan,
+  pas une maquette de site : présente-le comme le ${label}. Cite **uniquement** les faits de \`audit_facts.json\`
   (score, critères, rang Maps avec la recherche telle qu'elle a été lancée et sa date, concurrents, pixels des
-  concurrents, 3 actions). N'invente aucun chiffre : ni appels perdus, ni chiffre d'affaires, ni trafic.
+  concurrents, actions). N'invente aucun chiffre : ni appels perdus, ni chiffre d'affaires, ni trafic.
 - Un pixel « non vérifié » (\`null\`) n'est pas « aucun pixel » : ne l'affirme jamais.
-- Angle commercial : abonnement de visibilité locale / publicité en ligne pour corriger les points relevés par le bilan.
+- Angle commercial : ${angle}, pour corriger les points relevés par le bilan.
 ${
   p.siteDemoUrl
-    ? `- Une démo de site complémentaire est demandée (${p.siteDemoUrl}) : mentionne la refonte du site comme un complément, jamais comme l'offre principale.`
-    : "- Aucune démo de site n'est demandée : reste sur la visibilité, sans proposer de nouveau site."
+    ? `- Une démo de site complémentaire est demandée (${p.siteDemoUrl}) : mentionne la refonte du site comme un complément éventuel, jamais comme l'offre principale ; le lien principal reste le bilan.`
+    : `- Aucune démo de site n'est demandée : reste sur ${stay}, sans proposer de nouveau site.`
 }
 `;
 }

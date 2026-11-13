@@ -3,6 +3,7 @@ import type { ModelRouter } from "../llm/modelRouter";
 import type { Battlecard, MapsLead, SiteAudit, TokenUsageRecord } from "../types";
 import { extractJson, log } from "../utils/helpers";
 import { battlecardSchema } from "./battlecard";
+import { bilanLabel, bilanPromptFacts, type BilanPitch } from "./bilanPitch";
 
 /**
  * TASK_FAST : message écrit de premier contact, envoyé par email ou collé dans le formulaire de contact du prospect.
@@ -16,18 +17,20 @@ export async function generateColdEmailPitch(
   usageSink: TokenUsageRecord[],
   def: Pick<OpportunityDefinition, "label" | "commercial">,
   channel: ChannelId,
+  /** Preuve « bilan » : le lien ouvre le bilan, la démo de site n'est qu'un complément éventuel. */
+  bilan: BilanPitch | null = null,
 ): Promise<Battlecard> {
   const viaForm = channel === "contact_form";
+  const label = bilan ? bilanLabel(bilan.kind) : "";
   const best = [...lead.recentReviews].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
   const prompt = `Tu rédiges un premier message écrit de prospection pour ${lead.name} (${lead.activity}, ${lead.city}).
 Il sera ${viaForm ? "collé dans le formulaire de contact de son site (pas d'objet visible, texte brut, 900 caractères maximum)" : "envoyé par email"}.
 Offre : ${def.label}. Angle : ${def.commercial.pitchFocus}.
-Constat sur sa présence actuelle : ${audit.summary}. Points faibles : ${audit.weaknesses.join(" ; ")}.
+${bilan ? bilanPromptFacts(bilan, lead, audit, demoUrl) : `Constat sur sa présence actuelle : ${audit.summary}. Points faibles : ${audit.weaknesses.join(" ; ")}.`}
 Note Google : ${lead.rating ?? "n/a"}/5 (${lead.reviewsCount ?? "n/a"} avis).${best ? ` Avis réel à citer : "${best.text}" (${best.author}).` : ""}
-Lien de la démo déjà préparée pour lui : ${demoUrl}
-
+${bilan ? "" : `Lien de la démo déjà préparée pour lui : ${demoUrl}\n`}
 ${messageToneInstruction(def.commercial.tone)}
-Règles : vouvoiement, ${def.commercial.tone ? "" : "ton chaleureux et professionnel, "}un seul constat précis, le lien de la démo, une question simple
+Règles : vouvoiement, ${def.commercial.tone ? "" : "ton chaleureux et professionnel, "}un seul constat précis, ${bilan ? `le lien du ${label}` : "le lien de la démo"}, une question simple
 pour obtenir une réponse écrite. Pas de promesse chiffrée, pas de jargon. Le message se termine par
 « Pour ne plus recevoir de message de notre part, répondez simplement STOP. »
 
@@ -53,8 +56,8 @@ Réponds en JSON strict :
       objections: [],
       whatsappText: "",
       coldEmail: {
-        subject: `${lead.name} : une proposition préparée pour vous`,
-        body: `Bonjour,\n\nNous avons préparé pour ${lead.name} une démonstration personnalisée (${def.label.toLowerCase()}) : ${demoUrl}\n\nSeriez-vous d'accord pour que nous en parlions ?\n\nBien cordialement,\n\nPour ne plus recevoir de message de notre part, répondez simplement STOP.`,
+        subject: bilan ? `${lead.name} : votre ${label}` : `${lead.name} : une proposition préparée pour vous`,
+        body: `Bonjour,\n\nNous avons préparé pour ${lead.name} ${bilan ? `un ${label}, à partir des données publiques de Google` : `une démonstration personnalisée (${def.label.toLowerCase()})`} : ${demoUrl}\n\nSeriez-vous d'accord pour que nous en parlions ?\n\nBien cordialement,\n\nPour ne plus recevoir de message de notre part, répondez simplement STOP.`,
       },
     };
   }

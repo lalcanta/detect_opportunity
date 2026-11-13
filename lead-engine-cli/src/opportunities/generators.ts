@@ -3,10 +3,11 @@
  * `Record<…Id, …>` garantit à la compilation que chaque générateur déclaré dans le registre existe ici.
  */
 import type { BrowserContext } from "playwright";
-import { messageToneInstruction, type ChannelId, type OpportunityDefinition, type PitchGeneratorId, type ProofGeneratorId } from "../../../shared/opportunities";
+import { isReportProof, messageToneInstruction, type ChannelId, type OpportunityDefinition, type PitchGeneratorId, type ProofGeneratorId } from "../../../shared/opportunities";
 import { fetchCompetitorPixels, type CompetitorPixels } from "../collector/competitorPixels";
 import { generateBattlecard } from "../copywriter/battlecard";
 import { generateColdEmailPitch } from "../copywriter/coldEmail";
+import type { BilanPitch } from "../copywriter/bilanPitch";
 import { generateDemoHtml } from "../generator/demoGenerator";
 import { generateAcquisitionReportHtml } from "../generator/acquisitionReportGenerator";
 import { buildReportAudit } from "../generator/reportLayout";
@@ -43,6 +44,12 @@ export interface ProofResult {
 /** Adresse de la démo complémentaire citée par le bilan, ou null si elle ne sera pas produite. */
 function siteDemoUrlFor(ctx: GenerationContext): string | null {
   return siteDemoUrl(ctx.def, ctx.lead, ctx.inspection, ctx.remoteAppUrl, ctx.leadId);
+}
+
+/** Preuve « bilan » du besoin, pour que le message présente le bilan et non une maquette de site. */
+function bilanPitchFor(ctx: GenerationContext): BilanPitch | null {
+  const kind = ctx.def.proof.kind;
+  return isReportProof(kind) ? { kind, siteDemoUrl: siteDemoUrlFor(ctx) } : null;
 }
 
 export type ProofGenerator = (ctx: GenerationContext) => Promise<ProofResult>;
@@ -125,11 +132,11 @@ export const PROOF_GENERATORS: Record<ProofGeneratorId, ProofGenerator> = {
 export const PITCH_GENERATORS: Record<PitchGeneratorId, PitchGenerator> = {
   llm_phone_battlecard: async (ctx, audit) => {
     await ctx.onSubStep?.(`🎯 Synthèse Battlecard IA (script d'appel & objections)...`);
-    return generateBattlecard(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage, messageToneInstruction(ctx.def.commercial.tone));
+    return generateBattlecard(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage, messageToneInstruction(ctx.def.commercial.tone), bilanPitchFor(ctx));
   },
   llm_cold_email: async (ctx, audit) => {
     await ctx.onSubStep?.(`✉️ Rédaction IA du message écrit (${ctx.primaryChannel === "contact_form" ? "formulaire de contact" : "email"})...`);
-    return generateColdEmailPitch(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage, ctx.def, ctx.primaryChannel);
+    return generateColdEmailPitch(ctx.router, ctx.lead, audit, ctx.demoUrl, ctx.usage, ctx.def, ctx.primaryChannel, bilanPitchFor(ctx));
   },
   tracker_cold_email: async (ctx) => {
     await ctx.onSubStep?.(`✉️ Préparation du brouillon d'email Dev-to-Dev (relecture manuelle)...`);

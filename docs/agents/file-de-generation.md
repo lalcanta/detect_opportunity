@@ -38,8 +38,9 @@ File vide → réponds en une ligne (« file vide ») et arrête-toi : pas de sy
   - Lead de bilan (visibilité locale ou acquisition) : `demo.html` (le bilan) est déjà écrit, comme le rapport QA ;
     ne le réécris pas. Cite uniquement les faits de `audit_facts.json` (score, rang et recherche telle qu'elle a été
     lancée, concurrents, pixels, actions) : aucun chiffre inventé. Un pixel « non vérifié » n'est pas « aucun pixel ».
-    Garde l'angle de visibilité locale ; ne mentionne la refonte du site que comme complément, si
-    `prompt_site_demo.md` existe.
+    Le lien `/demos/<id>` ouvre le bilan, pas une maquette de site : présente-le comme tel. Garde l'angle de l'offre
+    (visibilité locale, ou acquisition : suivi, pixels, page d'arrivée) ; ne mentionne la refonte du site que comme
+    complément éventuel, si `prompt_site_demo.md` existe.
   - Lead dont `primary_channel` vaut `email` ou `contact_form` (quelle que soit l'opportunité) : le JSON **doit**
     contenir `coldEmail.subject` et `coldEmail.body`, sinon `sync-queue` le laisse en attente. Pour `contact_form`,
     le corps est collé tel quel dans le formulaire : texte brut, 900 caractères maximum.

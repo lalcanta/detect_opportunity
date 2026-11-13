@@ -91,12 +91,48 @@ describe("queueReports — autres offres et consigne de battlecard", () => {
   });
 
   it("limite la battlecard aux constats mesurés et mentionne la refonte seulement si la démo est demandée", () => {
-    const without = bilanBattlecardRules({ siteDemoUrl: null });
+    const without = bilanBattlecardRules({ kind: "visibility_report", siteDemoUrl: null });
     assert.match(without, /audit_facts\.json/);
     assert.match(without, /abonnement/i);
     assert.doesNotMatch(without, /refonte/i);
-    const withDemo = bilanBattlecardRules({ siteDemoUrl: "https://app.test/demos/l1/site" });
+    const withDemo = bilanBattlecardRules({ kind: "visibility_report", siteDemoUrl: "https://app.test/demos/l1/site" });
     assert.match(withDemo, /refonte/i);
     assert.match(withDemo, /https:\/\/app\.test\/demos\/l1\/site/);
+  });
+});
+
+describe("queueReports — consigne de battlecard selon l'offre", () => {
+  it("acquisition : angle publicité / suivi, jamais « reste sur la visibilité »", () => {
+    const r = bilanBattlecardRules({ kind: "acquisition_report", siteDemoUrl: null });
+    assert.doesNotMatch(r, /visibilité/i);
+    assert.match(r, /acquisition/i);
+    assert.match(r, /pas une maquette de site/);
+  });
+  it("visibilité : angle visibilité locale", () => {
+    const r = bilanBattlecardRules({ kind: "visibility_report", siteDemoUrl: null });
+    assert.match(r, /reste sur la visibilité locale/);
+    assert.match(r, /pas une maquette de site/);
+  });
+});
+
+describe("prep — angle de vente de la battlecard", () => {
+  it("publicité : pas de « besoin d'un site web moderne »", async () => {
+    const { battlecardSalesAngle } = await import("../prepScan");
+    const ads = battlecardSalesAngle("ads_acquisition", lead);
+    assert.doesNotMatch(ads, /site web moderne/);
+    assert.match(ads, /suivi|pixel/i);
+    assert.match(battlecardSalesAngle("showcase", lead), /site web moderne/);
+  });
+});
+
+describe("prep — message écrit d'un bilan", () => {
+  it("le lien est présenté comme le bilan, pas comme une démo de site", async () => {
+    const { buildWrittenPitchPrompt } = await import("../prepScan");
+    const base = { lead, leadDir: "/tmp/x", oppLabel: "Acquisition", pitchFocus: "pub", tone: "", channel: "email" as const, demoUrl: "https://app.test/demos/x", contactFormUrl: null };
+    const bilan = buildWrittenPitchPrompt({ ...base, proofLabel: "bilan d'acquisition" });
+    assert.match(bilan, /Lien du bilan d'acquisition préparé pour lui \(un bilan, pas une maquette de site\)/);
+    assert.match(bilan, /le lien du bilan d'acquisition\./);
+    assert.doesNotMatch(bilan, /Lien de la démo/);
+    assert.match(buildWrittenPitchPrompt(base), /Lien de la démo préparée pour lui/);
   });
 });
