@@ -77,7 +77,7 @@ describe("renderReportPage / renderScoreBadge", () => {
 describe("bilan visibilité", () => {
   it("sections dans l'ordre de la spec", () => {
     const h = vis(lead(), insp(), "https://app.test/demos/x/site");
-    inOrder(h, ["Dupont Plomberie", "Votre position sur Google Maps", "Vos avis", "Votre fiche", "Votre site", "Trois actions prioritaires"]);
+    inOrder(h, ["Dupont Plomberie", "Votre position sur Google Maps", "Vos avis", "Votre fiche", "Votre site", "Actions prioritaires"]);
   });
   it("recherche telle que lancée et date en français", () => {
     const h = vis();
@@ -135,7 +135,7 @@ describe("bilan acquisition", () => {
   ];
   it("sections dans l'ordre de la spec", () => {
     const h = acq(px, lead(), insp({ paidAdsDetected: ["Meta Ads (Facebook Pixel)"], cmpDetected: "Axeptio" }), "https://app.test/demos/x/site");
-    inOrder(h, ["Dupont Plomberie", "13 novembre 2026", "Ce qui est installé sur votre site", "Vos concurrents", "Votre page d'arrivée", "Trois actions prioritaires"]);
+    inOrder(h, ["Dupont Plomberie", "13 novembre 2026", "Ce qui est installé sur votre site", "Vos concurrents", "Votre page d'arrivée", "Actions prioritaires"]);
     assert.ok(h.includes("Voir à quoi pourrait ressembler votre site"));
     assert.ok(h.includes("Axeptio"));
   });
@@ -247,5 +247,13 @@ describe("bilan acquisition — rang des concurrents et recherche Maps", () => {
     assert.ok(!h.includes("Recherche Google Maps"));
     assert.ok(!h.includes(">Rang<"));
     assert.ok(h.includes("Martin"));
+  });
+});
+
+describe("actions du bilan", () => {
+  it("titre « Actions prioritaires » (pas « Trois » quand il y en a moins)", () => {
+    const h = vis();
+    assert.ok(h.includes("Actions prioritaires"));
+    assert.ok(!h.includes("Trois actions"));
   });
 });

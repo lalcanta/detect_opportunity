@@ -120,7 +120,7 @@ export function renderActions(r: ScoreResult): string {
   const body = actions.length
     ? `<ol class="space-y-2 text-sm text-zinc-200 list-decimal pl-5">${actions.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ol>`
     : `<p class="text-sm text-zinc-300">Aucun point à corriger parmi les éléments mesurés.</p>`;
-  return renderCard("Trois actions prioritaires", body);
+  return renderCard("Actions prioritaires", body);
 }
 
 export function renderSiteDemoLink(url: string | null): string {

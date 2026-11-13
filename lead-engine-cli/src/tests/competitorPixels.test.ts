@@ -37,3 +37,19 @@ test("fetchCompetitorPixels : pixel, 500, timeout, sans site, non-HTML", async (
     { name: "D", rank: 5, website: "https://d.fr", pixels: null },
   ]);
 });
+
+test("Google Ads (Conversion AW-) : seulement un vrai identifiant AW-, ni AdSense ni DoubleClick", () => {
+  const GA = "Google Ads (Conversion AW-)";
+  assert.deepEqual(detectPaidAdsInHtml(`<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>`), []);
+  assert.deepEqual(detectPaidAdsInHtml(`<img src="https://googleads.g.doubleclick.net/pagead/viewthroughconversion/1/">`), []);
+  assert.deepEqual(detectPaidAdsInHtml(`<script>gtag('config', 'AW-987654321');</script>`), [GA]);
+});
+
+test("detectPaidAdsFromHtml : la requête DoubleClick seule ne vaut pas Google Ads, une requête portant un AW- oui", async () => {
+  const { detectPaidAdsFromHtml } = await import("../inspector/modules/adsPixelSpyModule");
+  assert.deepEqual(detectPaidAdsFromHtml("", ["Google Ads / DoubleClick"]), []);
+  assert.deepEqual(
+    detectPaidAdsFromHtml("", ["Google Ads / DoubleClick"], ["https://www.googletagmanager.com/gtag/js?id=AW-123456789"]),
+    ["Google Ads (Conversion AW-)"],
+  );
+});

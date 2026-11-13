@@ -202,6 +202,12 @@ describe("bloc Bilan de la fiche du closer (renderReportBrief)", () => {
     assert.match(absent, /Hors des résultats relevés/);
     assert.match(absent, /Après lui/);
   });
+
+  it("scan par liste de domaines (ni recherche ni rang) : position non mesurée, jamais « hors des résultats »", () => {
+    const domains = renderReportBrief(lead("seo_local", { audit_data: JSON.stringify({ maps_rank: null, maps_query: null, competitors: [], no_maps_listing: true }) }), "https://crm.test");
+    assert.match(domains, /Position non mesurée/);
+    assert.doesNotMatch(domains, /Hors des résultats relevés/);
+  });
 });
 
 describe("catalogue de l'onglet Besoins", () => {

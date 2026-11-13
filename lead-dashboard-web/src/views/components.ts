@@ -411,7 +411,9 @@ export function renderReportBrief(
     .sort((a, b) => (num(a.rank) ?? Infinity) - (num(b.rank) ?? Infinity))
     .slice(0, 5);
 
-  const rankText = rank === null ? "Hors des résultats relevés" : rank === 1 ? "1er sur Maps" : `${rank}e sur Maps`;
+  // Sans recherche Maps (scan par liste de domaines), la position n'a pas été mesurée : rien ne dit qu'il est absent.
+  const rankMeasured = !!query && audit.no_maps_listing !== true;
+  const rankText = rank !== null ? (rank === 1 ? "1er sur Maps" : `${rank}e sur Maps`) : rankMeasured ? "Hors des résultats relevés" : "Position non mesurée";
   const search = query ? `pour « ${query} »` : "recherche non relevée";
   const rows = competitors
     .map((c) => {
