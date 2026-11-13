@@ -12,6 +12,7 @@ import { modelPickerScript, renderFallbackPicker } from "./modelPicker";
 import type { GeminiQuotaRow, GeminiQuotaSummary } from "../services/geminiQuota";
 import { esc, icon, layout, navbar, type IconName } from "./layout";
 import { sideNavShell, type SideNavGroup } from "./sideNav";
+import { renderLiveScanCard, renderScanRows } from "./liveScanCard";
 import { formatStatusLabel, opportunityBadgeMeta, renderStatusPill as formatStatusPill } from "./components";
 import { COMPETITOR_BENCHMARKS } from "../data/benchmarks";
 
@@ -186,188 +187,7 @@ function renderThinkingSlider(target: string, value: number): string {
   </div>`;
 }
 
-function renderLiveScanCard(scans: ScanJob[]): string {
-  const active = scans.find((s) => s.status === "running" || s.status === "queued");
-  if (!active) {
-    const latest = scans[0];
-    if (latest && latest.status === "done" && latest.finished_at) {
-      return `
-      <div id="live_scan_card" class="bg-gradient-to-r from-emerald-50/70 via-teal-50/40 to-white rounded-2xl border border-emerald-200 p-5 shadow-sm space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex items-center gap-2.5">
-            <span class="flex h-2.5 w-2.5 relative">
-              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <span class="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-md border border-emerald-200">Dernier Scan Terminé</span>
-            <span class="text-xs text-zinc-500">Job #${latest.id} · ${esc(latest.query)} à ${esc(latest.city)}</span>
-          </div>
-          <a href="/" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline inline-flex items-center gap-1">
-            <span>Voir les leads dans le Pipeline Closer</span>
-            ${icon("external", "w-3 h-3")}
-          </a>
-        </div>
-        <div class="bg-white/95 rounded-xl p-3 border border-emerald-100 flex items-center justify-between text-xs sm:text-sm">
-          <div class="flex items-center gap-2 font-medium text-zinc-700">
-            ${icon("check-circle", "w-4 h-4 text-emerald-600")}
-            <span id="live_scan_msg">${esc(latest.message || `${latest.processed}/${latest.total || latest.processed} leads traités`)}</span>
-          </div>
-          <span id="live_scan_counter" class="font-mono text-emerald-700 font-bold">${latest.processed} leads synchronisés</span>
-        </div>
-      </div>`;
-    }
-    return `<div id="live_scan_card" class="hidden"></div>`;
-  }
-
-  const isRunning = active.status === "running";
-  const targetObj = active.total > 0 ? active.total : active.lead_limit;
-  const pct = targetObj > 0 ? Math.min(100, Math.round((active.processed / targetObj) * 100)) : (isRunning ? 15 : 0);
-  const msg = active.message || (isRunning ? "Traitement par le worker local sur Mac..." : "En attente du worker local...");
-
-  const isMaps = msg.includes("Étape 1") || msg.includes("Maps") || msg.includes("Cartographie") || msg.includes("Recherche") || msg.includes("Collecte");
-  const isInspection = msg.includes("Inspection") || msg.includes("Audit") || msg.includes("site");
-  const isDemo = msg.includes("Tailwind") || msg.includes("démo") || msg.includes("Génération");
-  const isFlyer = msg.includes("Flyer") || msg.includes("Battlecard") || msg.includes("Pitch");
-  const isSync = msg.includes("Envoi") || msg.includes("Cloud") || msg.includes("synchronisé") || msg.includes("terminé");
-
-  // Détection des métriques dans le message en direct
-  const potMatch = msg.match(/(\d+)\s+potentiels/);
-  const potDisplay = potMatch ? `${potMatch[1]} fiches` : (isMaps ? "En exploration..." : "-");
-
-  return `
-  <div id="live_scan_card" class="bg-zinc-950 text-white rounded-2xl p-5 shadow-xl border border-zinc-800 space-y-4">
-    <!-- Header -->
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <span class="flex h-3 w-3 relative">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full ${isRunning ? "bg-cyan-400" : "bg-amber-400"} opacity-75"></span>
-          <span class="relative inline-flex rounded-full h-3 w-3 ${isRunning ? "bg-cyan-500" : "bg-amber-500"}"></span>
-        </span>
-        <div>
-          <div class="flex items-center gap-2">
-            <span id="live_scan_badge" class="text-xs font-bold uppercase tracking-wider ${isRunning ? "text-cyan-300 bg-cyan-950/80 border border-cyan-800" : "text-amber-300 bg-amber-950/80 border border-amber-800"} px-2.5 py-0.5 rounded-md">
-              ${isRunning ? "Scan en cours d'exécution" : "Job en file d'attente"}
-            </span>
-            <span class="text-xs text-zinc-400 font-mono">Job #${active.id}</span>
-          </div>
-          <p class="text-sm font-semibold text-white mt-0.5">
-            ${esc(active.query)} · <span class="text-cyan-300">${esc(active.city)}</span>
-            <span class="text-xs text-zinc-400 font-normal ml-1">(Objectif : ${active.lead_limit} qualifiés${active.use_cdp ? " · CDP actif" : ""})</span>
-          </p>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <button data-cancel="${active.id}" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-white border border-rose-500/30 rounded-lg px-3 py-1.5 font-semibold transition-all inline-flex items-center gap-1.5">
-          ${icon("x-circle", "w-3.5 h-3.5")} Annuler ce scan
-        </button>
-      </div>
-    </div>
-
-    <!-- 3 Cartes Métriques Clés : Potentiels, Objectif, Qualifiés -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <!-- 1. Potentiels Détectés -->
-      <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
-        <div>
-          <p class="text-[11px] font-medium text-zinc-400">1. Potentiels Repérés</p>
-          <p id="live_scan_potentials" class="text-base sm:text-lg font-mono font-bold text-indigo-300">${potDisplay}</p>
-          <p class="text-[10px] text-zinc-500">Fiches brutes Maps explorées</p>
-        </div>
-        <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-lg">
-          ${icon("search", "w-4 h-4")}
-        </div>
-      </div>
-
-      <!-- 2. Objectif Qualifiés -->
-      <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
-        <div>
-          <p class="text-[11px] font-medium text-zinc-400">2. Objectif Qualifiés</p>
-          <p class="text-base sm:text-lg font-mono font-bold text-amber-300">${active.lead_limit} leads</p>
-          <p class="text-[10px] text-zinc-500">Avec coordonnées & téléphone</p>
-        </div>
-        <div class="p-2.5 bg-amber-500/10 text-amber-400 rounded-lg">
-          ${icon("target", "w-4 h-4")}
-        </div>
-      </div>
-
-      <!-- 3. Qualifiés Validés & Traités -->
-      <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
-        <div>
-          <p class="text-[11px] font-medium text-zinc-400">3. Qualifiés Traités</p>
-          <p id="live_scan_counter" class="text-base sm:text-lg font-mono font-bold text-emerald-300">
-            ${active.processed} / ${targetObj}
-          </p>
-          <p class="text-[10px] text-zinc-500">Audit, Démo Tailwind & Sync CRM</p>
-        </div>
-        <div class="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
-          ${icon("check-circle", "w-4 h-4")}
-        </div>
-      </div>
-    </div>
-
-    <!-- Stepper Visuel des 5 Étapes -->
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 text-xs">
-      <div id="step_maps" class="rounded-xl px-2.5 py-2 border transition-all ${isMaps ? "bg-indigo-600/30 border-indigo-400 text-white font-bold ring-1 ring-indigo-400" : "bg-zinc-900 border-zinc-800 text-zinc-400"}">
-        <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded-full bg-zinc-800 text-zinc-300 inline-flex items-center justify-center text-[10px] font-bold">1</span> <span>Maps Scraper</span></div>
-        <p class="text-[10px] opacity-75 truncate mt-0.5">Collecte & filtrage tél</p>
-      </div>
-      <div id="step_audit" class="rounded-xl px-2.5 py-2 border transition-all ${isInspection ? "bg-indigo-600/30 border-indigo-400 text-white font-bold ring-1 ring-indigo-400" : "bg-zinc-900 border-zinc-800 text-zinc-400"}">
-        <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded-full bg-zinc-800 text-zinc-300 inline-flex items-center justify-center text-[10px] font-bold">2</span> <span>Audit & Tests</span></div>
-        <p class="text-[10px] opacity-75 truncate mt-0.5">Analyse du site web</p>
-      </div>
-      <div id="step_demo" class="rounded-xl px-2.5 py-2 border transition-all ${isDemo ? "bg-indigo-600/30 border-indigo-400 text-white font-bold ring-1 ring-indigo-400" : "bg-zinc-900 border-zinc-800 text-zinc-400"}">
-        <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded-full bg-zinc-800 text-zinc-300 inline-flex items-center justify-center text-[10px] font-bold">3</span> <span>Démo Tailwind</span></div>
-        <p class="text-[10px] opacity-75 truncate mt-0.5">Site vitrine IA & Logo</p>
-      </div>
-      <div id="step_flyer" class="rounded-xl px-2.5 py-2 border transition-all ${isFlyer ? "bg-indigo-600/30 border-indigo-400 text-white font-bold ring-1 ring-indigo-400" : "bg-zinc-900 border-zinc-800 text-zinc-400"}">
-        <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded-full bg-zinc-800 text-zinc-300 inline-flex items-center justify-center text-[10px] font-bold">4</span> <span>Flyer & Pitch</span></div>
-        <p class="text-[10px] opacity-75 truncate mt-0.5">PDF QR & Battlecard</p>
-      </div>
-      <div id="step_sync" class="col-span-2 sm:col-span-1 rounded-xl px-2.5 py-2 border transition-all ${isSync ? "bg-indigo-600/30 border-indigo-400 text-white font-bold ring-1 ring-indigo-400" : "bg-zinc-900 border-zinc-800 text-zinc-400"}">
-        <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded-full bg-zinc-800 text-zinc-300 inline-flex items-center justify-center text-[10px] font-bold">5</span> <span>Sync Cloud</span></div>
-        <p class="text-[10px] opacity-75 truncate mt-0.5">Pipeline CRM Closer</p>
-      </div>
-    </div>
-
-    <!-- Active Step Highlight Banner -->
-    <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 space-y-1.5">
-      <div class="flex items-center justify-between text-xs">
-        <span class="text-cyan-300 font-semibold inline-flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-          <span id="live_scan_step_label">Opération en cours sur le prospect :</span>
-        </span>
-        <span id="live_scan_pct" class="font-mono text-cyan-200 font-semibold">
-          ${pct}%
-        </span>
-      </div>
-      <p id="live_scan_msg" class="text-xs sm:text-sm font-medium text-white tracking-wide break-words">
-        ${esc(msg)}
-      </p>
-    </div>
-
-    <!-- Animated Progress Bar -->
-    <div class="space-y-1.5">
-      <div class="w-full bg-zinc-800 rounded-full h-2 overflow-hidden border border-zinc-800">
-        <div id="live_scan_bar" class="bg-gradient-to-r from-cyan-500 via-indigo-500 to-emerald-400 h-2 rounded-full transition-all duration-500 ease-out ${isRunning && active.total === 0 ? "w-1/3 animate-pulse" : ""}" style="width: ${active.total > 0 ? pct : (isRunning ? 25 : 5)}%"></div>
-      </div>
-      <div class="flex items-center justify-between text-[11px] text-zinc-400">
-        <span class="inline-flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>Actualisation en direct (auto-refresh 2.5s)</span>
-        </span>
-        <span id="live_scan_status_text" class="font-medium text-zinc-400">
-          ${isRunning ? "Worker local actif sur votre Mac" : "En attente du worker local..."}
-        </span>
-      </div>
-    </div>
-  </div>`;
-}
 export function adminPage({ user, leads, users, stats, scans, scheduledScans = [], models, availableModels = [], tab }: AdminProps): string {
-  const badge: Record<string, string> = {
-    queued: "bg-zinc-100 text-zinc-700",
-    running: "bg-blue-100 text-blue-700 animate-pulse font-bold",
-    done: "bg-emerald-100 text-emerald-800 font-bold",
-    failed: "bg-rose-100 text-rose-800 font-bold",
-    cancelled: "bg-amber-100 text-amber-800",
-  };
   const hasActive = scans.some((s) => s.status === "queued" || s.status === "running");
   const closers = users.filter((u) => u.role === "closer" && u.is_active);
   const conv = stats.total ? ((stats.won / stats.total) * 100).toFixed(1) : "0.0";
@@ -842,7 +662,7 @@ ${sideNavShell({
           <h2 class="font-semibold text-sm text-zinc-900 flex items-center gap-2">${icon("file-text", "w-4 h-4 text-zinc-700")} File des Jobs de Scan</h2>
           <p class="text-xs text-zinc-500">Historique des 15 derniers scans ordonnancés.</p>
         </div>
-        <button onclick="location.reload()" class="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-lg font-semibold inline-flex items-center gap-1">
+        <button type="button" id="btn_refresh_scans" class="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-1.5 rounded-lg font-semibold inline-flex items-center gap-1">
           ${icon("refresh", "w-3.5 h-3.5")} Actualiser
         </button>
       </div>
@@ -853,29 +673,7 @@ ${sideNavShell({
             <th class="py-2">#</th><th>Recherche</th><th>Besoin</th><th>Mode</th><th>Statut</th><th>Progression</th><th>Message de statut</th><th>Action</th>
           </tr></thead>
           <tbody id="scans_tbody" class="divide-y divide-zinc-100 text-xs">
-          ${
-            scans
-              .map((s) => {
-                const o = opportunityBadgeMeta(s.opportunity_type);
-                const filterTag = s.website_filter && s.website_filter !== "all" ? ` <span class="text-[9px] opacity-75">(${s.website_filter === "no_website" ? "sans site" : "avec site"})</span>` : "";
-                const modeBadge = jobModeBadge(s);
-                const isGen = s.job_type === "generate";
-                return `<tr class="hover:bg-zinc-50">
-              <td class="py-3 font-mono font-bold text-zinc-400">${s.id}</td>
-              <td class="py-3 font-semibold text-zinc-800">${esc(s.query)} · ${esc(s.city)}${isGen ? "" : ` <span class="text-xs text-zinc-400 font-normal">(${s.lead_limit} max${s.use_cdp ? ", CDP" : ""})</span>`}</td>
-              <td class="py-3">${isGen ? '<span class="text-zinc-400">—</span>' : `<span class="px-2 py-0.5 rounded text-[11px] font-semibold border ${o.cls}">${o.label}${filterTag}</span>`}</td>
-              <td class="py-3">${modeBadge}</td>
-              <td class="py-3"><span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ${badge[s.status] ?? ""}">${esc(s.status)}</span></td>
-              <td class="py-3 font-mono text-zinc-700 font-medium">${s.processed}/${s.total || "?"}</td>
-              <td class="py-3 text-xs text-zinc-500 max-w-xs truncate" title="${esc(s.message || '')}">${esc(s.message || "–")}</td>
-              <td class="py-3 flex items-center gap-1.5 whitespace-nowrap">
-                ${s.status === "queued" || s.status === "running" ? `<button data-cancel="${s.id}" class="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md px-2.5 py-1 font-semibold">Annuler</button>` : `<span class="text-xs text-zinc-400 font-medium">Terminé</span>`}
-                <button type="button" class="btn-view-scan-logs text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-md px-2 py-1 font-semibold inline-flex items-center gap-1 shadow-sm transition-colors" data-scan-id="${s.id}" data-scan-title="${esc(s.query)} · ${esc(s.city)}">📋 Logs</button>
-              </td>
-            </tr>`;
-              })
-              .join("") || `<tr><td colspan="8" class="text-zinc-400 py-6 text-center">Aucun job de scan dans la file</td></tr>`
-          }
+          ${renderScanRows(scans)}
           </tbody>
         </table>
       </div>
@@ -1889,7 +1687,6 @@ document.querySelectorAll('[data-opp-pick]').forEach(function (r) {
 });
 function post(url, body) { return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); }
 
-${hasActive && tab !== "needs" ? "setTimeout(function () { location.reload(); }, 8000);" : ""}
 
 // Initialisation Carte Leaflet (si onglet scanner)
 function initLeafletMap() {
@@ -2006,146 +1803,86 @@ function initLeafletMap() {
 }
 initLeafletMap();
 
-function escHtml(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
-function setStepClass(id, active) {
-  var el = $(id);
-  if (!el) return;
-  if (active) {
-    el.className = 'rounded-xl px-2.5 py-2 border transition-all bg-indigo-600/30 border-indigo-400 text-white font-bold ring-1 ring-indigo-400';
-  } else {
-    el.className = 'rounded-xl px-2.5 py-2 border transition-all bg-zinc-900 border-zinc-800 text-zinc-400';
+// Actualisation de l'onglet Scanner sans rechargement : le serveur renvoie la carte et les lignes de la table, rendues
+// par les mêmes fonctions qu'au chargement (src/views/liveScanCard.ts).
+var scanPollTimer = null;
+var scanPollInFlight = null;
+var scanWasActive = ${hasActive};
+var launchInFlight = false;
+
+function swapLiveCard(html) {
+  var card = $('live_scan_card');
+  if (!card || card.dataset.html === html) return;
+  var oldBar = $('live_scan_bar');
+  var oldWidth = oldBar ? oldBar.style.width : null;
+  card.outerHTML = html;
+  var fresh = $('live_scan_card');
+  if (fresh) fresh.dataset.html = html;
+  // La barre est recréée : repartir de l'ancienne largeur pour que la transition joue.
+  var bar = $('live_scan_bar');
+  if (bar && oldWidth) {
+    var target = bar.style.width;
+    bar.style.width = oldWidth;
+    requestAnimationFrame(function () { requestAnimationFrame(function () { bar.style.width = target; }); });
   }
 }
 
-function updateScanUI(scans) {
-  if (!scans || !scans.length) return;
-  var active = scans.find(function (s) { return s.status === 'running' || s.status === 'queued'; });
-  var card = $('live_scan_card');
+function onScanFinished() {
+  // Hors de l'onglet Scanner, compteurs et badges dépendent du scan terminé : un seul rechargement.
+  if (!$('live_scan_card')) { location.reload(); return; }
+  var link = document.querySelector('a[href="/admin?tab=scanner"]');
+  if (link) link.querySelectorAll('.sn-dot, .rounded-full.text-white').forEach(function (el) { el.remove(); });
+}
 
-  if (active && card) {
-    card.classList.remove('hidden');
-    var isRunning = active.status === 'running';
-    var total = active.total || active.lead_limit || 0;
-    var processed = active.processed || 0;
-    var pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : (isRunning ? 15 : 0);
-    var msg = active.message || (isRunning ? "Traitement par le worker local sur Mac..." : "En attente du worker local...");
-
-    var badgeEl = $('live_scan_badge');
-    if (badgeEl) {
-      badgeEl.textContent = isRunning ? "Scan en cours d'exécution" : "Job en file d'attente";
-      badgeEl.className = 'text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md ' +
-        (isRunning ? "text-cyan-300 bg-cyan-950/80 border border-cyan-800" : "text-amber-300 bg-amber-950/80 border border-amber-800");
-    }
-
-    var stepLabel = $('live_scan_step_label');
-    if (stepLabel) stepLabel.textContent = isRunning ? "Opération en cours sur le prospect :" : "En attente :";
-
-    // Extraction et mise à jour des potentiels repérés
-    var potMatch = msg.match(/(\d+)\s+potentiels/);
-    var isMaps = msg.indexOf("Étape 1") !== -1 || msg.indexOf("Maps") !== -1 || msg.indexOf("Cartographie") !== -1 || msg.indexOf("Recherche") !== -1 || msg.indexOf("Collecte") !== -1;
-    var potCount = potMatch ? (potMatch[1] + " fiches") : (isMaps ? "En exploration..." : "-");
-    var potEl = $('live_scan_potentials');
-    if (potEl) potEl.textContent = potCount;
-
-    var counter = $('live_scan_counter');
-    if (counter) counter.textContent = processed + " / " + (total > 0 ? total : active.lead_limit);
-
-    var pctEl = $('live_scan_pct');
-    if (pctEl) pctEl.textContent = pct + "%";
-
-    var msgEl = $('live_scan_msg');
-    if (msgEl) msgEl.textContent = msg;
-
-    var bar = $('live_scan_bar');
-    if (bar) {
-      bar.style.width = (total > 0 ? pct : (isRunning ? 30 : 5)) + "%";
-    }
-
-    var statusText = $('live_scan_status_text');
-    if (statusText) {
-      statusText.textContent = isRunning ? "Worker local actif sur votre Mac" : "En attente de prise en charge par le worker";
-    }
-
-    // Highlighting current step
-    var isInspection = msg.indexOf("Inspection") !== -1 || msg.indexOf("Audit") !== -1 || msg.indexOf("site") !== -1;
-    var isDemo = msg.indexOf("Tailwind") !== -1 || msg.indexOf("démo") !== -1 || msg.indexOf("Génération") !== -1;
-    var isFlyer = msg.indexOf("Flyer") !== -1 || msg.indexOf("Battlecard") !== -1 || msg.indexOf("Pitch") !== -1;
-    var isSync = msg.indexOf("Envoi") !== -1 || msg.indexOf("Cloud") !== -1 || msg.indexOf("synchronisé") !== -1 || msg.indexOf("terminé") !== -1;
-
-    setStepClass('step_maps', isMaps);
-    setStepClass('step_audit', isInspection);
-    setStepClass('step_demo', isDemo);
-    setStepClass('step_flyer', isFlyer);
-    setStepClass('step_sync', isSync);
-  } else if (!active && card) {
-    var latest = scans[0];
-    if (latest && latest.status === 'done') {
-      var counter = $('live_scan_counter');
-      if (counter) counter.textContent = (latest.processed || 0) + " / " + (latest.total || latest.lead_limit || latest.processed);
-      var msgEl = $('live_scan_msg');
-      if (msgEl) msgEl.textContent = "Scan terminé : " + (latest.message || (latest.processed + " leads ajoutés avec succès !"));
-      var bar = $('live_scan_bar');
-      if (bar) bar.style.width = "100%";
-      setStepClass('step_sync', true);
+function fetchScansNow() {
+  scanPollInFlight = fetch('/api/admin/scans/live')
+    .then(function (r) {
+      // Session expirée ou droits retirés : le rechargement mène à la connexion.
+      if (r.status === 401 || r.status === 403) { location.reload(); throw new Error('session'); }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      if (typeof data.card === 'string') swapLiveCard(data.card);
+      var tbody = $('scans_tbody');
+      if (tbody && typeof data.rows === 'string' && tbody.dataset.html !== data.rows) {
+        tbody.innerHTML = data.rows;
+        tbody.dataset.html = data.rows;
+      }
       var btn = $('launch');
-      if (btn) {
+      if (!data.active && !launchInFlight && btn && btn.disabled) {
         btn.disabled = false;
         btn.className = 'text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-2 font-semibold shadow-sm transition-colors inline-flex items-center gap-1.5';
       }
-    }
-  }
-
-  // Update table
-  var tbody = $('scans_tbody');
-  if (tbody) {
-    var badgeClasses = {
-      queued: 'bg-zinc-100 text-zinc-700',
-      running: 'bg-blue-100 text-blue-700 animate-pulse font-semibold',
-      done: 'bg-emerald-100 text-emerald-800 font-semibold',
-      failed: 'bg-rose-100 text-rose-800 font-semibold',
-      cancelled: 'bg-amber-100 text-amber-800'
-    };
-    var oppList = ${JSON.stringify(OPPORTUNITY_TYPES)};
-    var rowsHtml = '';
-    scans.forEach(function (s) {
-      var oppKey = s.opportunity_type || ${JSON.stringify(DEFAULT_OPPORTUNITY_ID)};
-      var o = oppList.find(function (x) { return x.id === oppKey; }) || { badge: '🎯 ' + oppKey };
-      var filterTag = s.website_filter && s.website_filter !== 'all' ? ' <span class="text-[9px] opacity-75">(' + (s.website_filter === 'no_website' ? 'sans site' : 'avec site') + ')</span>' : '';
-      var isGen = s.job_type === 'generate';
-      var modeBadge = s.mode_badge || '';
-      rowsHtml += '<tr class="hover:bg-zinc-50">' +
-        '<td class="py-3 font-mono font-bold text-zinc-400">' + s.id + '</td>' +
-        '<td class="py-3 font-semibold text-zinc-800">' + escHtml(s.query) + ' · ' + escHtml(s.city) + (isGen ? '' : ' <span class="text-xs text-zinc-400 font-normal">(' + s.lead_limit + ' max' + (s.use_cdp ? ', CDP' : '') + ')</span>') + '</td>' +
-        '<td class="py-3">' + (isGen ? '<span class="text-zinc-400">—</span>' : '<span class="px-2 py-0.5 rounded text-[11px] font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200">' + escHtml(o.badge) + filterTag + '</span>') + '</td>' +
-        '<td class="py-3">' + modeBadge + '</td>' +
-        '<td class="py-3"><span class="px-2.5 py-0.5 rounded-md text-xs font-semibold ' + (badgeClasses[s.status] || '') + '">' + escHtml(s.status) + '</span></td>' +
-        '<td class="py-3 font-mono text-zinc-700 font-medium">' + s.processed + '/' + (s.total || '?') + '</td>' +
-        '<td class="py-3 text-xs text-zinc-500 max-w-xs truncate" title="' + escHtml(s.message || '') + '">' + escHtml(s.message || '–') + '</td>' +
-        '<td class="py-3 flex items-center gap-1.5 whitespace-nowrap">' +
-          (s.status === 'queued' || s.status === 'running' ? '<button data-cancel="' + s.id + '" class="text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md px-2.5 py-1 font-semibold">Annuler</button>' : '<span class="text-xs text-zinc-400 font-medium">Terminé</span>') +
-          ' <button type="button" class="btn-view-scan-logs text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-md px-2 py-1 font-semibold inline-flex items-center gap-1 shadow-sm transition-colors" data-scan-id="' + s.id + '" data-scan-title="' + escHtml(s.query) + ' · ' + escHtml(s.city) + '">📋 Logs</button>' +
-        '</td>' +
-        '</tr>';
-    });
-    tbody.innerHTML = rowsHtml;
-  }
+      if (data.active) startScanPolling();
+      else if (scanPollTimer) { clearInterval(scanPollTimer); scanPollTimer = null; }
+      if (scanWasActive && !data.active) onScanFinished();
+      scanWasActive = data.active;
+    })
+    .catch(function () {})
+    .finally(function () { scanPollInFlight = null; });
+  return scanPollInFlight;
 }
 
-var scanPollTimer = null;
+/** Actualisation demandée (bouton, lancement, annulation) : toujours une réponse lue après l'appel. */
 function pollScansOnce() {
-  fetch('/api/admin/scans')
-    .then(function (r) { return r.json(); })
-    .then(function (scans) { updateScanUI(scans); })
-    .catch(function () {});
+  if (scanPollInFlight) return scanPollInFlight.then(fetchScansNow);
+  return fetchScansNow();
+}
+
+if ($('btn_refresh_scans')) {
+  $('btn_refresh_scans').onclick = function () {
+    var b = $('btn_refresh_scans');
+    b.disabled = true;
+    pollScansOnce().then(function () { b.disabled = false; });
+  };
 }
 
 function startScanPolling() {
   if (scanPollTimer) return;
-  scanPollTimer = setInterval(pollScansOnce, 2500);
+  // Tick périodique : sauté si une lecture est déjà en cours.
+  scanPollTimer = setInterval(function () { if (!scanPollInFlight) fetchScansNow(); }, 2500);
 }
 
 if (${hasActive}) {
@@ -2230,12 +1967,10 @@ document.addEventListener('click', async function (e) {
     var res = await post('/api/admin/scheduled-scans/' + rBtn.dataset.schedRun + '/run-now');
     if (res.ok) {
       startScanPolling();
-      pollScansOnce();
-      var card = $('live_scan_card');
-      if (card) {
-        card.classList.remove('hidden');
-        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      pollScansOnce().then(function () {
+        var card = $('live_scan_card');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     } else {
       alert("Erreur lors du déclenchement immédiat.");
       rBtn.disabled = false;
@@ -2258,6 +1993,7 @@ if ($('launch')) {
   $('launch').onclick = async function () {
     var btn = $('launch');
     var msg = $('launchmsg');
+    launchInFlight = true;
     btn.disabled = true;
     btn.className = 'text-xs bg-zinc-400 text-white rounded-lg px-5 py-2 font-semibold cursor-not-allowed inline-flex items-center gap-1.5';
     msg.textContent = 'Envoi du job au worker local…';
@@ -2282,22 +2018,23 @@ if ($('launch')) {
         msg.textContent = 'Job transmis ! Prise en charge par le worker…';
         msg.className = 'text-xs text-emerald-600 font-semibold';
         startScanPolling();
-        pollScansOnce();
-        var card = $('live_scan_card');
-        if (card) {
-          card.classList.remove('hidden');
-          card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        pollScansOnce().then(function () {
+          launchInFlight = false;
+          var card = $('live_scan_card');
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
       } else {
         var errBody = await r.json().catch(function () { return {}; });
         msg.textContent = errBody.message || 'Erreur lors du lancement du scan';
         msg.className = 'text-xs text-rose-600 font-semibold';
+        launchInFlight = false;
         btn.disabled = false;
         btn.className = 'text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-2 font-semibold shadow-sm transition-colors inline-flex items-center gap-1.5';
       }
     } catch (e) {
       msg.textContent = 'Erreur réseau';
       msg.className = 'text-xs text-rose-600 font-semibold';
+      launchInFlight = false;
       btn.disabled = false;
       btn.className = 'text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-2 font-semibold shadow-sm transition-colors inline-flex items-center gap-1.5';
     }
