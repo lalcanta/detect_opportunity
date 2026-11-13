@@ -8,13 +8,13 @@ const PAID_ADS_PATTERNS: { label: string; regex: RegExp }[] = [
   { label: "Microsoft Advertising (Bing UET)", regex: /bat\.bing\.com\/bat\.js|\buetq\b/i },
 ];
 
+/** Détection pure depuis le HTML (sans trackers réseau). */
+export function detectPaidAdsInHtml(html: string): string[] {
+  return PAID_ADS_PATTERNS.filter((p) => p.regex.test(html)).map((p) => p.label);
+}
+
 export function detectPaidAdsFromHtml(html: string, trackerNames: string[] = []): string[] {
-  const found = new Set<string>();
-  for (const p of PAID_ADS_PATTERNS) {
-    if (p.regex.test(html)) {
-      found.add(p.label);
-    }
-  }
+  const found = new Set<string>(detectPaidAdsInHtml(html));
   for (const t of trackerNames) {
     if (/google ads/i.test(t)) found.add("Google Ads (Conversion AW-)");
     if (/meta pixel|facebook/i.test(t)) found.add("Meta Ads (Facebook Pixel)");
