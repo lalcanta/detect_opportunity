@@ -51,7 +51,7 @@ npm run test:functional               # tests HTTP, démarrent leur serveur sur 
 - **Démos : n'invente rien.** Aucun avis, client, certification, prix ou délai absent des données du prospect.
   La règle complète est en tête du guide de design des démos (section 0).
 - **Un fragment d'interface rafraîchi côté client est rendu par le serveur** (même fonction au chargement et dans
-  l'API), pas reconstruit en JavaScript ; exemple : `src/views/liveScanCard.ts` et `GET /api/admin/scans?card=1`.
+  l'API), pas reconstruit en JavaScript ; exemple : `src/views/liveScanCard.ts` et `GET /api/admin/scans/live`.
 - **Quand le fonctionnement change**, mettre à jour la doc concernée dans la même PR (`docs/`, README, ce fichier).
 
 ## Interdits
