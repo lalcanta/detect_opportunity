@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CODE_OPPORTUNITIES } from "../../../shared/opportunities";
-import { migrateReportProofs, readStoredOpportunities } from "../services/opportunityStore";
+import {
+  migrateReportProofs,
+  readStoredOpportunities,
+  resetOpportunityStoreForTests,
+  saveOpportunityDefinition,
+} from "../services/opportunityStore";
 
 /**
  * Faux D1 minimal : ne connaît que les requêtes de opportunityStore.ts (tables opportunity_definitions et
@@ -13,8 +18,13 @@ interface HistRow { opportunity_id: string; version: number; definition: string;
 function fakeD1() {
   const defs = new Map<string, DefRow>();
   const history: HistRow[] = [];
+  const calls = { updates: 0 };
   const exec = (sql: string, args: unknown[]) => {
     const s = sql.replace(/\s+/g, " ").trim();
+    if (s.startsWith("SELECT DISTINCT opportunity_id FROM opportunity_definition_history WHERE changed_by = 'code-migration'")) {
+      const ids = new Set(history.filter((h) => h.changed_by === "code-migration" && args.includes(h.opportunity_id)).map((h) => h.opportunity_id));
+      return { all: [...ids].map((opportunity_id) => ({ opportunity_id })), changes: 0 };
+    }
     if (s.startsWith("SELECT COALESCE(MAX(position)")) {
       const max = Math.max(-1, ...[...defs.values()].map((r) => r.position));
       return { first: { p: max + 1 }, changes: 0 };
@@ -44,6 +54,7 @@ function fakeD1() {
       return { changes: 1 };
     }
     if (s.startsWith("UPDATE opportunity_definitions SET definition = ?")) {
+      calls.updates++;
       const [definition, next, by, id, expected] = args as [string, number, string, string, number];
       const r = defs.get(id);
       if (!r || r.version !== expected) return { changes: 0 };
@@ -63,7 +74,7 @@ function fakeD1() {
     prepare: (sql: string) => statement(sql),
     batch: async (stmts: Array<ReturnType<typeof statement>>) => stmts.map((st) => st._exec()),
   };
-  return { db: db as unknown as D1Database, defs, history };
+  return { db: db as unknown as D1Database, defs, history, calls };
 }
 
 const code = (id: string) => CODE_OPPORTUNITIES.find((d) => d.id === id)!;
@@ -119,7 +130,47 @@ describe("bascule des bilans (migrateReportProofs)", () => {
     assert.equal(defs.size, 0);
   });
 
+  it("une seule fois au total : un retour à la démo de site fait dans l'onglet Besoins est conservé", async () => {
+    const { db, defs } = fakeD1();
+    put(defs, "seo_local", oldDemo("seo_local"));
+    assert.equal(await migrateReportProofs(db), 1);
+    // Loïc rétablit l'ancienne version depuis l'historique (enregistrement normal, version 5).
+    const restored = await saveOpportunityDefinition(db, oldDemo("seo_local"), 4, "u-loic");
+    assert.deepEqual(restored, { ok: true, version: 5 });
+    // Nouvel isolat : la bascule ne repasse pas.
+    assert.equal(await migrateReportProofs(db), 0);
+    assert.equal(JSON.parse(defs.get("seo_local")!.definition).proof.kind, "demo_web");
+    assert.equal(defs.get("seo_local")!.version, 5);
+  });
+
+  it("deux appels simultanés : un seul enregistrement, sans erreur", async () => {
+    const { db, defs, calls } = fakeD1();
+    put(defs, "seo_local", oldDemo("seo_local"));
+    const errors: unknown[] = [];
+    const original = console.error;
+    console.error = (...a: unknown[]) => void errors.push(a);
+    try {
+      const [a, b] = await Promise.all([migrateReportProofs(db), migrateReportProofs(db)]);
+      assert.equal(a + b, 1);
+    } finally {
+      console.error = original;
+    }
+    assert.equal(calls.updates, 1);
+    assert.deepEqual(errors, []);
+    assert.equal(defs.get("seo_local")!.version, 4);
+  });
+
+  it("premières requêtes simultanées d'un isolat : la bascule ne tourne qu'une fois", async () => {
+    resetOpportunityStoreForTests();
+    const { db, defs, calls } = fakeD1();
+    put(defs, "seo_local", oldDemo("seo_local"));
+    await Promise.all([readStoredOpportunities(db), readStoredOpportunities(db), readStoredOpportunities(db)]);
+    assert.equal(calls.updates, 1);
+    assert.equal(defs.get("seo_local")!.updated_by, "code-migration");
+  });
+
   it("tourne avant la première lecture des définitions", async () => {
+    resetOpportunityStoreForTests();
     const { db, defs } = fakeD1();
     put(defs, "seo_local", oldDemo("seo_local"));
     const rows = await readStoredOpportunities(db);

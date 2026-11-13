@@ -12,10 +12,11 @@
   Modifier un fichier `definitions/*.ts` d'un besoin déjà en base ne change rien en production : faire la
   modification dans l'onglet Besoins, ou dans les deux si la valeur initiale doit suivre.
 - **Exception unique, la bascule des bilans** (décision du 13/11/2026, « écrase au besoin ») : `migrateReportProofs`
-  (même fichier), lancée une fois par isolat avant la première lecture, remplace les lignes `seo_local` et
+  (même fichier), lancée avant la première lecture des définitions, remplace les lignes `seo_local` et
   `ads_acquisition` encore en démo de site (`proof.kind === "demo_web"`) par la définition du code, même modifiées
-  dans l'onglet. L'ancienne version part dans l'historique (`changed_by = "code-migration"`) : la rétablir depuis
-  l'onglet Besoins si besoin. Une ligne déjà sur un bilan n'est plus touchée.
+  dans l'onglet. Elle ne passe qu'une fois au total : l'entrée `changed_by = "code-migration"` qu'elle laisse dans
+  l'historique la marque comme faite. Un retour à la démo de site fait ensuite depuis l'onglet Besoins (historique,
+  « Reprendre cette version ») est donc conservé.
 
 ## Ajouter un besoin
 

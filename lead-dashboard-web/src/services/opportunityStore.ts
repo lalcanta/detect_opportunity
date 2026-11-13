@@ -2,7 +2,7 @@
  * Définitions des besoins (opportunités) stockées en base, éditables depuis l'onglet admin « Besoins ».
  *
  * La table est remplie au premier accès avec les définitions du code (shared/opportunities) ; ensuite la base fait
- * foi, sauf la bascule unique des bilans (`migrateReportProofs`). Chaque requête charge les définitions (avec un cache court par isolat) et les installe dans le registre
+ * foi, sauf la bascule des bilans, faite une seule fois (`migrateReportProofs`). Chaque requête charge les définitions (avec un cache court par isolat) et les installe dans le registre
  * partagé, si bien que tout le code qui lit `OPPORTUNITIES`, `findOpportunity`… voit la version de la base.
  */
 import {
@@ -76,17 +76,41 @@ async function seedIfEmpty(db: D1Database): Promise<void> {
 
 /** Besoins passés de la démo de site aux bilans (visibilité, acquisition) : la ligne stockée est remplacée une fois. */
 const REPORT_MIGRATION_IDS = ["seo_local", "ads_acquisition"] as const;
+/** Auteur des versions écrites par la bascule ; sa présence dans l'historique marque la bascule comme faite. */
+const MIGRATION_AUTHOR = "code-migration";
 
 /**
  * Bascule des bilans en production (décision du 13/11/2026 : « écrase au besoin ») : une ligne `seo_local` ou
  * `ads_acquisition` encore en démo de site est remplacée par la définition du code, même modifiée dans l'onglet
  * Besoins. Passe par l'enregistrement normal (nouvelle version, ancienne dans l'historique, `code-migration`) pour
- * pouvoir revenir en arrière. Idempotente : une ligne déjà sur un bilan n'est pas touchée. Renvoie le nombre de
- * lignes remplacées.
+ * pouvoir revenir en arrière.
+ *
+ * Une seule fois au total : un besoin dont l'historique contient déjà une entrée `code-migration` n'est plus
+ * touché, si bien qu'un retour à la démo de site fait ensuite dans l'onglet Besoins est conservé. Deux appels
+ * simultanés sur la même base partagent le même passage ; un conflit de version (autre isolat plus rapide) vaut
+ * « déjà fait ». Renvoie le nombre de lignes remplacées.
  */
-export async function migrateReportProofs(db: D1Database): Promise<number> {
+export function migrateReportProofs(db: D1Database): Promise<number> {
+  const running = inflight.get(db);
+  if (running) return running.then(() => 0);
+  const run = runReportMigration(db).finally(() => inflight.delete(db));
+  inflight.set(db, run);
+  return run;
+}
+
+const inflight = new WeakMap<D1Database, Promise<number>>();
+
+async function runReportMigration(db: D1Database): Promise<number> {
+  const done = await db
+    .prepare(
+      `SELECT DISTINCT opportunity_id FROM opportunity_definition_history WHERE changed_by = '${MIGRATION_AUTHOR}' AND opportunity_id IN (${REPORT_MIGRATION_IDS.map(() => "?").join(", ")})`,
+    )
+    .bind(...REPORT_MIGRATION_IDS)
+    .all<{ opportunity_id: string }>();
+  const alreadyDone = new Set(done.results.map((r) => r.opportunity_id));
   let replaced = 0;
   for (const id of REPORT_MIGRATION_IDS) {
+    if (alreadyDone.has(id)) continue;
     const def = CODE_OPPORTUNITIES.find((d) => d.id === id);
     if (!def) continue;
     const row = await db
@@ -101,22 +125,32 @@ export async function migrateReportProofs(db: D1Database): Promise<number> {
       kind = undefined;
     }
     if (kind !== "demo_web") continue;
-    const res = await saveOpportunityDefinition(db, def, row.version, "code-migration");
+    const res = await saveOpportunityDefinition(db, def, row.version, MIGRATION_AUTHOR);
     if (res.ok) replaced++;
-    else console.error(`[besoins] bascule de « ${id} » vers le bilan impossible : ${res.errors.join(" ; ")}`);
+    else if (res.status !== 409) console.error(`[besoins] bascule de « ${id} » vers le bilan impossible : ${res.errors.join(" ; ")}`);
   }
   if (replaced > 0) console.log(`[besoins] ${replaced} besoin(s) basculé(s) vers les bilans`);
   return replaced;
 }
 
-let migrated = false;
+/** Bascule de cet isolat, lancée une fois (les premières requêtes simultanées l'attendent toutes). */
+let migration: Promise<number> | null = null;
 
-/** Amorçage et bascule des bilans, une fois par isolat, avant la première lecture des définitions. */
+/** Amorçage et bascule des bilans avant la première lecture des définitions. */
 async function prepareStore(db: D1Database): Promise<void> {
   await seedIfEmpty(db);
-  if (migrated) return;
-  await migrateReportProofs(db);
-  migrated = true;
+  migration ??= migrateReportProofs(db).catch((e: unknown) => {
+    migration = null; // réessayée à la requête suivante
+    throw e;
+  });
+  await migration;
+}
+
+/** Tests uniquement : oublie l'état de l'isolat (amorçage, bascule, cache). */
+export function resetOpportunityStoreForTests(): void {
+  seeded = false;
+  migration = null;
+  cache = null;
 }
 
 /** Lit les définitions en base (remplies depuis le code au premier accès). Les lignes invalides sont écartées. */
