@@ -25,7 +25,6 @@ npm run prep -- --query "plombier" --city "Lyon" --limit 5   # préparation sans
 npm run sync-queue                    # pousse les dossiers complétés vers REMOTE_APP_URL (sync-queue:prod : production)
 npm run typecheck && npm test         # ce que lance la CI
 npm --prefix lead-dashboard-web test  # dashboard : tsc + tests
-./lead-engine-cli/node_modules/.bin/tsx --test shared/outreach/*.test.ts   # absents de `npm test` (voir Pièges)
 npm run test:functional               # tests HTTP, démarrent leur serveur sur le port 8789, hors CI
 ```
 
@@ -72,7 +71,6 @@ npm run test:functional               # tests HTTP, démarrent leur serveur sur 
   `lead-engine-cli/` ou `shared/`, le redémarrer (`npm run worker:prod`).
 - **Options des scripts de la racine** : ils relaient leurs arguments au CLI (`npm run prep -- --query … --city …`)
   grâce au `--` final de chaque script de `package.json` ; un script relais ajouté sans ce `--` perd ses options.
-- **`npm test` racine ne lance pas `shared/outreach/*.test.ts`**, donc la CI non plus : lance-les à part.
 - **Modifier une définition de besoin dans le code ne change pas la production** : la base fait foi.
 - **Liaisons absentes en local** : avec `--d1=DB` en ligne de commande (`npm run dev:web`), wrangler ignore celles de
   `wrangler.toml` : ni `MEDIA` (R2) ni `AI`. Sans bucket, la route des photos redirige vers l'image d'origine ; pour
@@ -84,7 +82,7 @@ npm run test:functional               # tests HTTP, démarrent leur serveur sur 
 npm run typecheck && npm test && npm --prefix lead-dashboard-web test
 ```
 
-- [ ] Les tests du code touché passent, y compris `shared/outreach` s'il est concerné.
+- [ ] Les tests du code touché passent.
 - [ ] Interface modifiée : vérifiée dans le CRM local, à l'écran, en largeur bureau et mobile, console sans erreur.
 - [ ] Schéma modifié : les trois endroits de `docs/agents/donnees-d1.md` sont à jour.
 - [ ] Moteur modifié : un scan de test passe (`npm run scan -- … --dry-run`).

@@ -147,7 +147,7 @@ verrou, statut, relance, expiration démo) · `token_usage` · `scan_jobs` · `s
 
 Schéma de base : `lead-dashboard-web/schema.sql`. Les colonnes ajoutées après coup sont créées à chaud par
 `ensureAuthSchema()` (`src/auth.ts`) à chaque premier appel d'un isolate. Les changements impossibles à faire à chaud
-(contraintes CHECK) passent par `lead-dashboard-web/migrations/` (`npm run db:migrate:local` / `db:migrate:remote`).
+(contraintes CHECK) passent par `lead-dashboard-web/migrations/`, lancées à la main (voir `docs/agents/donnees-d1.md`).
 
 Règle de synchronisation : `POST /api/sync` est un upsert qui **ne modifie jamais le statut d'un lead déjà généré**.
 Seul un lead `pending_generation` avance vers le statut envoyé ; une re-préparation ne remplace pas son audit.
