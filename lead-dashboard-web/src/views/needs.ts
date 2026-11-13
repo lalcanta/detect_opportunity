@@ -7,6 +7,8 @@ import {
   BADGE_TONE_CATALOG,
   BUSINESS_MODEL_CATALOG,
   CHANNEL_CATALOG,
+  COMPLEMENT_DEMO_CATALOG,
+  COMPLEMENT_DEMO_MODES,
   CHANNEL_IDS,
   DATA_KEYS,
   DEMO_FOCUS_CATALOG,
@@ -17,6 +19,7 @@ import {
   PITCH_GENERATOR_CATALOG,
   PITCH_KIND_BY_GENERATOR,
   PROOF_CATALOG,
+  REPORT_PROOF_KINDS,
   SCAN_MODULE_CATALOG,
   SCAN_MODULE_IDS,
   STATUS_CATALOG,
@@ -29,7 +32,7 @@ import { opportunityBadgeMeta } from "./components";
 import { esc, icon, type IconName } from "./layout";
 
 /** Change à chaque modification de public/static/besoins.js, pour contourner le cache du CDN. */
-export const NEEDS_ASSET_VERSION = "20261112w2";
+export const NEEDS_ASSET_VERSION = "20261113b1";
 
 /** Icônes proposées pour un besoin, et celles du graphe. */
 const NEED_ICONS: IconName[] = ["globe", "shield", "star", "map-pin", "target", "sparkles", "search", "chart", "zap", "users", "file-text", "message", "phone", "mail", "layers", "cpu"];
@@ -46,6 +49,9 @@ export function needsTab(): string {
     website: WEBSITE_REQUIREMENT_CATALOG,
     pitch: Object.entries(PITCH_GENERATOR_CATALOG).map(([id, e]) => ({ id, kind: PITCH_KIND_BY_GENERATOR[id as keyof typeof PITCH_KIND_BY_GENERATOR], ...e })),
     proof: PROOF_CATALOG,
+    /** Preuves suivies du nœud `site_demo` (même règle que `workflowNodeIds`). */
+    reportProofs: REPORT_PROOF_KINDS,
+    complementDemo: COMPLEMENT_DEMO_MODES.map((id) => ({ id, ...COMPLEMENT_DEMO_CATALOG[id] })),
     focus: DEMO_FOCUS_CATALOG,
     status: STATUS_CATALOG,
     businessModel: BUSINESS_MODEL_CATALOG,

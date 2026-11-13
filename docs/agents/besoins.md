@@ -11,6 +11,11 @@
   `INSERT OR IGNORE` au premier accès (`seedIfEmpty`, `lead-dashboard-web/src/services/opportunityStore.ts`).
   Modifier un fichier `definitions/*.ts` d'un besoin déjà en base ne change rien en production : faire la
   modification dans l'onglet Besoins, ou dans les deux si la valeur initiale doit suivre.
+- **Exception unique, la bascule des bilans** (décision du 13/11/2026, « écrase au besoin ») : `migrateReportProofs`
+  (même fichier), lancée une fois par isolat avant la première lecture, remplace les lignes `seo_local` et
+  `ads_acquisition` encore en démo de site (`proof.kind === "demo_web"`) par la définition du code, même modifiées
+  dans l'onglet. L'ancienne version part dans l'historique (`changed_by = "code-migration"`) : la rétablir depuis
+  l'onglet Besoins si besoin. Une ligne déjà sur un bilan n'est plus touchée.
 
 ## Ajouter un besoin
 
@@ -39,6 +44,8 @@ Un nouveau nœud déclare ses prérequis : ne jamais coder un ordre à la main.
 
 Les preuves « bilan » (`visibility_report`, `acquisition_report`) sont suivies du nœud `site_demo` : une démo de site
 (générateur `llm_demo`, angle du bilan) jointe au bilan selon `complementDemo` (`auto` par défaut, `always`, `never`).
+Dans l'onglet Besoins, le choix se fait sur la carte « Démo de site complémentaire » du graphe (Automatique /
+Toujours / Jamais) ; `public/static/besoins.js` recopie l'ordre de `workflowNodeIds` (`nodeIdsOf`), à tenir identique.
 Les règles de `auto` sont dans `lead-engine-cli/src/opportunities/siteDemo.ts` (`needsSiteDemo`) ; le bilan, produit
 avant, cite `/demos/:id/site` quand la démo sera produite.
 

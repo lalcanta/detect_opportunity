@@ -62,7 +62,7 @@ export const PROOF_CATALOG: Record<ProofKind, CatalogEntry> = {
 };
 
 export const COMPLEMENT_DEMO_CATALOG: Record<ComplementDemoMode, CatalogEntry> = {
-  auto: { label: "Si le site est en cause", description: "Démo de site jointe au bilan quand le prospect n'a pas de site, ou que le site est lent, mal adapté au mobile ou mal référencé (visibilité) / sans numéro cliquable ni formulaire (acquisition)." },
+  auto: { label: "Automatique", description: "Démo de site jointe au bilan quand le prospect n'a pas de site, ou que le site est lent, mal adapté au mobile ou mal référencé (visibilité) / sans numéro cliquable ni formulaire (acquisition)." },
   always: { label: "Toujours", description: "Démo de site jointe à chaque bilan." },
   never: { label: "Jamais", description: "Bilan seul." },
 };

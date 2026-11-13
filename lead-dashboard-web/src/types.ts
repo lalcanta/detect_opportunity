@@ -247,6 +247,8 @@ export interface LeadRow {
   contact_form_url?: string | null;
   /** JSON : captcha, champs, fournisseur du formulaire */
   contact_form_meta?: string | null;
+  /** 1 si une démo de site complémentaire est servie sur /demos/:id/site (lu sans charger le HTML) */
+  has_site_demo?: number | null;
   created_at: string;
   assignee_name?: string | null;
   locker_name?: string | null;
