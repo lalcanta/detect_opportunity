@@ -229,3 +229,23 @@ describe("bilan visibilité — lead en tête : phrase tirée des avis mesurés"
     }
   });
 });
+
+describe("bilan acquisition — rang des concurrents et recherche Maps", () => {
+  const px: CompetitorPixels[] = [{ name: "Martin", rank: 1, website: "https://m.fr", pixels: [] }];
+  it("recherche connue : ligne « Recherche Google Maps » affichée avec la colonne Rang", () => {
+    const h = acq(px);
+    assert.ok(h.includes("Recherche Google Maps : <strong class=\"text-white\">« plombier Lyon »</strong>"));
+    assert.ok(h.includes(">Rang<"));
+  });
+  it("recherche hostile échappée", () => {
+    const h = acq(px, lead({ mapsQuery: "plombier <b>" }));
+    assert.ok(h.includes("plombier &lt;b&gt;"));
+    assert.ok(!h.includes("plombier <b>"));
+  });
+  it("recherche inconnue : ni ligne de recherche ni colonne Rang", () => {
+    const h = acq(px, lead({ mapsQuery: null }));
+    assert.ok(!h.includes("Recherche Google Maps"));
+    assert.ok(!h.includes(">Rang<"));
+    assert.ok(h.includes("Martin"));
+  });
+});

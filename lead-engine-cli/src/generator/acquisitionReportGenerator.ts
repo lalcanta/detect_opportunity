@@ -20,12 +20,15 @@ export function generateAcquisitionReportHtml(input: AcquisitionReportInput): st
   const { leadId, lead, inspection, competitorPixels, remoteAppUrl, siteDemoUrl } = input;
   const result = acquisitionScore(inspection, competitorPixels);
   const i = inspection;
+  // Le rang d'un concurrent n'a de sens qu'avec la recherche telle qu'elle a été lancée.
+  const query = lead.mapsQuery?.trim() || null;
 
   const header = `<header class="border-b border-zinc-800/80 bg-zinc-950/90">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1.5 min-w-0">
         <div class="text-xs uppercase tracking-wider text-indigo-400 font-semibold">Bilan d'acquisition</div>
         <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight break-words">${escapeHtml(lead.name)}</h1>
+        ${query ? `<p class="text-sm text-zinc-300">Recherche Google Maps : <strong class="text-white">« ${escapeHtml(query)} »</strong></p>` : ""}
         ${renderCheckedAt(lead.mapsCheckedAt)}
       </div>
       ${renderScoreBadge(result)}
@@ -53,11 +56,11 @@ export function generateAcquisitionReportHtml(input: AcquisitionReportInput): st
     if (c.pixels === null) txt = "non vérifié";
     else if (c.pixels.length === 0) txt = "Aucun pixel détecté";
     else txt = c.pixels.join(", ") + (c.pixels.includes(GOOGLE_ADS) ? " — mesure ses appels" : "");
-    return [c.name, `${c.rank}`, txt];
+    return query ? [c.name, `${c.rank}`, txt] : [c.name, txt];
   });
   sections.push(renderCard("Vos concurrents",
     rows.length
-      ? renderTable(["Établissement", "Rang", "Pixels trouvés sur son site"], rows, 99)
+      ? renderTable(query ? ["Établissement", "Rang", "Pixels trouvés sur son site"] : ["Établissement", "Pixels trouvés sur son site"], rows, 99)
       : `<p class="text-sm text-zinc-400">Aucun concurrent avec un site à comparer pour cette recherche.</p>`,
     "Données publiques de leur site, relevées à la date du constat."));
 
