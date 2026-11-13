@@ -5,6 +5,16 @@ export interface Review {
   relativeDate: string;
 }
 
+/** Fiche voisine vue dans la même recherche Maps (données publiques de la liste). */
+export interface MapsCompetitor {
+  name: string;
+  rank: number;
+  rating: number | null;
+  reviewsCount: number | null;
+  website: string | null;
+  category: string | null;
+}
+
 export interface MapsLead {
   name: string;
   activity: string;
@@ -19,6 +29,13 @@ export interface MapsLead {
   mapsUrl: string;
   /** ChIJ... si trouvé, sert au QR code du formulaire d'avis */
   placeId: string | null;
+  /** Rang de la fiche dans la recherche Maps (1 = première affichée) */
+  mapsRank?: number | null;
+  /** Recherche Maps telle qu'elle a été lancée */
+  mapsQuery?: string | null;
+  /** Date du constat (ISO) */
+  mapsCheckedAt?: string | null;
+  competitors?: MapsCompetitor[];
 }
 
 export interface TrackerRequest {
