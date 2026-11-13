@@ -203,3 +203,29 @@ describe("rapport RGPD (non-régression de la mise en page)", () => {
     assert.equal((html.match(/<main/g) ?? []).length, 1);
   });
 });
+
+describe("bilan visibilité — lead en tête : phrase tirée des avis mesurés", () => {
+  const top = (reviewsCount: number | null, next: ReturnType<typeof comp>[]) => vis(lead({ mapsRank: 1, reviewsCount, competitors: next }));
+  it("un suivant a plus d'avis (61 contre 80) : il est nommé, pas d'« avance »", () => {
+    const h = top(61, [comp("Durand <b>", 2, 4.5, 80), comp("Petit", 3, 4.1, 20)]);
+    assert.ok(!h.includes("garder l'avance"));
+    assert.ok(h.includes("Durand &lt;b&gt;"));
+    assert.ok(!h.includes("Durand <b>"));
+    assert.ok(/80 avis contre 61/.test(h), "chiffres comparés");
+  });
+  it("plus d'avis que tous les suivants", () => {
+    const h = top(120, [comp("Durand", 2, 4.5, 80), comp("Petit", 3, 4.1, 20)]);
+    assert.ok(/plus d'avis que les suivants/.test(h));
+    assert.ok(/120 contre 80 au plus/.test(h));
+  });
+  it("autant d'avis que le mieux pourvu des suivants", () => {
+    const h = top(80, [comp("Durand", 2, 4.5, 80)]);
+    assert.ok(/autant d'avis/.test(h));
+  });
+  it("avis non mesurés (lead ou suivants) : aucune comparaison", () => {
+    for (const h of [top(null, [comp("Durand", 2, 4.5, 80)]), top(61, [comp("Durand", 2, 4.5, null)]), top(61, [])]) {
+      assert.ok(h.includes("en tête"));
+      assert.ok(!/garder l'avance|plus d'avis|autant d'avis|avis contre/.test(h));
+    }
+  });
+});

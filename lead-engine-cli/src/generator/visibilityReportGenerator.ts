@@ -1,4 +1,4 @@
-import type { MapsLead, SiteInspection } from "../types";
+import type { MapsCompetitor, MapsLead, SiteInspection } from "../types";
 import { escapeHtml } from "../utils/helpers";
 import { visibilityScore } from "./reportScoring";
 import { renderCheckedAt, renderActions, renderCard, renderCheck, renderReportPage, renderScoreBadge, renderSiteDemoLink, renderTable } from "./reportLayout";
@@ -14,6 +14,20 @@ export interface VisibilityReportInput {
 const num = (v: number | null | undefined): string => (typeof v === "number" ? String(v) : "—");
 const rate = (v: number | null | undefined): string => (typeof v === "number" ? v.toFixed(1).replace(".", ",") : "—");
 const avg = (v: number[]): number | null => (v.length ? v.reduce((s, x) => s + x, 0) / v.length : null);
+
+/**
+ * Lead en tête : comparaison de son nombre d'avis à celui des suivants, uniquement si les deux sont mesurés
+ * (texte déjà échappé, précédé d'une espace ; vide sinon).
+ */
+function reviewsVersNext(own: number | null | undefined, next: MapsCompetitor[]): string {
+  if (typeof own !== "number") return "";
+  const counted = next.filter((c): c is MapsCompetitor & { reviewsCount: number } => typeof c.reviewsCount === "number");
+  if (!counted.length) return "";
+  const best = counted.reduce((a, b) => (b.reviewsCount > a.reviewsCount ? b : a));
+  if (own > best.reviewsCount) return ` Vous avez plus d'avis que les suivants (${own} contre ${best.reviewsCount} au plus).`;
+  if (own === best.reviewsCount) return ` Vous avez autant d'avis que le mieux pourvu des suivants (${own}).`;
+  return ` ${escapeHtml(best.name)} vous suit mais compte plus d'avis : ${best.reviewsCount} avis contre ${own}.`;
+}
 
 /** Bilan « visibilité locale » : déterministe, aucun chiffre non mesuré. */
 export function generateVisibilityReportHtml(input: VisibilityReportInput): string {
@@ -47,7 +61,7 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
         ? `<p class="text-sm text-zinc-300">Les suivants dans la recherche :</p>${renderTable(heads, next.map(row), 2)}`
         : "";
       sections.push(renderCard("Votre position sur Google Maps",
-        `<p class="text-sm text-zinc-200">Vous êtes <strong class="text-emerald-400">en tête</strong>${forQuery}. L'enjeu est de garder l'avance, notamment sur le nombre d'avis face aux suivants.</p>${gap}`));
+        `<p class="text-sm text-zinc-200">Vous êtes <strong class="text-emerald-400">en tête</strong>${forQuery}.${reviewsVersNext(lead.reviewsCount, next)}</p>${gap}`));
     } else {
       const ahead = competitors.filter((c) => c.rank < rank);
       sections.push(renderCard("Votre position sur Google Maps",
