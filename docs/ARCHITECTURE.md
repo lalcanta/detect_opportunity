@@ -134,8 +134,8 @@ Refonte en cours : [`PLAN_REFONTE_LEADS.md`](./PLAN_REFONTE_LEADS.md).
 | `website` | Appel closer | Démo de site |
 | `audit_qa_trackers` | Email asynchrone (dev à dev) | Rapport traceurs déterministe |
 | `google_reviews` | Appel closer | Démo de site (full_auto) / démo orientée avis (prep) |
-| `seo_local` | Appel closer | Démo de site |
-| `ads_acquisition` | Appel closer | Démo de site |
+| `seo_local` | Appel closer | Bilan de visibilité locale (`visibility_report`) + démo de site conditionnelle (`site_demo`, `complementDemo`) |
+| `ads_acquisition` | Appel closer | Bilan d'acquisition (`acquisition_report`) + démo de site conditionnelle (`site_demo`, `complementDemo`) |
 | `custom` | Email asynchrone | Démo de site + script d'appel |
 
 ## 7. Modèle de données (D1)

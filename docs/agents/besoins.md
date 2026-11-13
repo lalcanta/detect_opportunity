@@ -50,4 +50,10 @@ Toujours / Jamais) ; `public/static/besoins.js` recopie l'ordre de `workflowNode
 Les règles de `auto` sont dans `lead-engine-cli/src/opportunities/siteDemo.ts` (`needsSiteDemo`) ; le bilan, produit
 avant, cite `/demos/:id/site` quand la démo sera produite.
 
+Types de preuve (`proof.kind`) : `demo_web` (démo de site), `visibility_report` (bilan de visibilité locale : position
+Maps, concurrents listés, avis, SEO de la page, score sur 100), `acquisition_report` (bilan d'acquisition : pixels,
+consentement, page d'arrivée, concurrents, score sur 100), `audit_report` (rapport traceurs). Les bilans ne citent que des données
+publiques relevées à la date du constat (recherche Maps rejouée telle quelle, aucun chiffre inventé) ; le score
+détaille ses points dans un « détail du score ».
+
 Décisions métier sur les besoins (prérequis, canaux, emails) : `docs/PLAN_REFONTE_LEADS.md` §6 (10/11/2026).
