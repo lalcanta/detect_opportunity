@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CODE_OPPORTUNITIES } from "../../../shared/opportunities";
 import {
+  invalidateOpportunityCache,
   migrateReportProofs,
   readStoredOpportunities,
   resetOpportunityStoreForTests,
@@ -18,10 +19,11 @@ interface HistRow { opportunity_id: string; version: number; definition: string;
 function fakeD1() {
   const defs = new Map<string, DefRow>();
   const history: HistRow[] = [];
-  const calls = { updates: 0 };
+  const calls = { updates: 0, failMigration: false };
   const exec = (sql: string, args: unknown[]) => {
     const s = sql.replace(/\s+/g, " ").trim();
     if (s.startsWith("SELECT DISTINCT opportunity_id FROM opportunity_definition_history WHERE changed_by = 'code-migration'")) {
+      if (calls.failMigration) throw new Error("D1_ERROR: panne simulée");
       const ids = new Set(history.filter((h) => h.changed_by === "code-migration" && args.includes(h.opportunity_id)).map((h) => h.opportunity_id));
       return { all: [...ids].map((opportunity_id) => ({ opportunity_id })), changes: 0 };
     }
@@ -167,6 +169,31 @@ describe("bascule des bilans (migrateReportProofs)", () => {
     await Promise.all([readStoredOpportunities(db), readStoredOpportunities(db), readStoredOpportunities(db)]);
     assert.equal(calls.updates, 1);
     assert.equal(defs.get("seo_local")!.updated_by, "code-migration");
+  });
+
+  it("une bascule en échec ne bloque pas la lecture et sera retentée", async () => {
+    resetOpportunityStoreForTests();
+    const { db, defs, calls } = fakeD1();
+    put(defs, "seo_local", oldDemo("seo_local"));
+    calls.failMigration = true;
+    const errors: unknown[] = [];
+    const original = console.error;
+    console.error = (...a: unknown[]) => void errors.push(a);
+    let rows;
+    try {
+      rows = await Promise.all([readStoredOpportunities(db), readStoredOpportunities(db)]);
+    } finally {
+      console.error = original;
+    }
+    for (const r of rows) assert.equal(r.find((x) => x.def.id === "seo_local")?.def.proof.kind, "demo_web");
+    assert.equal(errors.length, 1);
+    assert.equal(calls.updates, 0);
+
+    calls.failMigration = false;
+    invalidateOpportunityCache();
+    const after = await readStoredOpportunities(db);
+    assert.equal(after.find((x) => x.def.id === "seo_local")?.def.proof.kind, "visibility_report");
+    assert.equal(calls.updates, 1);
   });
 
   it("tourne avant la première lecture des définitions", async () => {

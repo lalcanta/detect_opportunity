@@ -136,12 +136,17 @@ async function runReportMigration(db: D1Database): Promise<number> {
 /** Bascule de cet isolat, lancée une fois (les premières requêtes simultanées l'attendent toutes). */
 let migration: Promise<number> | null = null;
 
-/** Amorçage et bascule des bilans avant la première lecture des définitions. */
+/**
+ * Amorçage et bascule des bilans avant la première lecture des définitions. Une bascule en échec ne bloque jamais
+ * la lecture : elle est journalisée une fois (les requêtes simultanées partagent la même tentative) et retentée à
+ * la requête suivante.
+ */
 async function prepareStore(db: D1Database): Promise<void> {
   await seedIfEmpty(db);
   migration ??= migrateReportProofs(db).catch((e: unknown) => {
-    migration = null; // réessayée à la requête suivante
-    throw e;
+    migration = null;
+    console.error("[besoins] bascule des bilans impossible, retentée à la prochaine requête", e);
+    return 0;
   });
   await migration;
 }
