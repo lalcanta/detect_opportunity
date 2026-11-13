@@ -71,10 +71,11 @@ describe("needsSiteDemo — visibilité locale", () => {
     assert.equal(needsSiteDemo(seo, lead(), goodSite({ loadTimeMs: 3001 })), true);
     assert.equal(needsSiteDemo(seo, lead(), goodSite({ loadTimeMs: 3000 })), false);
   });
-  it("métier et ville absents du titre et du H1 : démo ; un seul absent : pas de démo", () => {
+  it("métier ou ville absent du titre et du H1 : démo ; les deux présents : pas de démo", () => {
     assert.equal(needsSiteDemo(seo, lead(), goodSite({ seo: seoOk({ activityInTitleOrH1: false, cityInTitleOrH1: false }) })), true);
-    assert.equal(needsSiteDemo(seo, lead(), goodSite({ seo: seoOk({ activityInTitleOrH1: false }) })), false);
-    assert.equal(needsSiteDemo(seo, lead(), goodSite({ seo: seoOk({ cityInTitleOrH1: false }) })), false);
+    assert.equal(needsSiteDemo(seo, lead(), goodSite({ seo: seoOk({ activityInTitleOrH1: false }) })), true);
+    assert.equal(needsSiteDemo(seo, lead(), goodSite({ seo: seoOk({ cityInTitleOrH1: false }) })), true);
+    assert.equal(needsSiteDemo(seo, lead(), goodSite({ seo: seoOk() })), false);
   });
   it("mesure absente : pas de démo sur un critère non mesuré", () => {
     assert.equal(needsSiteDemo(seo, lead(), goodSite({ isResponsive: null, loadTimeMs: null, seo: undefined })), false);
