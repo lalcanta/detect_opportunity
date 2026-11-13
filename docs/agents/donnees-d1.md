@@ -18,8 +18,13 @@ La production n'exécute aucun fichier de migration automatiquement : c'est `ens
 
 Une DDL recopiée porte le commentaire « Doit rester identique à schema.sql » ; toute modification de `schema.sql`
 s'accompagne de la même modification dans la copie. `lead-dashboard-web/src/tests/schemaSync.test.ts` le vérifie
-(tables copiées, tables créées dans `auth.ts`, colonnes des `ALTER TABLE`) ; seule différence admise : `UNIQUE`, que
-SQLite refuse dans `ADD COLUMN`. Une nouvelle constante `…_DDL` s'ajoute à la liste du test.
+dans les deux sens : copies et tables de `auth.ts` identiques à `schema.sql`, `ALTER TABLE` conformes, index présents,
+et toute colonne de `schema.sql` absente du socle d'origine (`BASE_COLUMNS`, à ne jamais allonger) doit avoir son
+`ALTER TABLE`. Seule différence admise : `UNIQUE`, que SQLite refuse dans `ADD COLUMN`.
+
+Le test compare des textes : il ne voit pas qu'une table déjà créée en production garde ses anciennes valeurs par
+défaut (exemple : `scheduled_scans.opportunity_type` vaut encore `'website'` en production). Toujours écrire la valeur
+explicitement à l'insertion.
 
 **Piège** : chaque instruction de `ensureAuthSchema` ignore ses erreurs (`.catch(() => undefined)`). Une DDL fausse
 échoue sans bruit : vérifie la table ou la colonne en local
