@@ -28,6 +28,7 @@ import { inspectSite, lookupCompanySirene } from "../inspector/siteInspector";
 import type { ModelRouter } from "../llm/modelRouter";
 import type { CompetitorPixels } from "../collector/competitorPixels";
 import { PITCH_GENERATORS, PROOF_GENERATORS, type GenerationContext } from "../opportunities/generators";
+import { mapsSeoAuditFields } from "./auditFields";
 import { needsSiteDemo, siteDemoFocus } from "../opportunities/siteDemo";
 import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection, UnqualifiedLeadError } from "../opportunities/qualify";
 import { log } from "../utils/helpers";
@@ -336,12 +337,7 @@ export function buildSyncPayload(d: Dossier): SyncPayload {
       is_https: inspection?.isHttps ?? null,
       copyright_year: inspection?.copyrightYear ?? null,
       obsolescence_signals: inspection?.obsolescenceSignals ?? [],
-      maps_rank: lead.mapsRank ?? null,
-      maps_query: lead.mapsQuery ?? null,
-      maps_checked_at: lead.mapsCheckedAt ?? null,
-      competitors: lead.competitors ?? [],
-      seo: inspection?.seo ?? null,
-      competitor_pixels: d.competitorPixels,
+      ...mapsSeoAuditFields(lead, inspection, d.competitorPixels),
       report_url: d.demoUrl,
       workflow_trace: d.trace,
     },

@@ -21,6 +21,7 @@ import { buildLeadContacts, UnqualifiedLeadError } from "./opportunities/qualify
 import { companyFacts, runLeadWorkflow, type Dossier } from "./workflow/runner";
 import { loadRemoteOpportunities } from "./opportunities/remote";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
+import { mapsSeoAuditFields } from "./workflow/auditFields";
 import { bilanBattlecardRules, buildBilanQueueFiles } from "./queueReports";
 import { siteDemoFocus } from "./opportunities/siteDemo";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
@@ -237,6 +238,10 @@ export async function runPrepScan(
       const brandColor = inspection?.dominantColors?.[0] || "#1e40af";
       if (dossier.flyerPdf) await writeFile(`${leadDir}/flyer.pdf`, dossier.flyerPdf);
 
+      // Bilans visibilité / acquisition : rapport et pixels des concurrents (requêtes HTTP simples).
+      const bilan = await buildBilanQueueFiles({ def, lead, inspection, leadId: id, remoteAppUrl: cfg.REMOTE_APP_URL });
+      const auditFields = mapsSeoAuditFields(lead, inspection, bilan?.competitorPixels ?? null);
+
       // 3. Récupération des benchmarks sectoriels
       const benchmark = getCompetitorBenchmark(lead.activity);
 
@@ -279,6 +284,7 @@ export async function runPrepScan(
           heroHeadlinePattern: benchmark.conversionBlueprint.hero.headlinePattern,
           mobileWinningPattern: benchmark.conversionBlueprint.mobileWinningPattern,
         },
+        audit_fields: auditFields,
         preparedAt: new Date().toISOString(),
       };
       await writeFile(`${leadDir}/meta.json`, JSON.stringify(meta, null, 2));
@@ -311,6 +317,7 @@ export async function runPrepScan(
             logoUrl: inspection?.logoUrl ?? null,
             trackersFound: inspection?.trackersFound ?? [],
             stack: inspection?.stack ?? [],
+            ...auditFields,
           },
           status: "pending_generation",
           flyer_pdf_base64: flyerPdfBase64,
@@ -349,7 +356,6 @@ export async function runPrepScan(
 
       // Preuve déterministe (bilans visibilité / acquisition) : le bilan est écrit en demo.html avec ses constats
       // mesurés ; l'agent n'écrit que la battlecard, et la démo de site complémentaire si elle est demandée.
-      const bilan = await buildBilanQueueFiles({ def, lead, inspection, leadId: id, remoteAppUrl: cfg.REMOTE_APP_URL });
       if (bilan) {
         await writeFile(`${leadDir}/demo.html`, bilan.demoHtml);
         await writeFile(`${leadDir}/audit_facts.json`, JSON.stringify(bilan.auditFacts, null, 2));

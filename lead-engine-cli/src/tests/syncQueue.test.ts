@@ -113,6 +113,18 @@ describe("syncQueue — dossiers de bilan et démo de site complémentaire", () 
     assert.equal(payloads[0]!.site_demo_html ?? null, null);
   });
 
+  it("reprend dans audit_data les données Maps, SEO et concurrents écrites par prep dans meta.json", async () => {
+    const fields = { maps_rank: 4, maps_query: "plombier Lyon", maps_checked_at: "2026-11-13T09:00:00.000Z", competitors: [{ name: "C", rank: 1 }], seo: { title: "T" }, competitor_pixels: null };
+    const { payloads } = await withQueue(async () => {
+      await mkLead("b4", { "demo.html": "<!DOCTYPE html><p>bilan</p>", "battlecard.json": BC });
+      const metaPath = path.join("queue", "pending", "b4", "meta.json");
+      const meta = JSON.parse(await readFile(metaPath, "utf-8"));
+      await writeFile(metaPath, JSON.stringify({ ...meta, audit_fields: fields }));
+    });
+    const ad = payloads[0]!.audit_data as Record<string, unknown>;
+    for (const [k, v] of Object.entries(fields)) assert.deepEqual(ad[k], v, k);
+  });
+
   it("laisse en attente un bilan dont prompt_site_demo.md n'a pas son site_demo.html, avec la raison", async () => {
     const { result, payloads } = await withQueue(() =>
       mkLead("b2", { "demo.html": "<!DOCTYPE html><p>bilan</p>", "battlecard.json": BC, "prompt_site_demo.md": "consigne" }),

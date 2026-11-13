@@ -300,6 +300,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
           social_links: meta.social_links || { linkedin: [], facebook: [], instagram: [] },
           siren: meta.siren || null,
           company_created_at: meta.company_created_at || null,
+          ...(meta.audit_fields && typeof meta.audit_fields === "object" ? meta.audit_fields : {}),
           report_url: `${cfg.REMOTE_APP_URL}/demos/${meta.id}`,
         },
         demo_html: demoHtml,

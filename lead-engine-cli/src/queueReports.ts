@@ -17,6 +17,8 @@ export interface BilanQueueFiles {
   auditFacts: Record<string, unknown>;
   /** Adresse de la démo de site complémentaire citée par le bilan, ou null si elle n'est pas demandée. */
   siteDemoUrl: string | null;
+  /** Pixels des concurrents (acquisition), null pour la visibilité. */
+  competitorPixels: CompetitorPixels[] | null;
 }
 
 /** Bilan de la preuve de l'offre, ou null si l'offre n'est pas un bilan. */
@@ -65,7 +67,7 @@ export async function buildBilanQueueFiles(p: {
     ...(competitorPixels ? { competitorPixels } : {}),
     actions,
   };
-  return { demoHtml, auditFacts, siteDemoUrl: demoUrl };
+  return { demoHtml, auditFacts, siteDemoUrl: demoUrl, competitorPixels: competitorPixels ?? null };
 }
 
 /** Règles ajoutées à `prompt_battlecard.md` d'un bilan : chiffres tirés de `audit_facts.json` uniquement. */
