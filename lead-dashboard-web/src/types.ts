@@ -280,6 +280,8 @@ export interface SyncBody {
   opportunity_type?: string | null;
   audit_data?: Record<string, unknown>;
   demo_html?: string | null;
+  /** Démo de site complémentaire d'un bilan, servie sur /demos/:id/site */
+  site_demo_html?: string | null;
   flyer_pdf_base64?: string | null;
   battlecard_data?: Battlecard | null;
   status?: LeadStatus | null;

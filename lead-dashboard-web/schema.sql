@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS leads (
   opportunity_type     TEXT NOT NULL DEFAULT 'website',
   primary_channel      TEXT,            -- phone | email | contact_form (canal principal selon l'opportunité)
   siren                TEXT,            -- 9 chiffres, relevé à l'inspection (détection des doublons)
+  site_demo_html       TEXT,            -- démo de site complémentaire d'un bilan, servie sur /demos/:id/site
   created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

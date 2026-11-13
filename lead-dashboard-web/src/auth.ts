@@ -9,7 +9,7 @@ import type { AppEnv, Role, User } from "./types";
 const COOKIE = "lead_session";
 export const SESSION_COOKIE = COOKIE;
 
-const AUTH_SCHEMA_VERSION = 15;
+const AUTH_SCHEMA_VERSION = 16;
 let migrationChecked = 0;
 
 /** Assure que les colonnes Whitelist / Invitation / Password / Expiration démo, execution_mode et la table scheduled_scans existent. */
@@ -39,6 +39,7 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       "ALTER TABLE leads ADD COLUMN demo_expires_at DATETIME",
       "ALTER TABLE leads ADD COLUMN primary_channel TEXT",
       "ALTER TABLE leads ADD COLUMN siren TEXT",
+      "ALTER TABLE leads ADD COLUMN site_demo_html TEXT",
       "ALTER TABLE token_usage ADD COLUMN requested_model TEXT",
       "ALTER TABLE model_settings ADD COLUMN fallback_models TEXT",
       "ALTER TABLE users ADD COLUMN allowed_channels TEXT NOT NULL DEFAULT '[\"phone\",\"email\",\"contact_form\"]'",
