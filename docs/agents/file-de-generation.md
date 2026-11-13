@@ -18,7 +18,8 @@ Pour chacun, détermine ce qui manque :
 | `screenshot.png` | Capture du site actuel, à regarder avant d'écrire la démo |
 
 Un dossier qui contient `api_generation.lock` est en cours de génération par API (bouton « Générer via l'API » du
-dashboard, exécuté par le worker) : ne le touche pas.
+dashboard, exécuté par le worker, qui écrit les mêmes fichiers manquants : `demo.html`, `site_demo.html` si
+`prompt_site_demo.md` existe, `battlecard.json`) : ne le touche pas.
 
 File vide → réponds en une ligne (« file vide ») et arrête-toi : pas de sync, pas de résumé long.
 
