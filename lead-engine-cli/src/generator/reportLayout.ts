@@ -79,17 +79,25 @@ export function renderCheck(label: string, ok: boolean | null, detail: string): 
   return `<li class="flex items-start gap-3 text-sm"><span class="mt-1.5 w-2 h-2 rounded-full shrink-0 ${dot}"></span><span><span class="font-medium text-zinc-100">${escapeHtml(label)}</span> <span class="text-zinc-400">— ${escapeHtml(detail)}</span></span></li>`;
 }
 
+/** Date en français ; chaîne vide si la date est absente ou invalide (jamais « aujourd'hui » par défaut). */
 export function dateFr(iso?: string | null): string {
-  const d = iso ? new Date(iso) : new Date();
-  const date = Number.isNaN(d.getTime()) ? new Date() : d;
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/** Ligne « Constat du … », vide si la date n'est pas connue. */
+export function renderCheckedAt(iso?: string | null): string {
+  const d = dateFr(iso);
+  return d ? `<p class="text-xs text-zinc-400">Constat du ${escapeHtml(d)}</p>` : "";
 }
 
 /** Score /100 ; détail en infobulle (survol, focus clavier, toucher via data-score-toggle). */
 export function renderScoreBadge(r: ScoreResult): string {
   const color = r.score >= 70 ? "text-emerald-400 border-emerald-500/40" : r.score >= 40 ? "text-amber-300 border-amber-500/40" : "text-rose-400 border-rose-500/40";
   const rows = r.criteria
-    .map((c) => `<li class="flex justify-between gap-4"><span>${escapeHtml(c.label)}</span><span class="font-mono whitespace-nowrap">${c.earned ?? 0}/${c.max}</span></li>`)
+    .map((c) => `<li class="flex justify-between gap-4"><span>${escapeHtml(c.label)}</span><span class="font-mono whitespace-nowrap">${c.earned === null ? "non mesuré" : `${c.earned}/${c.max}`}</span></li>`)
     .join("");
   const removed = r.removed
     .map((c) => `<li class="flex justify-between gap-4 text-zinc-400"><span>${escapeHtml(c.label)}</span><span class="whitespace-nowrap">non mesuré</span></li>`)
@@ -116,7 +124,7 @@ export function renderActions(r: ScoreResult): string {
 }
 
 export function renderSiteDemoLink(url: string | null): string {
-  if (!url) return "";
+  if (!url || !(/^https?:\/\//i.test(url) || url.startsWith("/demos/"))) return "";
   return `<a href="${escapeHtml(url)}" class="inline-block rounded-lg bg-indigo-500 hover:bg-indigo-400 px-4 py-2.5 text-sm font-semibold text-white">Voir à quoi pourrait ressembler votre site</a>`;
 }
 

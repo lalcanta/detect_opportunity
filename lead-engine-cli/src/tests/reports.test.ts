@@ -4,6 +4,7 @@ import { generateVisibilityReportHtml } from "../generator/visibilityReportGener
 import { generateAcquisitionReportHtml } from "../generator/acquisitionReportGenerator";
 import { renderReportPage, renderScoreBadge, buildReportAudit } from "../generator/reportLayout";
 import { visibilityScore } from "../generator/reportScoring";
+import { generateTrackerReportHtml } from "../generator/trackerReportGenerator";
 import type { MapsLead, SiteInspection, SeoOnPage } from "../types";
 import type { CompetitorPixels } from "../collector/competitorPixels";
 
@@ -148,5 +149,52 @@ describe("bilan acquisition", () => {
     const h = acq([{ name: 'Dupont <b>&"', rank: 1, website: "x", pixels: [] }]);
     assert.ok(h.includes("Dupont &lt;b&gt;&amp;&quot;"));
     assert.ok(!h.includes("Dupont <b>"));
+  });
+});
+
+describe("garde-fous des bilans", () => {
+  it("siteDemoUrl : seuls http(s) et /demos/ donnent un lien", () => {
+    for (const bad of ["javascript:alert(1)", "data:text/html,x", "//evil.test/x", "ftp://x"]) {
+      assert.ok(!vis(lead(), insp(), bad).includes("Voir à quoi pourrait ressembler votre site"), bad);
+      assert.ok(!acq([], lead(), insp(), bad).includes("Voir à quoi pourrait ressembler votre site"), bad);
+    }
+    assert.ok(vis(lead(), insp(), "/demos/abc/site").includes('href="/demos/abc/site"'));
+    assert.ok(vis(lead(), insp(), "http://a.test/x").includes("Voir à quoi pourrait ressembler votre site"));
+  });
+  it("recherche absente : ni ligne de recherche ni reconstruction métier + ville", () => {
+    const h = vis(lead({ mapsQuery: null }));
+    assert.ok(!h.includes("Recherche Google Maps"));
+    assert.ok(!h.includes("plombier Lyon"));
+    assert.ok(!h.includes("pour la recherche"));
+  });
+  it("date absente ou invalide : pas de ligne « Constat du »", () => {
+    for (const d of [null, undefined, "pas une date"]) {
+      assert.ok(!vis(lead({ mapsCheckedAt: d })).includes("Constat du"));
+      assert.ok(!acq([], lead({ mapsCheckedAt: d })).includes("Constat du"));
+    }
+    assert.ok(vis().includes("Constat du 13 novembre 2026"));
+  });
+  it("infobulle : critère earned null dans criteria affiché « non mesuré », pas 0/max", () => {
+    const b = renderScoreBadge({ score: 50, criteria: [{ id: "x", label: "Critère X", max: 10, earned: null }], removed: [] });
+    assert.ok(b.includes("non mesuré"));
+    assert.ok(!b.includes("0/10"));
+  });
+});
+
+describe("rapport RGPD (non-régression de la mise en page)", () => {
+  it("titre, pixel, sections et pied inchangés", () => {
+    const html = generateTrackerReportHtml({
+      leadId: "aabbccddeeff0011",
+      lead: { name: "Digidop", activity: "Agence Web", city: "Paris", phone: null, website: "https://www.digidop.fr", rating: 5, reviewsCount: 1, recentReviews: [], mapsUrl: "", placeId: null },
+      inspection: { url: "https://www.digidop.fr", loadTimeMs: 1000, isResponsive: true, dominantColors: [], logoUrl: null, screenshot: null, cmpDetected: "Axeptio",
+        trackerRequests: [{ name: "Hotjar", category: "heatmap_ux", url: "https://static.hotjar.com/c.js" }] },
+      remoteAppUrl: "http://localhost:8788",
+    });
+    assert.ok(html.startsWith("<!DOCTYPE html>"));
+    assert.ok(html.includes("<title>[QA Network Report] digidop.fr — Audit Traceurs &amp; CMP</title>"));
+    assert.ok(html.includes("/api/tracker/open?leadId=aabbccddeeff0011"));
+    inOrder(html, ["Dev QA · Network Trace", "Cascade réseau au premier chargement", "Requêtes tierces interceptées avant consentement", "Cause fréquente", "Surveillance continue CI/CD", "</main>", "/api/tracker/open"]);
+    assert.ok(html.includes("PRE-CMP FIRE"));
+    assert.equal((html.match(/<main/g) ?? []).length, 1);
   });
 });

@@ -2,7 +2,7 @@ import type { MapsLead, SiteInspection } from "../types";
 import type { CompetitorPixels } from "../collector/competitorPixels";
 import { escapeHtml } from "../utils/helpers";
 import { acquisitionScore } from "./reportScoring";
-import { dateFr, renderActions, renderCard, renderCheck, renderReportPage, renderScoreBadge, renderSiteDemoLink, renderTable } from "./reportLayout";
+import { renderCheckedAt, renderActions, renderCard, renderCheck, renderReportPage, renderScoreBadge, renderSiteDemoLink, renderTable } from "./reportLayout";
 
 export interface AcquisitionReportInput {
   leadId: string;
@@ -26,7 +26,7 @@ export function generateAcquisitionReportHtml(input: AcquisitionReportInput): st
       <div class="space-y-1.5 min-w-0">
         <div class="text-xs uppercase tracking-wider text-indigo-400 font-semibold">Bilan d'acquisition</div>
         <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight break-words">${escapeHtml(lead.name)}</h1>
-        <p class="text-xs text-zinc-400">Constat du ${escapeHtml(dateFr(lead.mapsCheckedAt))}</p>
+        ${renderCheckedAt(lead.mapsCheckedAt)}
       </div>
       ${renderScoreBadge(result)}
     </div>

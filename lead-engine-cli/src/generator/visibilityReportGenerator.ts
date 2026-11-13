@@ -1,7 +1,7 @@
 import type { MapsLead, SiteInspection } from "../types";
 import { escapeHtml } from "../utils/helpers";
 import { visibilityScore } from "./reportScoring";
-import { dateFr, renderActions, renderCard, renderCheck, renderReportPage, renderScoreBadge, renderSiteDemoLink, renderTable } from "./reportLayout";
+import { renderCheckedAt, renderActions, renderCard, renderCheck, renderReportPage, renderScoreBadge, renderSiteDemoLink, renderTable } from "./reportLayout";
 
 export interface VisibilityReportInput {
   leadId: string;
@@ -20,7 +20,8 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
   const { leadId, lead, inspection, remoteAppUrl, siteDemoUrl } = input;
   const result = visibilityScore(lead, inspection);
   const competitors = [...(lead.competitors ?? [])].sort((a, b) => a.rank - b.rank);
-  const query = lead.mapsQuery?.trim() || `${lead.activity} ${lead.city}`.trim();
+  const query = lead.mapsQuery?.trim() || null;
+  const forQuery = query ? ` pour la recherche « ${escapeHtml(query)} »` : "";
   const rank = typeof lead.mapsRank === "number" ? lead.mapsRank : null;
 
   const header = `<header class="border-b border-zinc-800/80 bg-zinc-950/90">
@@ -28,8 +29,8 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
       <div class="space-y-1.5 min-w-0">
         <div class="text-xs uppercase tracking-wider text-indigo-400 font-semibold">Bilan de visibilité locale</div>
         <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight break-words">${escapeHtml(lead.name)}</h1>
-        <p class="text-sm text-zinc-300">Recherche Google Maps : <strong class="text-white">« ${escapeHtml(query)} »</strong></p>
-        <p class="text-xs text-zinc-400">Constat du ${escapeHtml(dateFr(lead.mapsCheckedAt))}</p>
+        ${query ? `<p class="text-sm text-zinc-300">Recherche Google Maps : <strong class="text-white">« ${escapeHtml(query)} »</strong></p>` : ""}
+        ${renderCheckedAt(lead.mapsCheckedAt)}
       </div>
       ${renderScoreBadge(result)}
     </div>
@@ -46,11 +47,11 @@ export function generateVisibilityReportHtml(input: VisibilityReportInput): stri
         ? `<p class="text-sm text-zinc-300">Les suivants dans la recherche :</p>${renderTable(heads, next.map(row), 2)}`
         : "";
       sections.push(renderCard("Votre position sur Google Maps",
-        `<p class="text-sm text-zinc-200">Vous êtes <strong class="text-emerald-400">en tête</strong> pour la recherche « ${escapeHtml(query)} ». L'enjeu est de garder l'avance, notamment sur le nombre d'avis face aux suivants.</p>${gap}`));
+        `<p class="text-sm text-zinc-200">Vous êtes <strong class="text-emerald-400">en tête</strong>${forQuery}. L'enjeu est de garder l'avance, notamment sur le nombre d'avis face aux suivants.</p>${gap}`));
     } else {
       const ahead = competitors.filter((c) => c.rank < rank);
       sections.push(renderCard("Votre position sur Google Maps",
-        `<p class="text-sm text-zinc-200">Votre fiche apparaît en <strong class="text-white">position ${rank}</strong> pour la recherche « ${escapeHtml(query)} ».</p>${
+        `<p class="text-sm text-zinc-200">Votre fiche apparaît en <strong class="text-white">position ${rank}</strong>${forQuery}.</p>${
           ahead.length ? `<p class="text-sm text-zinc-300">Les établissements mieux classés :</p>${renderTable(heads, ahead.map(row), 2)}` : ""}`));
     }
   }
