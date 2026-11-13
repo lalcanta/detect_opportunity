@@ -62,7 +62,10 @@ export function visibilityScore(lead: MapsLead, inspection: SiteInspection | nul
   const avgReviews = average(competitors.map((c) => c.reviewsCount).filter((v): v is number => typeof v === "number"));
   let rating = 0;
   if (typeof lead.rating === "number") {
-    if (avgRating !== null) rating = lead.rating >= avgRating ? 15 : lead.rating >= avgRating - 0.3 ? 8 : 0;
+    if (avgRating !== null) {
+      const t = (v: number) => Math.round(v * 10);
+      rating = t(lead.rating) >= t(avgRating) ? 15 : t(lead.rating) >= t(avgRating) - 3 ? 8 : 0;
+    }
     else rating = lead.rating >= 4.5 ? 15 : lead.rating >= 4.0 ? 8 : 0;
   }
   let reviews = 0;

@@ -146,3 +146,56 @@ describe("scoreActions", () => {
     assert.deepEqual(scoreActions({ score: 0, removed: [], criteria: [{ id: "position", label: "", max: 35, earned: null }] }), []);
   });
 });
+
+describe("cas limites et couverture", () => {
+  it("seuil de note à 0,3 de la moyenne (flottants)", () => {
+    const cs = [comp(4.4, 80)];
+    assert.equal(get(visibilityScore(lead({ competitors: cs, rating: 4.1 }), insp()), "rating")?.earned, 8);
+    assert.equal(get(visibilityScore(lead({ competitors: cs, rating: 4.0 }), insp()), "rating")?.earned, 0);
+    assert.equal(get(visibilityScore(lead({ competitors: cs, rating: 4.4 }), insp()), "rating")?.earned, 15);
+  });
+  it("sans site, rang 1 et avis parfaits : 69/94 = 73", () => {
+    const r = visibilityScore(lead({ website: null }), null);
+    assert.equal(r.score, 73);
+  });
+  it("vitesse : 3000 ms obtenu, 3001 ms non", () => {
+    assert.equal(get(visibilityScore(lead(), insp({ loadTimeMs: 3000 })), "site_speed")?.earned, 2);
+    assert.equal(get(visibilityScore(lead(), insp({ loadTimeMs: 3001 })), "site_speed")?.earned, 0);
+    assert.equal(get(acquisitionScore(insp({ loadTimeMs: 3000 }), []), "landing_speed")?.earned, 8);
+    assert.equal(get(acquisitionScore(insp({ loadTimeMs: 3001 }), []), "landing_speed")?.earned, 0);
+  });
+  it("analytics via un traceur gtag", () => {
+    assert.equal(get(acquisitionScore(insp({ trackersFound: ["gtag.js"] }), []), "analytics")?.earned, 10);
+    assert.equal(get(acquisitionScore(insp({ trackersFound: ["Hotjar"] }), []), "analytics")?.earned, 0);
+  });
+  it("ordre complet des actions, ex-aequo par ordre des critères", () => {
+    const r = {
+      score: 0, removed: [],
+      criteria: [
+        { id: "rating", label: "", max: 15, earned: 0 },
+        { id: "position", label: "", max: 35, earned: 25 },
+        { id: "reviews_count", label: "", max: 15, earned: 0 },
+        { id: "site_https", label: "", max: 2, earned: 2 },
+        { id: "listing_category", label: "", max: 4, earned: 0 },
+      ],
+    };
+    const all = scoreActions(r, 10);
+    assert.equal(all.length, 4);
+    const one = (id: string) => scoreActions({ score: 0, removed: [], criteria: [{ id, label: "", max: 1, earned: 0 }] })[0];
+    assert.deepEqual(all, [one("rating"), one("reviews_count"), one("position"), one("listing_category")]);
+  });
+  it("tous les critères produits par les deux calculs ont une action", () => {
+    const seen = new Set<string>();
+    const collect = (r: { criteria: { id: string }[]; removed: { id: string }[] }) =>
+      [...r.criteria, ...r.removed].forEach((c) => seen.add(c.id));
+    collect(visibilityScore(lead(), insp()));
+    collect(visibilityScore(lead({ website: null }), null));
+    collect(acquisitionScore(insp(), [px([])]));
+    collect(acquisitionScore(null, []));
+    assert.ok(seen.size >= 20);
+    for (const id of seen) {
+      const a = scoreActions({ score: 0, removed: [], criteria: [{ id, label: "", max: 1, earned: 0 }] });
+      assert.equal(a.length, 1, id);
+    }
+  });
+});
