@@ -105,11 +105,11 @@ describe("acquisitionScore", () => {
   });
   it("comparaison : n < m → 10 ; n = 0, m = 0 → 20", () => {
     const three = ["a", "b", "c"];
-    const r = acquisitionScore(insp({ paidAdsDetected: ["Meta Ads (Facebook Pixel)"] }), [px(three)]);
+    const r = acquisitionScore(insp({ paidAdsDetected: ["Meta Ads (Facebook Pixel)"], cmpDetected: null }), [px(three)]);
     assert.equal(get(r, "competitors")?.earned, 10);
-    const r2 = acquisitionScore(insp({ paidAdsDetected: [] }), [px([])]);
+    const r2 = acquisitionScore(insp({ paidAdsDetected: [], cmpDetected: null }), [px([])]);
     assert.equal(get(r2, "competitors")?.earned, 20);
-    const r3 = acquisitionScore(insp({ paidAdsDetected: [] }), [px(["a"])]);
+    const r3 = acquisitionScore(insp({ paidAdsDetected: [], cmpDetected: null }), [px(["a"])]);
     assert.equal(get(r3, "competitors")?.earned, 0);
   });
   it("inspection absente → suivi et page d'arrivée retirés", () => {
@@ -166,7 +166,7 @@ describe("cas limites et couverture", () => {
   });
   it("analytics via un traceur gtag", () => {
     assert.equal(get(acquisitionScore(insp({ trackersFound: ["gtag.js"] }), []), "analytics")?.earned, 10);
-    assert.equal(get(acquisitionScore(insp({ trackersFound: ["Hotjar"] }), []), "analytics")?.earned, 0);
+    assert.equal(get(acquisitionScore(insp({ trackersFound: ["Hotjar"], cmpDetected: null }), []), "analytics")?.earned, 0);
   });
   it("ordre complet des actions, ex-aequo par ordre des critères", () => {
     const r = {
@@ -210,5 +210,35 @@ describe("visibilityScore — prospect sans fiche Maps (scan par liste de domain
     }
     assert.ok(ids(r.criteria).includes("site_mobile"));
     assert.equal(r.score, 100);
+  });
+});
+
+describe("acquisitionScore — outils retardés par un bandeau de consentement", () => {
+  const none = { analytics: [], googleAds: [], metaPixel: [] };
+  it("bandeau + identifiants trouvés dans le HTML : présents, points accordés", () => {
+    const r = acquisitionScore(insp({ trackersFound: [], paidAdsDetected: [], htmlTagIds: { analytics: ["G-ABC1234"], googleAds: ["AW-123456789"], metaPixel: ["1234567890123"] } }), []);
+    assert.equal(get(r, "analytics")?.earned, 10);
+    assert.equal(get(r, "google_ads")?.earned, 15);
+    assert.equal(get(r, "meta_pixel")?.earned, 10);
+  });
+  it("bandeau sans identifiant trouvé : suivi non mesuré (retiré), aucune action « Installer »", () => {
+    const r = acquisitionScore(insp({ trackersFound: [], paidAdsDetected: [], htmlTagIds: none }), [px(["a"])]);
+    for (const id of ["analytics", "google_ads", "meta_pixel", "competitors"]) assert.ok(ids(r.removed).includes(id), id);
+    assert.ok(!scoreActions(r, 10).some((a) => /^Installer/.test(a)));
+  });
+  it("bandeau : moins de pixels relevés que les concurrents = comparaison non mesurée ; autant ou plus = 20", () => {
+    const r = acquisitionScore(insp({ paidAdsDetected: ["Meta Ads (Facebook Pixel)"], htmlTagIds: none }), [px(["a", "b", "c"])]);
+    assert.ok(ids(r.removed).includes("competitors"));
+    const r2 = acquisitionScore(insp({ paidAdsDetected: ["Meta Ads (Facebook Pixel)"], htmlTagIds: none }), [px(["a"])]);
+    assert.equal(get(r2, "competitors")?.earned, 20);
+  });
+  it("bandeau, identifiants non relevés (ancien module) : non mesuré aussi", () => {
+    const r = acquisitionScore(insp({ trackersFound: [], paidAdsDetected: [], htmlTagIds: undefined }), []);
+    assert.ok(ids(r.removed).includes("analytics"));
+  });
+  it("sans bandeau : rien trouvé = absent (0 point)", () => {
+    const r = acquisitionScore(insp({ cmpDetected: null, trackersFound: [], paidAdsDetected: [], htmlTagIds: none }), []);
+    assert.equal(get(r, "analytics")?.earned, 0);
+    assert.equal(get(r, "google_ads")?.earned, 0);
   });
 });

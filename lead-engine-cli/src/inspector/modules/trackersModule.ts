@@ -1,4 +1,4 @@
-import type { TrackerRequest } from "../../types";
+import type { HtmlTagIds, TrackerRequest } from "../../types";
 import type { ScanModule } from "./types";
 
 interface TrackerSignature {
@@ -51,6 +51,21 @@ export function detectCmpFromHtml(html: string): string | null {
   return null;
 }
 
+const uniq = (values: string[]) => [...new Set(values)].slice(0, 5);
+const all = (html: string, re: RegExp, group = 0) => [...html.matchAll(re)].map((m) => m[group] ?? "").filter(Boolean);
+
+/** Identifiants de balises écrits dans le HTML (au plus 5 par famille) : seule trace des outils retardés par un bandeau. */
+export function detectTagIdsInHtml(html: string): HtmlTagIds {
+  return {
+    analytics: uniq([...all(html, /\bG-[A-Z0-9]{6,12}\b/g), ...all(html, /\bUA-\d{4,10}-\d{1,4}\b/g), ...all(html, /\bGTM-[A-Z0-9]{4,10}\b/g)]),
+    googleAds: uniq(all(html, /\bAW-\d{6,12}\b/g)),
+    metaPixel: uniq([
+      ...all(html, /fbq\s*\(\s*['"]init['"]\s*,\s*['"]?(\d{10,20})/g, 1),
+      ...all(html, /facebook\.com\/tr\/?\?(?:[^"'\s>]*&(?:amp;)?)?id=(\d{10,20})/g, 1),
+    ]),
+  };
+}
+
 export const trackersModule: ScanModule = {
   id: "trackers_cmp",
   label: "Traceurs Réseau & CMP (RGPD)",
@@ -71,5 +86,6 @@ export const trackersModule: ScanModule = {
     await page.waitForTimeout(800);
     const html = await page.evaluate(() => document.documentElement.outerHTML);
     result.cmpDetected = detectCmpFromHtml(html);
+    result.htmlTagIds = detectTagIdsInHtml(html);
   },
 };

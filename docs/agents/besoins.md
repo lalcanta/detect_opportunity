@@ -57,5 +57,9 @@ publiques relevées à la date du constat (recherche Maps rejouée telle quelle,
 détaille ses points dans un « détail du score ». Un prospect sans fiche Maps (scan par liste de domaines :
 `MapsLead.noMapsListing`, `audit_data.no_maps_listing`) n'a ni note, ni avis, ni fiche, ni métier et ville connus : ces
 critères (et « métier et ville dans le titre ») sont non mesurés, retirés du score, et ne déclenchent pas la démo.
+Bilan d'acquisition avec bandeau de consentement : la visite à froid ne voit pas les outils retardés jusqu'à l'accord ;
+les identifiants lus dans le HTML (`SiteInspection.htmlTagIds` : G-, UA-, GTM-, AW-, pixel Meta) les donnent
+« présent (déclenché après consentement) » ; sans identifiant, le critère est non mesuré, jamais « aucun ». Google Ads
+n'est retenu que sur un identifiant AW- (ni AdSense ni DoubleClick).
 
 Décisions métier sur les besoins (prérequis, canaux, emails) : `docs/PLAN_REFONTE_LEADS.md` §6 (10/11/2026).

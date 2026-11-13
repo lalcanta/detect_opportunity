@@ -1,7 +1,7 @@
 import type { MapsLead, SiteInspection } from "../types";
 import type { CompetitorPixels } from "../collector/competitorPixels";
 import { escapeHtml } from "../utils/helpers";
-import { acquisitionScore } from "./reportScoring";
+import { acquisitionScore, trackingView } from "./reportScoring";
 import { renderCheckedAt, renderActions, renderCard, renderCheck, renderReportPage, renderScoreBadge, renderSiteDemoLink, renderTable } from "./reportLayout";
 
 export interface AcquisitionReportInput {
@@ -37,12 +37,14 @@ export function generateAcquisitionReportHtml(input: AcquisitionReportInput): st
 
   const sections: string[] = [];
 
-  const ads = i?.paidAdsDetected;
-  const trackers = i?.trackersFound;
+  const { consentGated, pixels: ads, trackers, afterConsent } = trackingView(i);
+  // Avec un bandeau, ne rien trouver ne prouve pas l'absence : les outils attendent l'accord du visiteur.
+  const gatedEmpty = "non mesuré : le bandeau de consentement retarde ces outils jusqu'à l'accord du visiteur, et aucun identifiant n'a été trouvé dans la page";
+  const chip = (t: string) => (afterConsent.includes(t) ? `${t} — présent (déclenché après consentement)` : t);
   const chips = (list: string[], empty: string) =>
     list.length
-      ? list.map((t) => `<span class="px-2.5 py-1 rounded-md text-xs bg-zinc-800/90 text-zinc-200 border border-zinc-700">${escapeHtml(t)}</span>`).join(" ")
-      : `<span class="text-sm text-zinc-400">${escapeHtml(empty)}</span>`;
+      ? list.map((t) => `<span class="px-2.5 py-1 rounded-md text-xs bg-zinc-800/90 text-zinc-200 border border-zinc-700">${escapeHtml(chip(t))}</span>`).join(" ")
+      : `<span class="text-sm text-zinc-400">${escapeHtml(consentGated ? gatedEmpty : empty)}</span>`;
   const cmp = i?.cmpDetected;
   sections.push(renderCard("Ce qui est installé sur votre site",
     `<div class="space-y-4">

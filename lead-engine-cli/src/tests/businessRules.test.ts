@@ -8,6 +8,7 @@ import {
   buildObsolescenceSignals,
   classifyTrackerUrl,
   detectCmpFromHtml,
+  detectTagIdsInHtml,
   detectPaidAdsFromHtml,
   detectTechStackFromHtml,
   extractCleanEmails,
@@ -314,6 +315,17 @@ describe("RÈGLES MÉTIER : Moteur Local & CLI (lead-engine-cli)", () => {
       assert.equal(parsed.siren, "894512367");
       assert.equal(parsed.createdAt, "2021-03-15");
       assert.deepEqual(parsed.keyPeople, ["Jean-Marc Dupuy"]);
+    });
+
+    it("relève dans le HTML les identifiants de balises (G-, UA-, GTM-, AW-, pixel Meta)", () => {
+      const ids = detectTagIdsInHtml(`
+        <script>gtag('config','G-AB12CD34EF');gtag('config','UA-1234567-1');gtag('config','AW-987654321');</script>
+        <script>(function(w,d,s,l,i){})(window,document,'script','dataLayer','GTM-K9X2PQ');</script>
+        <script>fbq('init', '1234567890123456');</script><img src="https://www.facebook.com/tr?id=1234567890123456&ev=PageView">`);
+      assert.deepEqual(ids.analytics, ["G-AB12CD34EF", "UA-1234567-1", "GTM-K9X2PQ"]);
+      assert.deepEqual(ids.googleAds, ["AW-987654321"]);
+      assert.deepEqual(ids.metaPixel, ["1234567890123456"]);
+      assert.deepEqual(detectTagIdsInHtml("<p>rien</p>"), { analytics: [], googleAds: [], metaPixel: [] });
     });
 
     it("détecte les pixels publicitaires payants (Google Ads AW-, Meta Pixel) via adsPixelSpyModule", () => {

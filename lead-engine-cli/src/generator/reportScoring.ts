@@ -97,16 +97,55 @@ export function visibilityScore(lead: MapsLead, inspection: SiteInspection | nul
   return build(all);
 }
 
+const ANALYTICS_RE = /analytics|tag manager|gtag/i;
+
+export interface TrackingView {
+  /** Bandeau de consentement détecté : un outil non trouvé n'est pas mesuré (il peut attendre l'accord du visiteur). */
+  consentGated: boolean;
+  /** Pixels publicitaires présents (visite à froid, HTML ou identifiant), null = non mesuré */
+  pixels: string[] | null;
+  /** Outils de suivi présents, null = non mesuré */
+  trackers: string[] | null;
+  /** Libellés connus seulement par leur identifiant dans le HTML : déclenchés après consentement */
+  afterConsent: string[];
+}
+
+/**
+ * Suivi et pixels du site. La visite à froid ne voit pas ce qu'un bandeau retarde jusqu'au consentement :
+ * les identifiants lus dans le HTML (`htmlTagIds`) le complètent.
+ */
+export function trackingView(i: SiteInspection | null): TrackingView {
+  const consentGated = !!i?.cmpDetected;
+  const pixels = i?.paidAdsDetected ? [...i.paidAdsDetected] : null;
+  const trackers = i?.trackersFound ? [...i.trackersFound] : null;
+  const afterConsent: string[] = [];
+  const ids = consentGated ? i?.htmlTagIds : undefined;
+  const add = (list: string[] | null, label: string, found: boolean, already: boolean) => {
+    if (list && found && !already) {
+      list.push(label);
+      afterConsent.push(label);
+    }
+  };
+  if (ids) {
+    add(pixels, GOOGLE_ADS, ids.googleAds.length > 0, !!pixels?.includes(GOOGLE_ADS));
+    add(pixels, META_PIXEL, ids.metaPixel.length > 0, !!pixels?.includes(META_PIXEL));
+    const hasAnalytics = !!trackers?.some((t) => ANALYTICS_RE.test(t));
+    add(trackers, "Google Analytics", ids.analytics.some((x) => /^(G|UA)-/.test(x)), hasAnalytics);
+    add(trackers, "Google Tag Manager", ids.analytics.some((x) => x.startsWith("GTM-")), hasAnalytics);
+  }
+  return { consentGated, pixels, trackers, afterConsent };
+}
+
 export function acquisitionScore(inspection: SiteInspection | null, competitors: CompetitorPixels[]): ScoreResult {
   const all: ScoreCriterion[] = [];
   const i = inspection;
-  const ads = i?.paidAdsDetected;
-  const trackers = i?.trackersFound;
+  const { consentGated, pixels: ads, trackers } = trackingView(i);
+  // Trouvé : points ; absent sans bandeau : 0 ; absent avec bandeau : non mesuré (retiré).
+  const found = (present: boolean, max: number) => (present ? max : consentGated ? null : 0);
 
-  all.push(crit("google_ads", "Suivi des conversions Google Ads", 15, ads ? (ads.includes(GOOGLE_ADS) ? 15 : 0) : null));
-  all.push(crit("meta_pixel", "Pixel Meta", 10, ads ? (ads.includes(META_PIXEL) ? 10 : 0) : null));
-  all.push(crit("analytics", "Mesure d'audience", 10, trackers
-    ? (trackers.some((t) => /analytics|tag manager|gtag/i.test(t)) ? 10 : 0) : null));
+  all.push(crit("google_ads", "Suivi des conversions Google Ads", 15, ads ? found(ads.includes(GOOGLE_ADS), 15) : null));
+  all.push(crit("meta_pixel", "Pixel Meta", 10, ads ? found(ads.includes(META_PIXEL), 10) : null));
+  all.push(crit("analytics", "Mesure d'audience", 10, trackers ? found(trackers.some((t) => ANALYTICS_RE.test(t)), 10) : null));
   all.push(crit("consent", "Bandeau de consentement", 5,
     !i || i.cmpDetected === undefined ? null : i.cmpDetected ? 5 : 0));
 
@@ -121,7 +160,8 @@ export function acquisitionScore(inspection: SiteInspection | null, competitors:
   if (verified.length > 0 && ads) {
     const m = average(verified.map((c) => (c.pixels ?? []).length)) ?? 0;
     const n = ads.length;
-    comparison = n >= m ? 20 : n > 0 ? 10 : 0;
+    // Avec un bandeau, des pixels peuvent manquer au relevé : « moins que les concurrents » n'est pas mesuré.
+    comparison = n >= m ? 20 : consentGated ? null : n > 0 ? 10 : 0;
   }
   all.push(crit("competitors", "Comparaison avec les concurrents", 20, comparison));
   return build(all);

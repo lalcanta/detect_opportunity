@@ -78,6 +78,15 @@ export interface SeoOnPage {
   phoneMatchesListing: boolean | null;
 }
 
+export interface HtmlTagIds {
+  /** Google Analytics (G-, UA-) et Google Tag Manager (GTM-) */
+  analytics: string[];
+  /** Suivi des conversions Google Ads (AW-) */
+  googleAds: string[];
+  /** Pixel Meta (identifiant numérique) */
+  metaPixel: string[];
+}
+
 export interface SiteInspection {
   url: string;
   title?: string | null;
@@ -99,6 +108,11 @@ export interface SiteInspection {
   trackerRequests?: TrackerRequest[];
   /** Bandeau cookies / CMP détecté sur la page (Axeptio, Didomi, Cookiebot...) */
   cmpDetected?: string | null;
+  /**
+   * Identifiants de balises lus dans le HTML (G-, UA-, GTM-, AW-, pixel Meta). Avec un bandeau, les outils ne se
+   * déclenchent qu'après consentement : la visite à froid ne les voit pas, ces identifiants prouvent leur présence.
+   */
+  htmlTagIds?: HtmlTagIds;
   /** Liens réseaux sociaux détectés passivement sur le site (LinkedIn, Facebook, Instagram) */
   socialLinks?: {
     linkedin: string[];

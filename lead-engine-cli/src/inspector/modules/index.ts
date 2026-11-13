@@ -1,4 +1,4 @@
-import { trackersModule, classifyTrackerUrl, detectCmpFromHtml } from "./trackersModule";
+import { trackersModule, classifyTrackerUrl, detectCmpFromHtml, detectTagIdsInHtml } from "./trackersModule";
 import { techStackModule, detectTechStackFromHtml } from "./techStackModule";
 import { contactsLegalModule, extractCleanEmails, extractKeyPeopleFromText } from "./contactsLegalModule";
 import { socialLinksModule, extractSocialLinksFromHtml } from "./socialLinksModule";
@@ -40,6 +40,7 @@ export {
   getModulesForOpportunity,
   classifyTrackerUrl,
   detectCmpFromHtml,
+  detectTagIdsInHtml,
   detectTechStackFromHtml,
   extractCleanEmails,
   extractKeyPeopleFromText,
