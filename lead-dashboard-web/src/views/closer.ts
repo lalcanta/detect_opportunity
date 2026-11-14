@@ -1,5 +1,5 @@
 import { DEFAULT_OPPORTUNITY_ID, opportunityIdOf } from "../../../shared/opportunities";
-import { OPPORTUNITY_TYPES, parseAllowedOpportunities, type Battlecard, type LeadRow, type User } from "../types";
+import { OPPORTUNITY_TYPES, SCANNABLE_OPPORTUNITY_TYPES, parseAllowedOpportunities, type Battlecard, type LeadRow, type User } from "../types";
 import { EMAIL_TEMPLATES, buildTemplateVars } from "../templates/emailTemplates";
 import { esc, icon, layout, navbar, telHref, toWaNumber } from "./layout";
 import { activeNavLabel, sideNavShell, type SideNavGroup } from "./sideNav";
@@ -509,11 +509,13 @@ export function closerPage({ user, leads, scope, view, origin, opp = "all" }: Cl
 
   const href = (o: { scope?: string; view?: string; opp?: string }): string =>
     `/?scope=${encodeURIComponent(o.scope ?? scope)}&view=${encodeURIComponent(o.view ?? view)}&opp=${encodeURIComponent(o.opp ?? opp)}`;
+  // Seuls les besoins actifs sont proposés en filtre : un brouillon ou un besoin archivé n'a pas sa place dans le pipeline.
+  const myActiveOpps = SCANNABLE_OPPORTUNITY_TYPES.filter((o) => (allowedOpps as string[]).includes(o.id));
   const oppChoices: [string, string][] = isAdmin
-    ? [["all", "Tous les besoins"], ...OPPORTUNITY_TYPES.map((o) => [o.id, o.badge] as [string, string])]
+    ? [["all", "Tous les besoins"], ...SCANNABLE_OPPORTUNITY_TYPES.map((o) => [o.id, o.badge] as [string, string])]
     : [
-        ["all", `Tous mes besoins (${allowedOpps.length})`],
-        ...OPPORTUNITY_TYPES.filter((o) => (allowedOpps as string[]).includes(o.id)).map((o) => [o.id, o.badge] as [string, string]),
+        ["all", `Tous mes besoins (${myActiveOpps.length})`],
+        ...myActiveOpps.map((o) => [o.id, o.badge] as [string, string]),
       ];
   const navGroups: SideNavGroup[] = [
     {
