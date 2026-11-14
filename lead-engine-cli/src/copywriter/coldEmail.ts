@@ -3,7 +3,16 @@ import type { ModelRouter } from "../llm/modelRouter";
 import type { Battlecard, MapsLead, TokenUsageRecord } from "../types";
 import { extractJson, log } from "../utils/helpers";
 import { battlecardSchema } from "./battlecard";
+import { STOP_LINE } from "../workflow/pitchPrompt";
 import { bilanLabel } from "./bilanPitch";
+
+/** Ajoute le lien principal s'il manque : avant la ligne STOP (qui reste la dernière ligne) si elle est présente, sinon à la fin. */
+export function withMainLink(body: string, url: string): string {
+  if (body.includes(url)) return body;
+  const stop = body.lastIndexOf(STOP_LINE);
+  if (stop < 0) return `${body}\n\n${url}`;
+  return `${body.slice(0, stop).trimEnd()}\n\n${url}\n\n${body.slice(stop)}`;
+}
 
 /**
  * TASK_FAST : message écrit de premier contact, envoyé par email ou collé dans le formulaire de contact du prospect.
@@ -25,7 +34,7 @@ export async function generateColdEmailPitch(
     const { text } = await router.generate({ task: "battlecard", prompt, json: true, usageSink });
     const card = battlecardSchema.parse(extractJson(text));
     if (!card.coldEmail) throw new Error("coldEmail absent de la réponse");
-    if (!card.coldEmail.body.includes(demoUrl)) card.coldEmail.body += `\n\n${demoUrl}`;
+    card.coldEmail.body = withMainLink(card.coldEmail.body, demoUrl);
     return { ...card, callScript: "", objections: [], whatsappText: "" };
   } catch (err) {
     log("battlecard", `Erreur génération message écrit : ${(err as Error).message} → fallback`);

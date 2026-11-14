@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { getOpportunityOrDefault } from "../../../shared/opportunities";
 import { generateBattlecard } from "../copywriter/battlecard";
 import { generateColdEmailPitch } from "../copywriter/coldEmail";
+import { STOP_LINE } from "../workflow/pitchPrompt";
 import type { ModelRouter } from "../llm/modelRouter";
 import type { MapsLead } from "../types";
 
@@ -48,5 +49,28 @@ describe("secours sans modèle d'un bilan", () => {
     assert.match(t, /bilan d'acquisition/i);
     assert.doesNotMatch(t, /démonstration personnalisée/);
     noMeasure(t);
+  });
+});
+
+describe("lien principal oublié par le modèle (message écrit)", () => {
+  const def = getOpportunityOrDefault("ads_acquisition");
+  const reply = (body: string): ModelRouter =>
+    ({ generate: async () => ({ text: JSON.stringify({ coldEmail: { subject: "S", body } }) }) }) as unknown as ModelRouter;
+  const body = async (b: string): Promise<string> =>
+    (await generateColdEmailPitch(reply(b), "CONSIGNE", lead, DEMO, [], def, "email")).coldEmail!.body;
+
+  it("le lien est inséré avant la ligne STOP, qui reste la dernière ligne", async () => {
+    const out = await body(`Bonjour,\n\nVoici un constat. Seriez-vous d'accord pour en parler ?\n\n${STOP_LINE}`);
+    assert.ok(out.includes(DEMO));
+    assert.ok(out.indexOf(DEMO) < out.indexOf(STOP_LINE), out);
+    assert.ok(out.trimEnd().endsWith(STOP_LINE), out);
+  });
+  it("sans ligne STOP : le lien est ajouté à la fin", async () => {
+    const out = await body("Bonjour, un constat.");
+    assert.ok(out.trimEnd().endsWith(DEMO), out);
+  });
+  it("lien déjà présent : le message n'est pas modifié", async () => {
+    const original = `Bonjour ${DEMO}\n\n${STOP_LINE}`;
+    assert.equal(await body(original), original);
   });
 });
