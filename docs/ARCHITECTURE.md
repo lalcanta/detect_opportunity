@@ -196,6 +196,6 @@ est la table `users`.
 
 ## 11. CI / déploiement
 
-- GitHub Actions (`.github/workflows/ci-cd.yml`) : install, typecheck, `npm test` (tests unitaires uniquement).
+- GitHub Actions (`.github/workflows/ci-cd.yml`) : install, typecheck, `npm test` (tests unitaires), puis les tests fonctionnels (`npm run test:functional`).
   **Plus aucun déploiement** depuis Actions (commit `701c315`).
 - Déploiement : build natif Cloudflare Pages connecté au dépôt (le build exécute aussi les tests du dashboard).
