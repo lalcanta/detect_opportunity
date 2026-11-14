@@ -1,4 +1,6 @@
 node_modules
 .dev.vars
+# Exception pour le LIEN dev-local/.dev.vars -> ../.dev.vars, jamais pour un fichier : si le lien devient un
+# fichier ordinaire, il contient les secrets. src/tests/devLocalLinks.test.ts (npm test) échoue dans ce cas.
 !dev-local/.dev.vars
 .wrangler
