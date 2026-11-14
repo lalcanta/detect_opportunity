@@ -7,6 +7,7 @@
 import { WORKFLOW_NODES, isReportProof, type ChannelId, type OpportunityDefinition } from "../../../shared/opportunities";
 import type { CompetitorPixels } from "../collector/competitorPixels";
 import { dateFr } from "../generator/reportLayout";
+import { titleKeywords } from "../opportunities/siteDemo";
 import { CONSENT_GATED_LABEL, trackingView } from "../generator/reportScoring";
 import type { MapsCompetitor, MapsLead, SiteInspection } from "../types";
 import type { NodeRun, SireneInfo } from "./runner";
@@ -77,7 +78,7 @@ const mapsListing: Contribution = ({ lead }) => {
   if (lead.city?.trim()) facts.push(fact("Ville", lead.city.trim()));
   const rating = ratingText(lead.rating, lead.reviewsCount);
   if (rating) facts.push(fact("Note Google", rating));
-  for (const r of lead.recentReviews.filter((r) => r.text?.trim()).slice(0, MAX_REVIEWS)) {
+  for (const r of (lead.recentReviews ?? []).filter((r) => r.text?.trim()).slice(0, MAX_REVIEWS)) {
     const author = r.author?.trim();
     facts.push(fact("Avis client", `${quote(excerpt(r.text))}${author ? ` — ${author}` : ""}`));
   }
@@ -90,15 +91,13 @@ const mapsListing: Contribution = ({ lead }) => {
   return facts;
 };
 
-/** Métier et ville dans le titre ou le H1 (même règle que la démo complémentaire : prospect avec fiche seulement). */
+/** Métier et ville dans le titre ou le H1 : même règle que la démo complémentaire (`titleKeywords`). */
 function keywordsText(lead: MapsLead, i: SiteInspection): string | null {
-  const seo = i.seo!;
-  if (!hasListing(lead)) return null;
-  const a = seo.activityInTitleOrH1;
-  const c = seo.cityInTitleOrH1;
-  if (a && c) return "le métier et la ville figurent dans le titre ou le H1";
-  if (!a && !c) return "ni le métier ni la ville ne figurent dans le titre ou le H1";
-  return a
+  const kw = titleKeywords(lead, i);
+  if (!kw) return null;
+  if (kw.activity && kw.city) return "le métier et la ville figurent dans le titre ou le H1";
+  if (!kw.activity && !kw.city) return "ni le métier ni la ville ne figurent dans le titre ou le H1";
+  return kw.activity
     ? "la ville ne figure ni dans le titre ni dans le H1 ; le métier y figure"
     : "le métier ne figure ni dans le titre ni dans le H1 ; la ville y figure";
 }
@@ -194,7 +193,8 @@ const reportProof: Contribution = (p) => {
     facts.push(fact("Score du bilan", `${p.report.score}/100 sur les critères mesurés`));
     if (p.report.actions.length) facts.push(fact("Actions prioritaires du bilan", p.report.actions.join(" ; ")));
   }
-  if (p.def.proof.kind === "acquisition_report") {
+  // Concurrents Maps : sans objet pour un prospect sans fiche.
+  if (p.def.proof.kind === "acquisition_report" && hasListing(p.lead)) {
     for (const c of [...(p.competitorPixels ?? [])].sort((a, b) => a.rank - b.rank)) {
       const pixels = c.pixels === null ? "non vérifié" : c.pixels.length ? c.pixels.join(", ") : "aucun pixel publicitaire relevé sur l'accueil";
       facts.push(fact("Pixels d'un concurrent", `${c.name} (${ordinal(c.rank)} sur Google Maps) : ${pixels}`));

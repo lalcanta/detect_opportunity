@@ -127,6 +127,14 @@ describe("bilans", () => {
     assert.ok(durand.some((v) => v.includes("non vérifié")), durand.join("\n"));
     assert.ok(!durand.some((v) => /aucun pixel/i.test(v)));
   });
+  it("sans fiche Maps : aucun pixel de concurrent cité", () => {
+    const p = input({
+      def: acquisition, lead: { ...baseLead, noMapsListing: true }, report: { score: 40, actions: [] },
+      competitorPixels: [{ name: "Durand", rank: 1, website: "https://d.fr", pixels: ["Meta Ads (Facebook Pixel)"] }],
+    });
+    const facts = pitchFacts(p);
+    assert.ok(!facts.some((f) => /concurrent/i.test(f.label) || f.value.includes("Durand")), JSON.stringify(facts));
+  });
   it("score et actions du bilan", () => {
     const vs = values(input({ def: visibility, report: { score: 52, actions: ["Collecter davantage d'avis"] } }));
     assert.ok(vs.some((v) => v.includes("52/100")));
