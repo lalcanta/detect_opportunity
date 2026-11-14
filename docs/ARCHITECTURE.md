@@ -68,7 +68,7 @@ Point d'entrée : `npm run prep` ou job `prep_only`. Code : `lead-engine-cli/src
 
 1. Collecte + inspection comme ci-dessus (sans LLM).
 2. Écrit `queue/pending/<id>/` : `meta.json` (avec `primary_channel` et `contacts`), `screenshot.png`, `prompt_demo.md`,
-   `prompt_battlecard.md` (+ `demo.html` et `battlecard.json` déterministes si `audit_qa_trackers`).
+   `prompt_battlecard.md` (assemblée par `workflow/pitchPrompt.ts` à partir des nœuds exécutés ; + `demo.html` et `battlecard.json` déterministes si `audit_qa_trackers`).
 3. Pousse immédiatement le lead au CRM en `status = pending_generation` (onglet « file de génération » de l'admin,
    masqué du Kanban).
 4. **Humain + agent** : on demande à Antigravity « Génère les démos et battlecards des leads en attente » ; il suit

@@ -11,6 +11,7 @@ import type { BrowserContext } from "playwright";
 import {
   CHANNEL_LABELS,
   DATA_KEYS,
+  isReportProof,
   keysBlockedBy,
   pitchGeneratorFor,
   workflowNode,
@@ -29,7 +30,8 @@ import type { ModelRouter } from "../llm/modelRouter";
 import type { CompetitorPixels } from "../collector/competitorPixels";
 import { PITCH_GENERATORS, PROOF_GENERATORS, type GenerationContext } from "../opportunities/generators";
 import { mapsSeoAuditFields } from "./auditFields";
-import { needsSiteDemo, siteDemoFocus } from "../opportunities/siteDemo";
+import type { PitchInput } from "./pitchFacts";
+import { needsSiteDemo, siteDemoFocus, siteDemoUrl } from "../opportunities/siteDemo";
 import { buildLeadContacts, buildUnqualifiedPayload, qualifyAfterInspection, UnqualifiedLeadError } from "../opportunities/qualify";
 import { log } from "../utils/helpers";
 import type { Battlecard, MapsLead, SiteAudit, SiteInspection, SyncPayload, TokenUsageRecord } from "../types";
@@ -133,6 +135,24 @@ function genContext(d: Dossier, env: WorkflowEnv): GenerationContext {
   };
 }
 
+/** Entrée de la consigne des textes commerciaux, tirée du dossier (mêmes règles en mode préparation). */
+export function pitchInputFromDossier(d: Dossier, remoteAppUrl: string): PitchInput {
+  if (!d.primaryChannel) throw new Error("lead non qualifié");
+  const report = isReportProof(d.def.proof.kind) && d.audit ? { score: d.audit.score, actions: d.audit.weaknesses } : null;
+  return {
+    def: d.def,
+    lead: d.lead,
+    demoUrl: d.demoUrl,
+    primaryChannel: d.primaryChannel,
+    inspection: d.inspection,
+    sirene: d.sirene,
+    trace: d.trace,
+    report,
+    competitorPixels: d.competitorPixels,
+    siteDemoUrl: report ? siteDemoUrl(d.def, d.lead, d.inspection, remoteAppUrl, d.leadId) : null,
+  };
+}
+
 /** Issue d'un nœud : `skipped` quand il n'a rien écrit, `note` quand il a tourné sans résultat. */
 type NodeOutcome = { skipped: string } | { note: string } | void;
 
@@ -173,7 +193,7 @@ async function runNode(node: WorkflowNodeType, d: Dossier, env: WorkflowEnv): Pr
       if (node.binding.generator !== pitchGeneratorFor(d.def, d.primaryChannel)) return { skipped: "canal non principal pour ce lead" };
       if (prep) return { skipped: "écrit par la file locale" };
       if (!d.audit) throw new Error("preuve absente");
-      d.battlecard = await PITCH_GENERATORS[node.binding.generator](genContext(d, env), d.audit);
+      d.battlecard = await PITCH_GENERATORS[node.binding.generator](genContext(d, env), pitchInputFromDossier(d, env.remoteAppUrl), d.audit);
       return;
     }
     case "fixed": {

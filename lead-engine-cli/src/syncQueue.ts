@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { loadConfig } from "./config";
 import { pushLead } from "./sync/pushLead";
 import { stripDesignPlan } from "./generator/demoGenerator";
+import { bilanLabel, type BilanKind } from "./copywriter/bilanPitch";
 import { log, stripCodeFences } from "./utils/helpers";
 import { loadRemoteOpportunities } from "./opportunities/remote";
 import type { Battlecard, LeadContact, SyncPayload, TokenUsageRecord } from "./types";
@@ -29,6 +30,8 @@ interface RawBattlecardFile {
 }
 
 interface AuditFactsFile {
+  /** Preuve du dossier quand c'est un bilan (écrite par prep dans audit_facts.json). */
+  kind?: string;
   auditSummary?: string;
   weaknesses?: string[];
 }
@@ -40,12 +43,33 @@ interface QueueMeta {
   /** Canal principal calculé par prep (phone | email | contact_form) */
   primary_channel?: string | null;
   contacts?: LeadContact[];
+  /** Mesures du site relevées à la préparation (absentes des anciens dossiers). */
+  isResponsive?: boolean | null;
+  obsolescence_signals?: string[];
 }
 
 /** Démo de site complémentaire d'un bilan : consigne écrite par prep, démo écrite par l'agent. */
 export const SITE_DEMO_PROMPT_FILE = "prompt_site_demo.md";
 export const SITE_DEMO_FILE = "site_demo.html";
 export const MANIFEST_PATH = "queue/pending_manifest.json";
+
+/** Faiblesses du site tirées des seules mesures présentes dans meta.json ; liste vide quand rien n'a été mesuré. */
+function measuredWeaknesses(meta: QueueMeta): string[] {
+  const signals = (meta.obsolescence_signals ?? []).filter((s) => typeof s === "string" && s.trim());
+  return [...(meta.isResponsive === false ? ["Affichage défaillant sur téléphone (débordements constatés)"] : []), ...signals];
+}
+
+const isBilanKind = (k: unknown): k is BilanKind => k === "visibility_report" || k === "acquisition_report";
+
+/** Nom de la preuve du dossier : bilan (d'après audit_facts.json, sinon le besoin) ou démo de site. */
+function proofLabel(meta: QueueMeta, facts: AuditFactsFile | null): string {
+  const kind = isBilanKind(facts?.kind) ? facts.kind : getOpportunityOrDefault(meta.opportunity_type).proof.kind;
+  return isBilanKind(kind) ? `le ${bilanLabel(kind)}` : "la démo de site";
+}
+
+/** Message WhatsApp de secours : nomme la bonne preuve et donne le lien, sans aucune mesure ni promesse. */
+const neutralWhatsapp = (company: string, label: string, url: string): string =>
+  `Bonjour ${company}, voici ${label} préparé${label.startsWith("la ") ? "e" : ""} pour votre activité : ${url}`;
 
 /**
  * Assemble la battlecard et les constats d'audit d'un lead de la file à partir des fichiers écrits par l'agent.
@@ -86,26 +110,18 @@ export function buildQueueBattlecard(
       }
     : {
         closerBrief: rawBc.closerBrief || rawBc.executiveSummary || rawBc.auditSummary,
-        ourAdvantages: rawBc.ourAdvantages || rawBc.closingArguments || [
-          "Barre d'appel d'urgence mobile collante en bas d'écran",
-          "Mise en avant immédiate des avis Google et du vrai logo client",
-          "Chargement ultra-rapide (< 0.5s) pensé pour convertir sur smartphone",
-        ],
+        // Aucun avantage inventé : sans avantage écrit par l'agent, la liste reste vide.
+        ourAdvantages: rawBc.ourAdvantages || rawBc.closingArguments || [],
         callScript: rawBc.callScript || rawBc.openingPitch || "Bonjour, je vous contacte concernant votre site internet.",
         objections: (rawBc.objections || []).map((o) => ({ objection: o.objection, reply: o.reply || o.response || "" })),
-        whatsappText: rawBc.whatsappText || `Bonjour ${meta.company_name}, voici la démo interactive de votre futur site web : ${demoUrl}`,
+        whatsappText: rawBc.whatsappText || neutralWhatsapp(meta.company_name, proofLabel(meta, facts), demoUrl),
         coldEmail,
       };
 
+  // Aucun secours inventé : sans audit, le résumé est neutre et les faiblesses viennent des seules mesures de meta.json.
   const summary =
-    rawBc.auditSummary || rawBc.executiveSummary || facts?.auditSummary || "Audit de performance web & opportunité d'optimisation.";
-  const weaknesses =
-    rawBc.weaknesses ||
-    rawBc.currentSiteCritique ||
-    facts?.weaknesses ||
-    (isColdEmail
-      ? []
-      : ["Site web existant lent à charger sur smartphone", "Absence de barre d'appel immédiate pour les urgences", "Avis clients Google non mis en valeur"]);
+    rawBc.auditSummary || rawBc.executiveSummary || facts?.auditSummary || `Dossier de ${meta.company_name} préparé sans audit détaillé.`;
+  const weaknesses = rawBc.weaknesses || rawBc.currentSiteCritique || facts?.weaknesses || measuredWeaknesses(meta);
 
   return { battlecard, summary, weaknesses };
 }

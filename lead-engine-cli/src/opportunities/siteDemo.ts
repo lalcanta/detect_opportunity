@@ -18,6 +18,16 @@ export function siteDemoFocus(def: OpportunityDefinition): DemoFocus | null {
 }
 
 /**
+ * Métier et ville présents dans le titre ou le H1 du site ; null si non mesuré (pas de lecture SEO) ou sans objet :
+ * sans fiche Maps, métier et ville sont de remplissage, leur absence du titre ne prouve rien.
+ */
+export function titleKeywords(lead: MapsLead, inspection: SiteInspection | null): { activity: boolean; city: boolean } | null {
+  const seo = inspection?.seo;
+  if (lead.noMapsListing || !seo) return null;
+  return { activity: seo.activityInTitleOrH1, city: seo.cityInTitleOrH1 };
+}
+
+/**
  * Faut-il joindre une démo de site au bilan ? `always` / `never` tranchent ; `auto` (défaut) :
  * - visibilité : pas de site, site non adapté au mobile, métier ou ville absent du titre et du H1 (prospect avec fiche
  *   Maps seulement), ou chargement > 3 s ;
@@ -32,9 +42,8 @@ export function needsSiteDemo(def: OpportunityDefinition, lead: MapsLead, inspec
   const i = inspection;
   if (def.proof.kind === "visibility_report") {
     if (!lead.website) return true;
-    const seo = i?.seo;
-    // Sans fiche Maps, métier et ville sont de remplissage : leur absence du titre ne prouve rien.
-    const keywordsMissing = Boolean(!lead.noMapsListing && seo && (!seo.activityInTitleOrH1 || !seo.cityInTitleOrH1));
+    const kw = titleKeywords(lead, i);
+    const keywordsMissing = Boolean(kw && (!kw.activity || !kw.city));
     return notMobile(i) || keywordsMissing || isSlow(i);
   }
   // `contactForm` : null = cherché sans succès, undefined = non cherché (critère ignoré).

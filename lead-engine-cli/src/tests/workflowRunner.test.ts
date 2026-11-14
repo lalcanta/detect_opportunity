@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import type { BrowserContext } from "playwright";
 import { getOpportunityOrDefault } from "../../../shared/opportunities";
 import { UnqualifiedLeadError } from "../opportunities/qualify";
-import { leadWorkflowWaves, runLeadWorkflow } from "../workflow/runner";
+import type { ModelRouter } from "../llm/modelRouter";
+import { buildPitchPrompt } from "../workflow/pitchPrompt";
+import { leadWorkflowWaves, pitchInputFromDossier, runLeadWorkflow } from "../workflow/runner";
 import type { MapsLead } from "../types";
 
 const realFetch = globalThis.fetch;
@@ -86,5 +88,23 @@ describe("exécuteur du workflow", () => {
     assert.equal(branding.status, "skipped");
     assert.match(branding.note ?? "", /Site web/);
     assert.equal(d.trace.find((t) => t.node === "dirigeant_sirene")?.status, "done");
+  });
+
+  it("mode complet : le modèle reçoit la consigne assemblée, sans mesure absente", async () => {
+    stubSirene();
+    const prompts: string[] = [];
+    const router = {
+      generate: async (r: { prompt: string }) => {
+        prompts.push(r.prompt);
+        return { text: "{}" };
+      },
+    } as unknown as ModelRouter;
+    const def = { ...getOpportunityOrDefault("seo_local"), complementDemo: "never" as const };
+    const l = lead({ rating: null, reviewsCount: null, mapsRank: 1, mapsQuery: "plombier Lyon", mapsCheckedAt: "2026-11-13T09:00:00.000Z" });
+    const d = await runLeadWorkflow({ def, lead: l, leadId: "pm", demoUrl: "https://crm.test/demos/pm" }, { ...env, mode: "full", router });
+    assert.equal(prompts.length, 1);
+    assert.equal(prompts[0], buildPitchPrompt(pitchInputFromDossier(d, env.remoteAppUrl), "llm_phone_battlecard"));
+    assert.doesNotMatch(prompts[0]!, /manque de visibilité|5★/);
+    assert.equal(pitchInputFromDossier(d, env.remoteAppUrl).siteDemoUrl, null);
   });
 });

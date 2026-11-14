@@ -1,51 +1,40 @@
-import { messageToneInstruction, type ChannelId, type OpportunityDefinition } from "../../../shared/opportunities";
+import { isReportProof, type ChannelId, type OpportunityDefinition } from "../../../shared/opportunities";
 import type { ModelRouter } from "../llm/modelRouter";
-import type { Battlecard, MapsLead, SiteAudit, TokenUsageRecord } from "../types";
+import type { Battlecard, MapsLead, TokenUsageRecord } from "../types";
 import { extractJson, log } from "../utils/helpers";
 import { battlecardSchema } from "./battlecard";
-import { bilanLabel, bilanPromptFacts, type BilanPitch } from "./bilanPitch";
+import { STOP_LINE } from "../workflow/pitchPrompt";
+import { bilanLabel } from "./bilanPitch";
+
+/** Ajoute le lien principal s'il manque : avant la ligne STOP (qui reste la dernière ligne) si elle est présente, sinon à la fin. */
+export function withMainLink(body: string, url: string): string {
+  if (body.includes(url)) return body;
+  const stop = body.lastIndexOf(STOP_LINE);
+  if (stop < 0) return `${body}\n\n${url}`;
+  return `${body.slice(0, stop).trimEnd()}\n\n${url}\n\n${body.slice(stop)}`;
+}
 
 /**
  * TASK_FAST : message écrit de premier contact, envoyé par email ou collé dans le formulaire de contact du prospect.
- * Générique : l'angle vient de l'opportunité (libellé et argument commercial du registre).
+ * La consigne est assemblée en amont (`buildPitchPrompt`) ; ici : appel au modèle, validation, secours sans IA.
  */
 export async function generateColdEmailPitch(
   router: ModelRouter,
+  prompt: string,
   lead: MapsLead,
-  audit: SiteAudit,
   demoUrl: string,
   usageSink: TokenUsageRecord[],
-  def: Pick<OpportunityDefinition, "label" | "commercial">,
+  def: Pick<OpportunityDefinition, "label" | "proof">,
   channel: ChannelId,
-  /** Preuve « bilan » : le lien ouvre le bilan, la démo de site n'est qu'un complément éventuel. */
-  bilan: BilanPitch | null = null,
 ): Promise<Battlecard> {
   const viaForm = channel === "contact_form";
-  const label = bilan ? bilanLabel(bilan.kind) : "";
-  const best = [...lead.recentReviews].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
-  const prompt = `Tu rédiges un premier message écrit de prospection pour ${lead.name} (${lead.activity}, ${lead.city}).
-Il sera ${viaForm ? "collé dans le formulaire de contact de son site (pas d'objet visible, texte brut, 900 caractères maximum)" : "envoyé par email"}.
-Offre : ${def.label}. Angle : ${def.commercial.pitchFocus}.
-${bilan ? bilanPromptFacts(bilan, lead, audit, demoUrl) : `Constat sur sa présence actuelle : ${audit.summary}. Points faibles : ${audit.weaknesses.join(" ; ")}.`}
-Note Google : ${lead.rating ?? "n/a"}/5 (${lead.reviewsCount ?? "n/a"} avis).${best ? ` Avis réel à citer : "${best.text}" (${best.author}).` : ""}
-${bilan ? "" : `Lien de la démo déjà préparée pour lui : ${demoUrl}\n`}
-${messageToneInstruction(def.commercial.tone)}
-Règles : vouvoiement, ${def.commercial.tone ? "" : "ton chaleureux et professionnel, "}un seul constat précis, ${bilan ? `le lien du ${label}` : "le lien de la démo"}, une question simple
-pour obtenir une réponse écrite. Pas de promesse chiffrée, pas de jargon. Le message se termine par
-« Pour ne plus recevoir de message de notre part, répondez simplement STOP. »
-
-Réponds en JSON strict :
-{
-  "closerBrief": "2 phrases pour la personne qui envoie le message : contexte du prospect et angle retenu.",
-  "ourAdvantages": ["Avantage concret 1", "Avantage concret 2", "Avantage concret 3"],
-  "coldEmail": { "subject": "Objet court et personnalisé", "body": "Le message complet" }
-}`;
-
+  const bilan = isReportProof(def.proof.kind) ? def.proof.kind : null;
+  const label = bilan ? bilanLabel(bilan) : "";
   try {
     const { text } = await router.generate({ task: "battlecard", prompt, json: true, usageSink });
     const card = battlecardSchema.parse(extractJson(text));
     if (!card.coldEmail) throw new Error("coldEmail absent de la réponse");
-    if (!card.coldEmail.body.includes(demoUrl)) card.coldEmail.body += `\n\n${demoUrl}`;
+    card.coldEmail.body = withMainLink(card.coldEmail.body, demoUrl);
     return { ...card, callScript: "", objections: [], whatsappText: "" };
   } catch (err) {
     log("battlecard", `Erreur génération message écrit : ${(err as Error).message} → fallback`);

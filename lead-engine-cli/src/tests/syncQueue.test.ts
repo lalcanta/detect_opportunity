@@ -39,6 +39,69 @@ describe("syncQueue — assemblage battlecard (audit 1.6)", () => {
   });
 });
 
+describe("syncQueue — aucune faiblesse inventée (démo de site préparée en file)", () => {
+  const nouveau = { callScript: "Bonjour", objections: [], whatsappText: "" };
+  const meta = { id: "w2", company_name: "Plombier Dupont", opportunity_type: "website_redesign" };
+
+  it("meta.json sans mesure : aucune faiblesse et un résumé sans affirmation", () => {
+    const res = buildQueueBattlecard(meta, nouveau, null, APP);
+    assert.ok(!("waiting" in res));
+    assert.deepEqual(res.weaknesses, []);
+    assert.doesNotMatch(res.summary, /lent|smartphone|performance|barre d'appel|avis/i);
+  });
+
+  it("signal mesuré dans meta.json : ce signal seulement", () => {
+    const res = buildQueueBattlecard(
+      { ...meta, isResponsive: false, obsolescence_signals: ["Site non mis à jour depuis 2018"] },
+      nouveau, null, APP,
+    );
+    assert.ok(!("waiting" in res));
+    assert.equal(res.weaknesses.length, 2);
+    assert.ok(res.weaknesses.includes("Site non mis à jour depuis 2018"));
+    assert.ok(res.weaknesses.some((w) => /téléphone/i.test(w)));
+  });
+
+  it("isResponsive vrai ou nul : pas de faiblesse d'affichage", () => {
+    assert.deepEqual((buildQueueBattlecard({ ...meta, isResponsive: true }, nouveau, null, APP) as { weaknesses: string[] }).weaknesses, []);
+  });
+
+  it("les anciens champs restent lus pour les dossiers déjà en file", () => {
+    const res = buildQueueBattlecard(meta, { ...nouveau, currentSiteCritique: ["Ancien constat"] }, null, APP);
+    assert.ok(!("waiting" in res));
+    assert.deepEqual(res.weaknesses, ["Ancien constat"]);
+  });
+});
+
+describe("syncQueue — secours sans mesure inventée (battlecard absente)", () => {
+  const empty = { callScript: "Bonjour", objections: [] };
+  const url = "https://app.test/demos/s1";
+  const fallback = (meta: { opportunity_type?: string }, facts: { kind?: string } | null = null) =>
+    (buildQueueBattlecard({ id: "s1", company_name: "Plombier Dupont", ...meta }, empty, facts, APP) as { battlecard: { ourAdvantages?: string[]; whatsappText?: string } }).battlecard;
+
+  it("aucun avantage inventé : liste vide quand l'agent n'en a pas écrit", () => {
+    assert.deepEqual(fallback({ opportunity_type: "website_redesign" }).ourAdvantages, []);
+    assert.deepEqual(fallback({}).ourAdvantages, []);
+  });
+  it("secours WhatsApp d'une démo de site : nomme la démo, avec le lien, sans mesure", () => {
+    const w = fallback({ opportunity_type: "website_redesign" }).whatsappText ?? "";
+    assert.ok(w.includes(url) && /démo/i.test(w), w);
+    assert.doesNotMatch(w.replace(url, ""), /futur site|\d/);
+  });
+  it("secours WhatsApp d'un bilan de visibilité : nomme le bilan, jamais une démo de site", () => {
+    const w = fallback({ opportunity_type: "seo_local" }).whatsappText ?? "";
+    assert.ok(w.includes(url) && w.includes("bilan de visibilité locale"), w);
+    assert.doesNotMatch(w, /démo|futur site/i);
+  });
+  it("secours WhatsApp d'un bilan d'acquisition : nomme le bilan", () => {
+    const w = fallback({ opportunity_type: "ads_acquisition" }).whatsappText ?? "";
+    assert.ok(w.includes(url) && w.includes("bilan d'acquisition"), w);
+  });
+  it("audit_facts.kind prime sur le type d'opportunité", () => {
+    const w = fallback({ opportunity_type: "website_redesign" }, { kind: "visibility_report" }).whatsappText ?? "";
+    assert.ok(w.includes("bilan de visibilité locale"), w);
+  });
+});
+
 describe("syncQueue — purge du manifeste (audit 1.7)", () => {
   it("doit retirer les leads dont le dossier n'est plus dans pending", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "lead-queue-"));

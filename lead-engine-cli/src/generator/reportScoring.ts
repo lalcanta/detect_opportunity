@@ -97,6 +97,9 @@ export function visibilityScore(lead: MapsLead, inspection: SiteInspection | nul
   return build(all);
 }
 
+/** Libellé d'un outil connu seulement par son identifiant dans le HTML, derrière un bandeau de consentement. */
+export const CONSENT_GATED_LABEL = "présent dans la page (déclenché par le bandeau cookies, non vérifié)";
+
 const ANALYTICS_RE = /analytics|tag manager|gtag/i;
 
 export interface TrackingView {
@@ -106,7 +109,7 @@ export interface TrackingView {
   pixels: string[] | null;
   /** Outils de suivi présents, null = non mesuré */
   trackers: string[] | null;
-  /** Libellés connus seulement par leur identifiant dans le HTML : déclenchés après consentement */
+  /** Libellés connus seulement par leur identifiant dans le HTML : présents dans la page, déclenchement non vérifié */
   afterConsent: string[];
 }
 

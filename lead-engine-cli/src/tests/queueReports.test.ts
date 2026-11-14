@@ -2,7 +2,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getOpportunityOrDefault } from "../../../shared/opportunities";
-import { buildBilanQueueFiles, bilanBattlecardRules } from "../queueReports";
+import { SCAN_MODULE_IDS } from "../../../shared/opportunities";
+import { buildBilanQueueFiles, prepBattlecardHeader, prepPitchInput } from "../queueReports";
+import { buildPitchPrompt } from "../workflow/pitchPrompt";
+import { pitchInputFromDossier, type Dossier } from "../workflow/runner";
 import type { MapsLead, SiteInspection } from "../types";
 
 const lead: MapsLead = {
@@ -84,55 +87,75 @@ describe("queueReports — bilan d'acquisition", () => {
   });
 });
 
-describe("queueReports — autres offres et consigne de battlecard", () => {
+describe("queueReports — autres offres", () => {
   it("ne produit rien pour une offre qui n'est pas un bilan", async () => {
     const files = await buildBilanQueueFiles({ def: getOpportunityOrDefault("website"), lead, inspection: null, leadId: "x", remoteAppUrl: APP });
     assert.equal(files, null);
   });
+});
 
-  it("limite la battlecard aux constats mesurés et mentionne la refonte seulement si la démo est demandée", () => {
-    const without = bilanBattlecardRules({ kind: "visibility_report", siteDemoUrl: null });
-    assert.match(without, /audit_facts\.json/);
-    assert.match(without, /abonnement/i);
-    assert.doesNotMatch(without, /refonte/i);
-    const withDemo = bilanBattlecardRules({ kind: "visibility_report", siteDemoUrl: "https://app.test/demos/l1/site" });
-    assert.match(withDemo, /refonte/i);
-    assert.match(withDemo, /https:\/\/app\.test\/demos\/l1\/site/);
+describe("queueReports — consigne de préparation", () => {
+  const seo = getOpportunityOrDefault("seo_local");
+  const audit = { score: 62, weaknesses: ["Fiche Google peu fournie", "Site sans balisage local"] };
+  const dossier = (def: typeof seo): Dossier => ({
+    def, lead, leadId: "l1", demoUrl: `${APP}/demos/l1`, keys: new Set(), inspection: null, sirene: null, qualification: null,
+    primaryChannel: "phone", audit: null, demoHtml: null, siteDemoHtml: null, competitorPixels: null, flyerPdf: null, battlecard: null,
+    usage: [], trace: SCAN_MODULE_IDS.map((m) => ({ node: m, wave: 1, status: "done" as const, ms: 0 })),
+  });
+
+  it("même consigne que le mode complet pour le même bilan (appel, message écrit, formulaire de contact)", async () => {
+    const bilan = await buildBilanQueueFiles({ def: seo, lead, inspection: null, leadId: "l1", remoteAppUrl: APP });
+    assert.ok(bilan);
+    const facts = bilan.auditFacts as { score: { score: number }; weaknesses: string[] };
+    const cases = [["phone", "llm_phone_battlecard"], ["email", "llm_cold_email"], ["contact_form", "llm_cold_email"]] as const;
+    for (const [channel, generator] of cases) {
+      const d = { ...dossier(seo), primaryChannel: channel };
+      const full = { ...d, audit: { summary: "", weaknesses: facts.weaknesses, score: facts.score.score } };
+      assert.equal(
+        buildPitchPrompt(prepPitchInput(d, bilan, APP), generator),
+        buildPitchPrompt(pitchInputFromDossier(full, APP), generator),
+        channel,
+      );
+    }
+  });
+
+  it("angle demandé en ligne de commande : prioritaire sur celui de la définition", () => {
+    const d = dossier(seo);
+    const out = buildPitchPrompt(prepPitchInput(d, null, APP, "angle demandé ce jour"), "llm_cold_email");
+    assert.ok(out.includes("angle demandé ce jour"));
+    assert.ok(!out.includes(seo.commercial.pitchFocus));
+    assert.ok(buildPitchPrompt(prepPitchInput(d, null, APP), "llm_cold_email").includes(seo.commercial.pitchFocus));
+  });
+
+  it("angle fait d'espaces : l'angle de la définition est conservé", () => {
+    const d = dossier(seo);
+    assert.ok(buildPitchPrompt(prepPitchInput(d, null, APP, "   "), "llm_cold_email").includes(seo.commercial.pitchFocus));
+    assert.ok(buildPitchPrompt(prepPitchInput(d, null, APP, "  angle  "), "llm_cold_email").includes("angle"));
+  });
+
+  it("démo de site : pas de bilan dans l'entrée", () => {
+    const p = prepPitchInput(dossier(getOpportunityOrDefault("website_redesign")), null, APP);
+    assert.equal(p.report, null);
+    assert.equal(p.competitorPixels, null);
+    assert.equal(p.siteDemoUrl, null);
+  });
+
+  it("bilan : score et actions du bilan préparé", () => {
+    const bilan = { demoHtml: "", auditFacts: { score: { score: audit.score }, weaknesses: audit.weaknesses }, siteDemoUrl: `${APP}/demos/l1/site`, competitorPixels: null };
+    const p = prepPitchInput(dossier(seo), bilan, APP);
+    assert.deepEqual(p.report, { score: 62, actions: audit.weaknesses });
+    assert.equal(p.siteDemoUrl, `${APP}/demos/l1/site`);
   });
 });
 
-describe("queueReports — consigne de battlecard selon l'offre", () => {
-  it("acquisition : angle publicité / suivi, jamais « reste sur la visibilité »", () => {
-    const r = bilanBattlecardRules({ kind: "acquisition_report", siteDemoUrl: null });
-    assert.doesNotMatch(r, /visibilité/i);
-    assert.match(r, /acquisition/i);
-    assert.match(r, /pas une maquette de site/);
+describe("queueReports — en-tête du prompt_battlecard.md", () => {
+  it("preuve bilan : rappelle que demo.html est déjà écrit et ne doit pas être réécrit", () => {
+    const h = prepBattlecardHeader("queue/pending/x", "visibility_report");
+    assert.ok(h.includes("queue/pending/x/battlecard.json"));
+    assert.ok(h.includes("`demo.html` (le bilan de visibilité locale) est déjà écrit : ne le réécris pas."), h);
+    assert.ok(prepBattlecardHeader("d", "acquisition_report").includes("le bilan d'acquisition"));
   });
-  it("visibilité : angle visibilité locale", () => {
-    const r = bilanBattlecardRules({ kind: "visibility_report", siteDemoUrl: null });
-    assert.match(r, /reste sur la visibilité locale/);
-    assert.match(r, /pas une maquette de site/);
-  });
-});
-
-describe("prep — angle de vente de la battlecard", () => {
-  it("publicité : pas de « besoin d'un site web moderne »", async () => {
-    const { battlecardSalesAngle } = await import("../prepScan");
-    const ads = battlecardSalesAngle("ads_acquisition", lead);
-    assert.doesNotMatch(ads, /site web moderne/);
-    assert.match(ads, /suivi|pixel/i);
-    assert.match(battlecardSalesAngle("showcase", lead), /site web moderne/);
-  });
-});
-
-describe("prep — message écrit d'un bilan", () => {
-  it("le lien est présenté comme le bilan, pas comme une démo de site", async () => {
-    const { buildWrittenPitchPrompt } = await import("../prepScan");
-    const base = { lead, leadDir: "/tmp/x", oppLabel: "Acquisition", pitchFocus: "pub", tone: "", channel: "email" as const, demoUrl: "https://app.test/demos/x", contactFormUrl: null };
-    const bilan = buildWrittenPitchPrompt({ ...base, proofLabel: "bilan d'acquisition" });
-    assert.match(bilan, /Lien du bilan d'acquisition préparé pour lui \(un bilan, pas une maquette de site\)/);
-    assert.match(bilan, /le lien du bilan d'acquisition\./);
-    assert.doesNotMatch(bilan, /Lien de la démo/);
-    assert.match(buildWrittenPitchPrompt(base), /Lien de la démo préparée pour lui/);
+  it("hors bilan : aucune règle sur demo.html", () => {
+    assert.doesNotMatch(prepBattlecardHeader("d", null), /demo\.html|réécris/);
   });
 });
