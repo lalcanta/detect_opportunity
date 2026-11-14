@@ -1,3 +1,4 @@
+import { assertKnownOptions } from "./utils/cliArgs";
 import { PITCH_KIND_BY_GENERATOR, getOpportunityOrDefault, isChannelId, opportunityIdOf, pitchGeneratorFor } from "../../shared/opportunities";
 import { readdir, readFile, rename, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -34,6 +35,8 @@ interface AuditFactsFile {
   kind?: string;
   auditSummary?: string;
   weaknesses?: string[];
+  /** Score mesuré du bilan (critères et pondérations dans le fichier). */
+  score?: { score?: number };
 }
 
 interface QueueMeta {
@@ -80,7 +83,7 @@ export function buildQueueBattlecard(
   rawBc: RawBattlecardFile,
   facts: AuditFactsFile | null,
   appUrl: string,
-): { waiting: string } | { battlecard: Battlecard; summary: string; weaknesses: string[] } {
+): { waiting: string } | { battlecard: Battlecard; summary: string; weaknesses: string[]; score: number | null } {
   // Canal principal écrit (email ou formulaire) : le message est indispensable, le lead attend tant que l'agent ne l'a pas écrit.
   const def = getOpportunityOrDefault(meta.opportunity_type);
   const primaryChannel = isChannelId(meta.primary_channel) ? meta.primary_channel : null;
@@ -123,7 +126,11 @@ export function buildQueueBattlecard(
     rawBc.auditSummary || rawBc.executiveSummary || facts?.auditSummary || `Dossier de ${meta.company_name} préparé sans audit détaillé.`;
   const weaknesses = rawBc.weaknesses || rawBc.currentSiteCritique || facts?.weaknesses || measuredWeaknesses(meta);
 
-  return { battlecard, summary, weaknesses };
+  // Score : celui du bilan, seule mesure chiffrée ; jamais déduit du temps de chargement. Absent = null.
+  const measured = facts?.score?.score;
+  const score = typeof measured === "number" && Number.isFinite(measured) ? measured : null;
+
+  return { battlecard, summary, weaknesses, score };
 }
 
 /** Consommations à 0 € qui tracent qui a généré la démo et la battlecard d'un lead de la file. */
@@ -270,7 +277,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
         waitingCount++;
         continue;
       }
-      const { battlecard, summary, weaknesses } = built;
+      const { battlecard, summary, weaknesses, score } = built;
 
       let flyerPdfBase64: string | null = null;
       if (existsSync(flyerPath)) {
@@ -293,14 +300,10 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
         scanned_at: typeof meta.preparedAt === "string" ? meta.preparedAt : undefined,
         contacts: Array.isArray(meta.contacts) ? meta.contacts : undefined,
         audit_data: {
-          score: meta.loadTimeMs && meta.loadTimeMs > 4000 ? 35 : 45,
+          score,
           summary,
           weaknesses,
-          recommendations: [
-            "Site moderne Tailwind ultra-rapide optimisé pour mobile",
-            "Bouton d'urgence cliquable direct avec sticky call bar",
-            "Mise en valeur des avis Google 5 étoiles et devis express",
-          ],
+          recommendations: [], // rien d'inventé : le panneau du closer lit les arguments de la battlecard
           loadTimeMs: meta.loadTimeMs,
           isResponsive: meta.isResponsive,
           dominantColors: meta.dominantColors || [],
@@ -360,6 +363,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  assertKnownOptions({});
   loadRemoteOpportunities(loadConfig())
     .then(() => syncQueue())
     .catch((err) => {

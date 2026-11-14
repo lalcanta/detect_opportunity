@@ -104,18 +104,6 @@ describe("RÈGLES MÉTIER : Moteur Local & CLI (lead-engine-cli)", () => {
     });
   });
 
-  describe("Règle 4 : Calcul du Score d'Audit de Performance", () => {
-    it("doit pénaliser sévèrement un site existant dont le temps de chargement dépasse 4000ms", () => {
-      const computeScore = (loadTimeMs: number | null): number => {
-        return loadTimeMs && loadTimeMs > 4000 ? 35 : 45;
-      };
-
-      assert.equal(computeScore(5200), 35, "Site très lent (>4s) doit avoir un score critique de 35");
-      assert.equal(computeScore(1800), 45, "Site plus réactif doit avoir le score de base");
-      assert.equal(computeScore(null), 45, "Site sans mesure doit avoir le score standard");
-    });
-  });
-
   describe("Règle 10 : Filtrage Multi-Opportunités & Présence Web (mapsScraper)", () => {
     const shouldKeepLead = (
       website: string | null | undefined,

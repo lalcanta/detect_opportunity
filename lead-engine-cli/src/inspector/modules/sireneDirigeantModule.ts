@@ -17,6 +17,25 @@ interface GouvSearchResponse {
   results?: GouvResultItem[];
 }
 
+const capitalize = (s: string) =>
+  s.trim().split(/\s+/).map((w) => (w ? w[0]!.toUpperCase() + w.slice(1).toLowerCase() : "")).join(" ");
+
+/** Comparaison sans casse ni accents. */
+const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/**
+ * Formate le nom de famille. L'API renvoie parfois « DRAY (DRAY) » : le nom d'usage entre parenthèses est retiré
+ * quand il répète le nom (sans casse ni accents), gardé quand il apporte un nom différent.
+ */
+export function formatNom(nom: string): string {
+  const m = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(nom.trim());
+  if (!m || !m[1]!.trim()) return capitalize(nom);
+  const base = m[1]!;
+  const usage = m[2]!;
+  if (!usage.trim() || fold(usage) === fold(base)) return capitalize(base);
+  return `${capitalize(base)} (${capitalize(usage)})`;
+}
+
 /** Formate proprement Prénom + Nom à partir de la réponse de recherche-entreprises.api.gouv.fr */
 export function parseSireneApiResponse(data: unknown): {
   siren: string | null;
@@ -35,11 +54,7 @@ export function parseSireneApiResponse(data: unknown): {
         .split("-")
         .map((p) => (p ? p[0]!.toUpperCase() + p.slice(1).toLowerCase() : ""))
         .join("-");
-      const formattedNom = d.nom
-        .trim()
-        .split(/\s+/)
-        .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1).toLowerCase() : ""))
-        .join(" ");
+      const formattedNom = formatNom(d.nom);
       const full = `${formattedPrenom} ${formattedNom}`.trim();
       if (full.length >= 4 && !people.includes(full)) {
         people.push(full);

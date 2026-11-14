@@ -1,32 +1,43 @@
 # lead-dashboard-web
 
-Plateforme de closing (Cloudflare Pages Functions + Hono + D1). Reçoit les leads du Mac, sert les démos, suit les ouvertures, pilote les closers.
+CRM et back-office de closing (Cloudflare Pages Functions, Hono, D1, R2). Reçoit les leads du moteur, sert les démos,
+suit les ouvertures, pilote les closers. Règles du projet : `AGENTS.md` (racine et ce dossier).
 
-## Mise en route
+## Développement local
+Node 22 requis (wrangler 4).
 ```bash
 npm install
-npx wrangler d1 create lead-dashboard-db     # copier le database_id dans wrangler.toml
-cp .env.example .dev.vars                    # puis éditer
-npm run db:init:local
-npm run db:seed:local                        # comptes de démo LOCAUX (jetons publics, jamais en prod)
-npm run dev                                  # http://localhost:8788
+cp .env.example .dev.vars   # puis éditer
+npm run db:local:reset      # crée la base locale + comptes de démo LOCAUX (jetons publics, jamais en prod)
+npm run dev                 # http://localhost:8788 (ou npm run dev:web à la racine)
 ```
+`npm run dev` lance wrangler depuis `dev-local/`, avec D1 et un bucket R2 local, mais sans Workers AI (liaison distante et facturée
+en wrangler 4) : la génération par Workers AI n'y est pas testable (détails : `AGENTS.md` ici).
+`npm run db:local:reset` recrée la base : arrêter `npm run dev` avant. Elle ne touche jamais la production.
+
+## Tests
+`npm test` : typecheck puis tests du dashboard. Les tests unitaires de tout le dépôt et les tests fonctionnels
+(`npm run test:functional` à la racine, serveur sur le port 8789) tournent aussi en CI.
 
 ## Production
-Première installation, secrets et livraison : [`docs/deploiement.md`](../docs/deploiement.md).
-⚠️ Ne jamais exécuter `seed.sql` en prod : ses jetons sont versionnés.
+Première installation, secrets, livraison et retour arrière : [`docs/deploiement.md`](../docs/deploiement.md).
+Ne jamais exécuter `seed.sql` en production : ses jetons sont versionnés.
 
-## Endpoints
-| Route | Accès |
+## Routes
+Pas de liste à maintenir ici : le code fait foi. `src/app.ts` monte un fichier par famille dans `src/routes/` :
+
+| Fichier | Famille |
 |---|---|
-| `POST /api/sync` | Bearer `SYNC_SECRET_TOKEN` |
-| `GET /demos/:id` | public (id non devinable) |
-| `GET /api/tracker/open?leadId=` | public, ignore les bots/prévisualisations, alerte max 1/30 min/lead |
-| `POST /api/leads/:id/lock` · `/status` | closer connecté |
-| `GET /api/leads/:id/flyer` | connecté |
-| `POST /api/admin/assign` · `/users` · `GET /api/admin/stats` | admin |
+| `public.ts` | `POST /api/sync` (jeton `SYNC_SECRET_TOKEN`), `/demos/:id`, suivi `/api/tracker/*`, lead entrant public, `/landing` |
+| `pages.ts` | pages du CRM : `/`, `/admin`, `/login`, `/logout`, `/invite/:code` |
+| `leads.ts` | `/api/leads/:id/*` (statut, verrou, notes…), agenda du closer |
+| `admin.ts` | `/api/admin/*` : attribution, utilisateurs, statistiques, modèles et quotas |
+| `scans.ts` | `/api/admin/scans`, `/api/admin/scheduled-scans`, `/api/worker/*` (file de jobs du worker) |
+| `opportunities.ts` | `/api/admin/opportunities` (besoins) et `/api/worker/opportunities` |
+| `emails.ts` | envoi d'emails (`/api/email/*`, `/api/worker/emails`) |
+| `authGoogle.ts` | connexion et agenda Google (`/auth/google*`, `/api/closer/google-*`) |
 
 ## Limites connues
-- D1 plafonne à ~2 Mo par ligne : démo HTML + flyer PDF base64 y tiennent, mais R2 est recommandé à grande échelle.
+- D1 plafonne à ~2 Mo par ligne ; les médias passent par R2 (`lead-media`).
 - `phone_quota_weekly` est stocké et affiché, pas encore appliqué.
-- Authentification simplifiée par jeton/cookie ; pour la production, envisager Cloudflare Access.
+- Authentification par jeton/cookie ; pour la production, envisager Cloudflare Access.

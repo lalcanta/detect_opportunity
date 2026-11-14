@@ -95,6 +95,14 @@ describe("Reusable UI Components (lead-dashboard-web/src/views/components.ts)", 
     assert.ok(auditHtml.includes("text-rose-700"));
   });
 
+  it("renderAuditScoreBadge : un score absent ou nul n'affiche aucun chiffre", () => {
+    for (const score of [undefined, null]) {
+      const html = renderAuditScoreBadge(score, "https://example.com");
+      assert.ok(html.includes("Site en ligne"));
+      assert.ok(!/Score|null|NaN|undefined|\/100/.test(html));
+    }
+  });
+
   it("adminPage and closerPage inline <script> blocks have zero JavaScript syntax errors", () => {
     for (const tab of ["overview", "scanner", "models", "benchmarks", "team", "attribution"]) {
       const html = adminPage({

@@ -33,6 +33,12 @@ class CaptchaError extends Error {}
 
 export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
   const page = await opts.context.newPage();
+  // Dès que le rappel de progression renvoie `false` (job annulé), on n'émet plus rien et on sort des boucles.
+  let stopped = false;
+  const progress = async (message: string, qualifiedCount?: number, potentialCount?: number): Promise<void> => {
+    if (stopped) return;
+    if ((await opts.onProgress?.(message, qualifiedCount, potentialCount)) === false) stopped = true;
+  };
   try {
     const subQueries = opts.query
       .split(/[,;\n]+/)
@@ -54,7 +60,8 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
       const sq = subQueries[qIdx];
       if (!sq) continue;
       if (allUrls.size >= targetCandidates) break;
-      await opts.onProgress?.(`Recherche Maps (${qIdx + 1}/${subQueries.length}) : ciblage "${sq}"... (0/${targetQualified} qualifiés · ${allUrls.size} potentiels repérés)`, 0, allUrls.size);
+      await progress(`Recherche Maps (${qIdx + 1}/${subQueries.length}) : ciblage "${sq}"... (0/${targetQualified} qualifiés · ${allUrls.size} potentiels repérés)`, 0, allUrls.size);
+      if (stopped) break;
       const targetUrl =
         opts.lat != null && opts.lng != null
           ? `https://www.google.com/maps/search/${encodeURIComponent(sq)}/@${opts.lat},${opts.lng},${zoom}z?hl=fr`
@@ -71,12 +78,13 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
         allUrls.add(u);
         if (!placeSeen.has(u)) placeSeen.set(u, { subQuery: sq, rank: i + 1 });
       });
-      await opts.onProgress?.(`Collecte Maps : ${allUrls.size} potentiels repérés sur la zone (objectif : ${targetQualified} qualifiés)...`, 0, allUrls.size);
+      await progress(`Collecte Maps : ${allUrls.size} potentiels repérés sur la zone (objectif : ${targetQualified} qualifiés)...`, 0, allUrls.size);
     }
 
     const potentialCount = allUrls.size;
+    if (stopped) return { qualifiedLeads: [], potentialCount };
     log("maps", `${potentialCount} fiches potentielles repérées sur la zone`);
-    await opts.onProgress?.(`Extraction détaillée des fiches Maps (${potentialCount} potentiels repérés sur la zone, objectif : ${targetQualified} qualifiés)...`, 0, potentialCount);
+    await progress(`Extraction détaillée des fiches Maps (${potentialCount} potentiels repérés sur la zone, objectif : ${targetQualified} qualifiés)...`, 0, potentialCount);
 
     const qualifiedLeads: MapsLead[] = [];
     const fromCoords = opts.lat != null && opts.lng != null;
@@ -85,12 +93,13 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
     const leadSource = new Map<MapsLead, { subQuery: string; rank: number }>();
     let pIdx = 0;
     for (const url of allUrls) {
+      if (stopped) break;
       if (qualifiedLeads.length >= targetQualified) {
         log("maps", `Objectif de ${targetQualified} leads qualifiés atteint !`);
         break;
       }
       pIdx++;
-      await opts.onProgress?.(
+      await progress(
         `[Analyse fiche Maps ${pIdx}/${potentialCount}] Recherche coordonnées... (${qualifiedLeads.length}/${targetQualified} qualifiés validés · ${potentialCount} potentiels repérés)`,
         qualifiedLeads.length,
         potentialCount,
@@ -118,7 +127,7 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
             "maps",
           );
           if (!check.qualified) {
-            await opts.onProgress?.(
+            await progress(
               `⚪ Fiche écartée (${check.reasons.map(describeRejection).join(" ; ")}) : "${lead.name}" (${qualifiedLeads.length}/${targetQualified} qualifiés · ${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,
               qualifiedLeads.length,
               potentialCount,
@@ -128,7 +137,7 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
 
           // Filtre présence web : sans site ou avec site uniquement
           if (opts.websiteFilter === "no_website" && lead.website) {
-            await opts.onProgress?.(
+            await progress(
               `⚪ A déjà un site web (${lead.website}) ignoré par filtre "Sans site uniquement" : "${lead.name}"`,
               qualifiedLeads.length,
               potentialCount,
@@ -137,7 +146,7 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
           }
 
           if (opts.websiteFilter === "has_website" && !lead.website) {
-            await opts.onProgress?.(
+            await progress(
               `⚪ Sans site web ignoré par filtre "Avec site web uniquement" : "${lead.name}"`,
               qualifiedLeads.length,
               potentialCount,
@@ -151,7 +160,7 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
           }
           qualifiedLeads.push(lead);
           if (seen) leadSource.set(lead, seen);
-          await opts.onProgress?.(
+          await progress(
             `✔ Prospect retenu : "${lead.name}" (${lead.phone ? `📞 ${lead.phone}` : "📵 sans téléphone"}${lead.website ? " · 🌐 Site existant" : " · 🚫 Sans site"}) → ${qualifiedLeads.length}/${targetQualified} qualifiés (${pIdx}/${potentialCount} analysés sur ${potentialCount} potentiels repérés)`,
             qualifiedLeads.length,
             potentialCount,

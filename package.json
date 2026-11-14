@@ -11,6 +11,7 @@
     "sync-queue": "npm --prefix lead-engine-cli run sync-queue --",
     "sync-queue:prod": "npm --prefix lead-engine-cli run sync-queue:prod --",
     "dev:web": "npm --prefix lead-dashboard-web run dev",
+    "db:local:reset": "npm --prefix lead-dashboard-web run db:local:reset --",
     "worker": "npm --prefix lead-engine-cli run worker --",
     "worker:prod": "npm --prefix lead-engine-cli run worker:prod --",
     "typecheck": "npm --prefix lead-dashboard-web run typecheck && npm --prefix lead-engine-cli run typecheck",

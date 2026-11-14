@@ -9,7 +9,7 @@ import type { AppEnv, Role, User } from "./types";
 const COOKIE = "lead_session";
 export const SESSION_COOKIE = COOKIE;
 
-const AUTH_SCHEMA_VERSION = 16;
+const AUTH_SCHEMA_VERSION = 17;
 let migrationChecked = 0;
 
 /** Assure que les colonnes Whitelist / Invitation / Password / Expiration démo, execution_mode et la table scheduled_scans existent. */
@@ -26,6 +26,18 @@ export const LEAD_CONTACTS_DDL = `CREATE TABLE IF NOT EXISTS lead_contacts (
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (lead_id, kind, value)
 )`;
+
+/**
+ * Version 17 : les jobs déjà `running` au déploiement n'ont pas de battement (colonne neuve). Sans ce remplissage,
+ * le nettoyage les verrait muets depuis leur démarrage et les passerait en échec alors que le worker est vivant.
+ * Idempotent : ne touche que les jobs sans battement.
+ */
+export async function backfillRunningHeartbeats(db: D1Database): Promise<void> {
+  await db
+    .prepare("UPDATE scan_jobs SET heartbeat_at = CURRENT_TIMESTAMP WHERE status = 'running' AND heartbeat_at IS NULL")
+    .run()
+    .catch(() => undefined);
+}
 
 export async function ensureAuthSchema(db: D1Database): Promise<void> {
   if (migrationChecked >= AUTH_SCHEMA_VERSION) return;
@@ -49,6 +61,7 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
       "ALTER TABLE scan_jobs ADD COLUMN lead_ids TEXT",
       "ALTER TABLE scan_jobs ADD COLUMN effective_mode TEXT",
       "ALTER TABLE scan_jobs ADD COLUMN opportunity_version INTEGER",
+      "ALTER TABLE scan_jobs ADD COLUMN heartbeat_at DATETIME",
       "ALTER TABLE available_models ADD COLUMN is_flagship INTEGER NOT NULL DEFAULT 1",
       "ALTER TABLE available_models ADD COLUMN speed TEXT DEFAULT 'fast'",
       "ALTER TABLE available_models ADD COLUMN cost_tier TEXT DEFAULT 'eco'",
@@ -58,6 +71,7 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
     for (const sql of alterCols) {
       await db.prepare(sql).run().catch(() => undefined);
     }
+    await backfillRunningHeartbeats(db);
 
     await db.prepare(LEAD_CONTACTS_DDL).run().catch(() => undefined);
     await db.prepare(LEAD_ACTIVITIES_DDL).run().catch(() => undefined);

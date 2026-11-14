@@ -120,6 +120,7 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
   requested_by    TEXT,
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   started_at      DATETIME,
+  heartbeat_at    DATETIME,                          -- dernier signe de vie du worker ; un job running muet depuis 10 min est marqué failed
   finished_at     DATETIME,
   processed       INTEGER NOT NULL DEFAULT 0,
   total           INTEGER NOT NULL DEFAULT 0,

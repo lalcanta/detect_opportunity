@@ -1,3 +1,4 @@
+import { assertKnownOptions } from "./utils/cliArgs";
 import { opportunityIdOf } from "../../shared/opportunities";
 import { execSync } from "node:child_process";
 import { loadConfig } from "./config";
@@ -6,6 +7,7 @@ import { generateDemoHtml, LOGO_PLACEHOLDER } from "./generator/demoGenerator";
 import { pushLead } from "./sync/pushLead";
 import type { MapsLead, SiteAudit, SiteInspection, TokenUsageRecord } from "./types";
 import { log } from "./utils/helpers";
+import { existingAuditScore } from "./utils/auditScore";
 
 interface D1Lead {
   id: string;
@@ -25,6 +27,7 @@ interface D1Lead {
 }
 
 async function main() {
+  assertKnownOptions({});
   const cfg = loadConfig({ REMOTE_APP_URL: "https://lead-dashboard-8bx.pages.dev" });
   log("regen", `Configuration chargée : ${cfg.REMOTE_APP_URL}`);
 
@@ -49,8 +52,9 @@ async function main() {
     if (!l) continue;
     log("regen", `\n[${i + 1}/${leads.length}] Régénération de la démo pour "${l.company_name}" (${l.city || "N/A"})...`);
 
-    let audit: SiteAudit = {
-      score: 50,
+    // Le score reste `null` quand il n'a pas été mesuré (le type SiteAudit exige un nombre : conversion au passage au générateur).
+    let audit: Omit<SiteAudit, "score"> & { score: number | null } = {
+      score: null,
       summary: "",
       weaknesses: [],
     };
@@ -61,7 +65,7 @@ async function main() {
       try {
         const parsedAudit = JSON.parse(l.audit_data);
         audit = {
-          score: parsedAudit.score ?? 50,
+          score: existingAuditScore(parsedAudit.score),
           summary: parsedAudit.summary ?? "",
           weaknesses: parsedAudit.weaknesses ?? [],
         };
@@ -107,7 +111,7 @@ async function main() {
         leadId: l.id,
         lead: mapsLead,
         inspection,
-        audit,
+        audit: audit as SiteAudit,
         remoteAppUrl: cfg.REMOTE_APP_URL,
       },
       usage

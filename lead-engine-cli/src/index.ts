@@ -2,6 +2,8 @@ import { parseArgs } from "node:util";
 import { loadConfig } from "./config";
 import { ModelRouter } from "./llm/modelRouter";
 import { runScan } from "./scanRunner";
+import { assertKnownOptions } from "./utils/cliArgs";
+import { SCAN_CLI_OPTIONS } from "./utils/scanCliOptions";
 
 import { ALL_OPPORTUNITY_IDS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../shared/opportunities";
 
@@ -14,6 +16,7 @@ const USAGE = `Usage: npm run scan -- --query "plombier" --city "Lyon" [--limit 
 Pour piloter les scans depuis le dashboard : npm run worker`;
 
 async function main(): Promise<void> {
+  assertKnownOptions(SCAN_CLI_OPTIONS, USAGE);
   const { values } = parseArgs({
     options: {
       query: { type: "string" },

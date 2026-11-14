@@ -34,6 +34,18 @@ export interface ScanResult {
   cancelled: boolean;
 }
 
+/** Issue d'une lecture Maps sans prospect : annulation (aucun message « aucun prospect ») ou zone vide. */
+export function noProspectOutcome(
+  cancelled: boolean,
+  potentialCount: number,
+): { message: string | null; result: ScanResult } {
+  if (cancelled) return { message: null, result: { processed: 0, total: 0, cancelled: true } };
+  return {
+    message: `Aucun prospect qualifié trouvé sur la zone (${potentialCount} fiches potentielles analysées).`,
+    result: { processed: 0, total: 0, cancelled: false },
+  };
+}
+
 export async function runScan(
   opts: ScanOptions,
   cfg: Config,
@@ -85,6 +97,7 @@ export async function runScan(
       if ((await hooks.onProgress?.(0, target, `Étape 1/2 : Connexion & cartographie Google Maps (objectif : ${target} qualifiés)...`)) === false) {
         return { processed: 0, total: 0, cancelled: true };
       }
+      let cancelledDuringScrape = false;
       const scraped = await scrapeMaps({
         query: opts.query,
         city: opts.city,
@@ -98,6 +111,7 @@ export async function runScan(
         websiteFilter: websiteFilter.filter,
         onProgress: async (msg, qCount) => {
           const proceed = await hooks.onProgress?.(Math.min(qCount ?? 0, target), target, `Étape 1/2 : ${msg}`);
+          if (proceed === false) cancelledDuringScrape = true;
           return proceed !== false;
         },
       });
@@ -106,8 +120,9 @@ export async function runScan(
       log("main", `${prospects.length} prospects retenus sur ${potentialCount} fiches potentielles repérées`);
 
       if (prospects.length === 0) {
-        await hooks.onProgress?.(0, target, `Aucun prospect qualifié trouvé sur la zone (${potentialCount} fiches potentielles analysées).`);
-        return { processed: 0, total: 0, cancelled: false };
+        const outcome = noProspectOutcome(cancelledDuringScrape, potentialCount);
+        if (outcome.message) await hooks.onProgress?.(0, target, outcome.message);
+        return outcome.result;
       }
 
       if ((await hooks.onProgress?.(0, target, `Étape 2/2 : ${prospects.length} prospects retenus (sur ${potentialCount} potentiels repérés). Démarrage des audits & preuves...`)) === false) {

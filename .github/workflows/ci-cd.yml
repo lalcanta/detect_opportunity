@@ -39,3 +39,10 @@ jobs:
 
       - name: 🛡️ Run Full Test Suite
         run: npm test
+
+      # Démarre son propre serveur local (wrangler pages dev, port 8789, base D1 neuve dans /tmp/lead-d1-test-state).
+      # Aucun secret requis : le jeton de sync est injecté par tests/setupTestEnv.ts, et le lien dev-local/.dev.vars
+      # (absent en CI) est ignoré par wrangler.
+      - name: 🌐 Tests fonctionnels (serveur local, base neuve)
+        timeout-minutes: 5
+        run: npm run test:functional

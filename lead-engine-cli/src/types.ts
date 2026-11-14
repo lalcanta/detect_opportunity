@@ -143,7 +143,8 @@ export interface SiteInspection {
 export interface SiteAudit {
   summary: string;
   weaknesses: string[];
-  score: number;
+  /** Score mesuré ; null quand aucune mesure ne permet d'en calculer un (jamais de valeur inventée). */
+  score: number | null;
 }
 
 export interface Objection {

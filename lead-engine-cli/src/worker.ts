@@ -1,3 +1,4 @@
+import { assertKnownOptions } from "./utils/cliArgs";
 import { loadConfig, type Config } from "./config";
 import { ModelRouter } from "./llm/modelRouter";
 import { runScan } from "./scanRunner";
@@ -13,6 +14,8 @@ import { smtpSender, smtpSettingsFrom } from "./outreach/smtpSender";
  * et remonte la progression. Aucun port entrant à ouvrir sur le Mac.
  */
 const POLL_MS = 10_000;
+/** Battement envoyé au CRM pendant un job, même sans progression (sinon le CRM le déclare mort après 10 min). */
+export const HEARTBEAT_MS = 60_000;
 
 interface RemoteJob {
   id: number;
@@ -81,10 +84,26 @@ async function handleGenerateJob(cfg: Config, router: ModelRouter, job: RemoteJo
   });
 }
 
+/** Exécute `run` en envoyant un battement toutes les HEARTBEAT_MS ; la minuterie s'arrête à la fin, succès ou erreur. */
+export async function withHeartbeat<T>(beat: () => Promise<unknown>, run: () => Promise<T>, everyMs = HEARTBEAT_MS): Promise<T> {
+  const timer = setInterval(() => void beat().catch(() => undefined), everyMs);
+  try {
+    return await run();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Promise<void> {
-  const effectiveMode = effectiveModeOf(job, router.isZeroCostMode());
   const report = (b: Record<string, unknown>): Promise<{ cancel?: boolean }> =>
     api<{ cancel?: boolean }>(cfg, `/api/worker/jobs/${job.id}/progress`, b);
+  // Le battement n'envoie aucun statut : il ne met à jour que heartbeat_at. Si le CRM répond `cancel` (job annulé ou déclaré mort),
+  // le prochain rapport de progression le renverra aussi et le scan s'arrête.
+  await withHeartbeat(() => report({}), () => runJob(cfg, router, job, report));
+}
+
+async function runJob(cfg: Config, router: ModelRouter, job: RemoteJob, report: (b: Record<string, unknown>) => Promise<{ cancel?: boolean }>): Promise<void> {
+  const effectiveMode = effectiveModeOf(job, router.isZeroCostMode());
 
   if (effectiveMode === "api_generation") {
     await report({ status: "running", effective_mode: effectiveMode }).catch(() => undefined);
@@ -495,38 +514,81 @@ interface RemoteScheduledScan {
   last_run_at?: string | null;
 }
 
+/** Fuseau d'évaluation des planifications : l'heure saisie dans le CRM est une heure de Paris, quel que soit le Mac. */
+export const SCHEDULE_TIMEZONE = "Europe/Paris";
+/** Un passage n'est lancé que dans les 2 h qui suivent `time_of_day` ; au-delà il est sauté pour la journée. */
+export const SCHEDULE_WINDOW_MINUTES = 120;
+
+const parisFormat = new Intl.DateTimeFormat("en-CA", {
+  timeZone: SCHEDULE_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** Date, jour ISO (1=lundi..7=dimanche) et minutes depuis minuit d'un instant, en heure de Paris. */
+function parisParts(d: Date): { date: string; isoDay: number; minutes: number } {
+  const p: Record<string, string> = {};
+  for (const part of parisFormat.formatToParts(d)) p[part.type] = part.value;
+  const isoDay = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(p.weekday ?? "") + 1;
+  return { date: `${p.year}-${p.month}-${p.day}`, isoDay, minutes: Number(p.hour) * 60 + Number(p.minute) };
+}
+
+/** `last_run_at` est un ISO UTC (écrit par le CRM) ; une ancienne valeur D1 « YYYY-MM-DD HH:MM:SS » est aussi en UTC. */
+function parseStoredDate(value: string): Date | null {
+  const iso = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value.replace(" ", "T")}Z`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export type ScheduleDecision = "due" | "wrong_day" | "invalid_time" | "too_early" | "window_missed" | "already_ran";
+
 /**
- * Vérifie si une programmation doit être déclenchée à l'instant présent.
- * Compare l'heure courante (format HH:mm) et le jour de la semaine (1=Lundi..7=Dimanche)
- * tout en s'assurant qu'elle n'a pas déjà tourné dans la journée actuelle.
+ * Décide si une planification doit être déclenchée à `now`, en heure de Paris :
+ * jour coché (1=lundi..7=dimanche ou `*`), heure atteinte, au plus 2 h après `time_of_day`,
+ * et pas déjà lancée par le planificateur le même jour de Paris.
+ * Limite : la fenêtre ne passe pas minuit. Un passage prévu à 22:00 ou plus n'a que le temps restant dans la
+ * journée de Paris (22:00 -> 23:59), car après minuit c'est un autre jour. Un `time_of_day` vide ou illisible
+ * refuse la planification (`invalid_time`).
  */
-export function shouldTriggerScheduledScan(sched: RemoteScheduledScan, now = new Date()): boolean {
-  const currentHour = String(now.getHours()).padStart(2, "0");
-  const currentMin = String(now.getMinutes()).padStart(2, "0");
-  const currentTimeStr = `${currentHour}:${currentMin}`;
+export function scheduleDecision(sched: RemoteScheduledScan, now = new Date()): ScheduleDecision {
+  const cur = parisParts(now);
+  const days = sched.days_of_week.trim() === "*" ? [1, 2, 3, 4, 5, 6, 7] : sched.days_of_week.split(",").map((x) => parseInt(x.trim(), 10));
+  if (!days.includes(cur.isoDay)) return "wrong_day";
 
-  // Jour ISO : 1 = Lundi, ..., 7 = Dimanche
-  const day = now.getDay() === 0 ? 7 : now.getDay();
-  const days = sched.days_of_week === "*" ? [1, 2, 3, 4, 5, 6, 7] : sched.days_of_week.split(",").map((x) => parseInt(x.trim(), 10));
+  const match = /^(\d{1,2}):(\d{2})$/.exec((sched.time_of_day ?? "").trim());
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) return "invalid_time";
+  const planned = Number(match[1]) * 60 + Number(match[2]);
+  if (cur.minutes < planned) return "too_early";
 
-  if (!days.includes(day)) return false;
-
-  // L'heure prévue doit être atteinte (ou dans la fenêtre courante)
-  if (currentTimeStr < sched.time_of_day) return false;
-
-  // S'assure qu'elle n'a pas déjà été exécutée aujourd'hui
   if (sched.last_run_at) {
-    const lastDate = new Date(sched.last_run_at);
-    if (
-      lastDate.getFullYear() === now.getFullYear() &&
-      lastDate.getMonth() === now.getMonth() &&
-      lastDate.getDate() === now.getDate()
-    ) {
-      return false;
-    }
+    const last = parseStoredDate(sched.last_run_at);
+    if (last && parisParts(last).date === cur.date) return "already_ran";
   }
+  if (cur.minutes >= planned + SCHEDULE_WINDOW_MINUTES) return "window_missed";
+  return "due";
+}
 
-  return true;
+export function isScheduleDue(sched: RemoteScheduledScan, now = new Date()): boolean {
+  return scheduleDecision(sched, now) === "due";
+}
+
+/** Passages sautés déjà journalisés (planification + jour de Paris), pour ne pas répéter la ligne toutes les 30 s. */
+const skippedLogged = new Set<string>();
+
+/** Ligne de log d'un passage refusé ou sauté, une seule fois par planification et par jour de Paris ; sinon null. */
+export function skipLogLine(s: RemoteScheduledScan, decision: ScheduleDecision, now: Date): string | null {
+  if (decision !== "window_missed" && decision !== "invalid_time") return null;
+  const key = `${s.id}@${decision}@${now.toLocaleDateString("en-CA", { timeZone: SCHEDULE_TIMEZONE })}`;
+  if (skippedLogged.has(key)) return null;
+  skippedLogged.add(key);
+  return decision === "invalid_time"
+    ? `⚠️ Programmation #${s.id} "${s.label}" ignorée : heure illisible (« ${s.time_of_day ?? ""} »), attendu HH:mm`
+    : `⏭️ Programmation #${s.id} "${s.label}" sautée aujourd'hui : fenêtre de ${SCHEDULE_WINDOW_MINUTES / 60} h après ${s.time_of_day} dépassée`;
 }
 
 async function checkAndTriggerSchedules(cfg: Config): Promise<void> {
@@ -534,7 +596,11 @@ async function checkAndTriggerSchedules(cfg: Config): Promise<void> {
     const res = await api<{ scheduled: RemoteScheduledScan[] }>(cfg, "/api/worker/scheduled-scans", undefined, "GET");
     const now = new Date();
     for (const s of res.scheduled || []) {
-      if (shouldTriggerScheduledScan(s, now)) {
+      const decision = scheduleDecision(s, now);
+      const skipLine = skipLogLine(s, decision, now);
+      if (skipLine) {
+        log("worker", skipLine);
+      } else if (decision === "due") {
         log("worker", `⏰ Déclenchement automatique de la programmation #${s.id} "${s.label}" (${s.time_of_day})`);
         await api(cfg, `/api/worker/scheduled-scans/${s.id}/trigger`, {}).catch((err: Error) =>
           log("worker", `⚠️ Déclenchement de la programmation #${s.id} échoué : ${err.message}`),
@@ -547,7 +613,23 @@ async function checkAndTriggerSchedules(cfg: Config): Promise<void> {
   }
 }
 
+/**
+ * Boucle des planifications, indépendante de celle des jobs : un scan long ne retarde pas la vérification
+ * (déclencher ne fait que créer un job en file via `/trigger`). Les erreurs sont journalisées sans casser la boucle.
+ */
+export async function runScheduleLoop(check: () => Promise<void>, intervalMs = 30_000, shouldStop: () => boolean = () => false): Promise<void> {
+  while (!shouldStop()) {
+    try {
+      await check();
+    } catch (err) {
+      log("worker", `⚠️ Vérification des planifications échouée : ${(err as Error).message}`);
+    }
+    await sleep(intervalMs);
+  }
+}
+
 async function main(): Promise<void> {
+  assertKnownOptions({});
   const cfg = loadConfig();
   const router = new ModelRouter(cfg);
   log("worker", `En écoute des scans et planifications automatiques sur ${cfg.REMOTE_APP_URL} (Ctrl+C pour arrêter)`);
@@ -562,16 +644,11 @@ async function main(): Promise<void> {
     void runEmailLoop(<T>(path: string, body?: unknown) => api<T>(cfg, path, body), [smtpSender(smtp)]);
   }
 
-  let lastScheduleCheck = 0;
+  // Planifications récurrentes : boucle propre (toutes les 30 s), non bloquée par un scan en cours.
+  void runScheduleLoop(() => checkAndTriggerSchedules(cfg));
 
   for (;;) {
     try {
-      // Vérification des planifications récurrentes (toutes les 30s)
-      if (Date.now() - lastScheduleCheck >= 30_000) {
-        lastScheduleCheck = Date.now();
-        await checkAndTriggerSchedules(cfg);
-      }
-
       const res = await api<{
         job: RemoteJob | null;
         models?: { action_type: string; provider: string; model: string; thinking_budget?: number }[];

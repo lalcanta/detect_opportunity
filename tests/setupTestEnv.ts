@@ -2,12 +2,20 @@ import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error module .mjs sans déclaration de types
+import { requireNode22 } from "../lead-dashboard-web/scripts/require-node22.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const TEST_PORT = 8789;
 export const TEST_BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
+/**
+ * Jeton de synchronisation du serveur de test : injecté par `--binding`, donc indépendant de tout `.dev.vars`
+ * (absent en CI). Valeur factice, valable uniquement pour ce serveur local ; surchargeable via TEST_SYNC_SECRET
+ * quand TEST_APP_URL vise un autre serveur de test.
+ */
+export const TEST_SYNC_SECRET = process.env.TEST_SYNC_SECRET || "test-sync-secret-local-only";
 export const TEST_DB_DIR = "/tmp/lead-d1-test-state/v3/d1/miniflare-D1DatabaseObject";
 export const TEST_DB_FILE = path.join(TEST_DB_DIR, "e7352547963de7050bd7d94658afc4fe78b61811b7815da12d90be8e863abf4d.sqlite");
 
@@ -56,6 +64,8 @@ export async function isTestServerRunning(): Promise<boolean> {
  * Démarre le serveur de test dédié sur le port 8789 s'il n'est pas déjà lancé.
  */
 export async function ensureTestServer(): Promise<void> {
+  // Avant tout : sous Node 20, wrangler 4 échoue en silence (stdio ignoré) et on attendrait 15 s pour rien.
+  requireNode22();
   if (await isTestServerRunning()) {
     resetTestDatabase();
     return;
@@ -64,7 +74,8 @@ export async function ensureTestServer(): Promise<void> {
   resetTestDatabase();
 
   const rootDir = path.resolve(__dirname, "..");
-  const dashboardDir = path.join(rootDir, "lead-dashboard-web");
+  // dev-local/ : config locale sans liaison AI (wrangler 4 la rendrait distante, donc facturée).
+  const dashboardDir = path.join(rootDir, "lead-dashboard-web", "dev-local");
 
   const child = spawn(
     "npx",
@@ -72,7 +83,6 @@ export async function ensureTestServer(): Promise<void> {
       "wrangler",
       "pages",
       "dev",
-      "public",
       "--port",
       String(TEST_PORT),
       "--ip",
@@ -80,6 +90,7 @@ export async function ensureTestServer(): Promise<void> {
       "--d1=DB",
       "--compatibility-date=2024-11-01",
       "--persist-to=/tmp/lead-d1-test-state",
+      `--binding=SYNC_SECRET_TOKEN=${TEST_SYNC_SECRET}`,
     ],
     {
       cwd: dashboardDir,

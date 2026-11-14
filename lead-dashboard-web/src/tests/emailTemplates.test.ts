@@ -80,6 +80,31 @@ describe("RÈGLES MÉTIER : Templating Email (contrôle humain, aucun envoi auto
       assert.ok(out.includes("acme.fr"));
     });
   });
+  describe("Gabarit QA : liste de traceurs vide", () => {
+    const tpl = EMAIL_TEMPLATES.find((t) => t.id === "qa_trackers_first")!;
+    const render = (audit: Record<string, unknown>) =>
+      renderTemplate(tpl.body, buildTemplateVars({ company_name: "Acme", website_url: "https://acme.fr", demo_url: "u", audit }));
+    it("sans traceur : l'introduction « certains scripts s'exécutent » disparaît avec la liste", () => {
+      const out = render({ trackers_found: [], weaknesses: [] });
+      assert.doesNotMatch(out, /certains scripts|cascade réseau|\n- /);
+      assert.ok(!/\{\{/.test(out));
+    });
+    it("faiblesses sans traceur : ni « scripts » ni les faiblesses", () => {
+      const out = render({ trackers_found: [], weaknesses: ["Copyright 2018"] });
+      assert.doesNotMatch(out, /scripts|Copyright 2018|\n- /);
+    });
+    it("avec des traceurs : introduction et liste sont présentes", () => {
+      const out = render({ trackers_found: ["GA4", "Hotjar"] });
+      assert.match(out, /certains scripts s'exécutent immédiatement :\n- GA4\n- Hotjar/);
+    });
+  });
+  describe("Audit perf : objet", () => {
+    it("l'objet est neutre : aucune mention du chargement", () => {
+      const tpl = EMAIL_TEMPLATES.find((t) => t.id === "perf_audit_first")!;
+      const subject = renderTemplate(tpl.subject, buildTemplateVars({ company_name: "Acme", website_url: "https://acme.fr", demo_url: "u" }));
+      assert.equal(subject, "Quelques points relevés sur acme.fr");
+    });
+  });
   describe("Audit perf : liste de faiblesses vide", () => {
     const tpl = EMAIL_TEMPLATES.find((t) => t.id === "perf_audit_first")!;
     const render = (audit: Record<string, unknown>) =>

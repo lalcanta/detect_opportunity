@@ -1,11 +1,15 @@
 import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
-import { ensureTestServer, TEST_BASE_URL } from "./setupTestEnv";
+import { ensureTestServer, TEST_BASE_URL, TEST_SYNC_SECRET } from "./setupTestEnv";
 
 const BASE_URL = process.env.TEST_APP_URL || TEST_BASE_URL;
 const CLOSER_COOKIE = "lead_session=cls_d7e12e4e0eee45d8654fd44439726210";
 const ADMIN_COOKIE = "lead_session=adm_9e86b81a2886a9c4de99f1eb10580218";
-const SYNC_SECRET = "sync_1422c56ef4ceae76fc23637942230c3daa4b91ffdd80cb57";
+const SYNC_SECRET = TEST_SYNC_SECRET;
+/** Tous les besoins qu'un admin peut accorder à un closer : liste unique de la suite. */
+const ALL_OPPORTUNITIES = ["website", "website_creation", "website_redesign", "audit_qa_trackers", "google_reviews", "seo_local", "ads_acquisition", "custom"];
+/** Idem sans l'audit QA / traceurs (les parcours qui ne le testent pas). */
+const OPPORTUNITIES_WITHOUT_QA = ALL_OPPORTUNITIES.filter((o) => o !== "audit_qa_trackers");
 
 describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR BASE DÉDIÉE)", () => {
   // Réinitialisation automatique de la base de test dédiée avant l'exécution de la suite
@@ -27,7 +31,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
         body: JSON.stringify({
-          opportunities: ["website", "google_reviews", "seo_local", "ads_acquisition", "custom"],
+          opportunities: OPPORTUNITIES_WITHOUT_QA,
         }),
       });
       assert.equal(res.status, 200);
@@ -404,7 +408,8 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
     it("GET /demos/:id doit servir le code HTML Tailwind avec en-têtes sécurisés (HTTP 200)", async () => {
       const res = await fetch(`${BASE_URL}/demos/${testLeadSyncId}`);
       assert.equal(res.status, 200);
-      assert.equal(res.headers.get("Cache-Control"), "no-store");
+      // src/app.ts ajoute no-store, no-cache, must-revalidate, max-age=0 à toute réponse HTML
+      assert.match(res.headers.get("Cache-Control") ?? "", /\bno-store\b/);
       assert.equal(res.headers.get("X-Robots-Tag"), "noindex, nofollow");
       const html = await res.text();
       assert.ok(html.includes("Démo V2"));
@@ -519,8 +524,9 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       });
       assert.equal(res.status, 200);
       const html = await res.text();
-      assert.ok(html.includes("Agenda Interne des Relances & Rappels"));
-      assert.ok(html.includes("Télécharger l'Agenda (.ics)"));
+      assert.ok(html.includes("Ma Journée & Agenda des Relances"));
+      assert.ok(html.includes("Exporter .ics"));
+      assert.ok(html.includes("/api/closer/calendar.ics"));
     });
 
     it("Filtrage par portefeuille ?scope=mine et ?scope=all", async () => {
@@ -541,7 +547,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       });
       assert.equal(res.status, 200);
       const html = await res.text();
-      assert.ok(html.includes("⭐ Avis Google"));
+      assert.ok(html.includes("Avis Google"));
       assert.ok(html.includes(testLeadSyncId));
     });
   });
@@ -1028,16 +1034,16 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.equal(resAssign.status, 200);
     });
 
-    it("L'Admin restreint les opportunités du closer 1 à ['website'] uniquement", async () => {
+    it("L'Admin restreint les opportunités du closer 1 à ['website_redesign'] uniquement", async () => {
       const res = await fetch(`${BASE_URL}/api/admin/users/u_closer1/opportunities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
-        body: JSON.stringify({ opportunities: ["website"] }),
+        body: JSON.stringify({ opportunities: ["website_redesign"] }),
       });
       assert.equal(res.status, 200);
       const json = await res.json() as { ok: boolean; allowed_opportunities: string[] };
       assert.equal(json.ok, true);
-      assert.deepEqual(json.allowed_opportunities, ["website"]);
+      assert.deepEqual(json.allowed_opportunities, ["website_redesign"]);
     });
 
     it("Le Closer 1 tente de lire le lead 'google_reviews' assigné -> HTTP 403 Forbidden", async () => {
@@ -1067,21 +1073,21 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       // La barre de filtre de ce closer ne doit pas proposer Avis Google
       assert.ok(!html.includes("opp=google_reviews"), "Le badge de filtre pour opportunité non autorisée ne doit pas apparaître");
       // Mais doit proposer Site Web
-      assert.ok(html.includes("opp=website"));
+      assert.ok(html.includes("opp=website_redesign"));
     });
 
-    it("L'Admin réactive ['website', 'google_reviews', 'seo_local', 'ads_acquisition', 'custom'] pour le closer 1", async () => {
+    it("L'Admin réactive tous les besoins (hors audit QA) pour le closer 1", async () => {
       const res = await fetch(`${BASE_URL}/api/admin/users/u_closer1/opportunities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
         body: JSON.stringify({
-          opportunities: ["website", "google_reviews", "seo_local", "ads_acquisition", "custom"],
+          opportunities: OPPORTUNITIES_WITHOUT_QA,
         }),
       });
       assert.equal(res.status, 200);
       const json = await res.json() as { ok: boolean; allowed_opportunities: string[] };
       assert.equal(json.ok, true);
-      assert.equal(json.allowed_opportunities.length, 5);
+      assert.equal(json.allowed_opportunities.length, OPPORTUNITIES_WITHOUT_QA.length);
     });
 
     it("Après réactivation, le Closer 1 peut immédiatement accéder et verrouiller son lead 'google_reviews'", async () => {
@@ -1130,7 +1136,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       await fetch(`${BASE_URL}/api/admin/users/u_closer1/opportunities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
-        body: JSON.stringify({ opportunities: ["website", "audit_qa_trackers", "google_reviews", "seo_local", "ads_acquisition", "custom"] }),
+        body: JSON.stringify({ opportunities: ALL_OPPORTUNITIES }),
       });
       const res = await fetch(`${BASE_URL}/api/sync`, {
         method: "POST",
@@ -1301,7 +1307,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       await fetch(`${BASE_URL}/api/admin/users/u_closer1/opportunities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
-        body: JSON.stringify({ opportunities: ["website", "audit_qa_trackers", "google_reviews", "seo_local", "ads_acquisition", "custom"] }),
+        body: JSON.stringify({ opportunities: ALL_OPPORTUNITIES }),
       });
     });
   });

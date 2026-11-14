@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import { closerPage } from "../views/closer";
 import type { LeadRow, User } from "../types";
 
@@ -72,5 +73,47 @@ describe("closerPage — filtre des besoins", () => {
     assert.ok(links.includes("website_redesign"));
     assert.ok(!links.includes("seo_local"));
     assert.ok(html.includes("Tous mes besoins (1)"));
+  });
+});
+
+describe("closerPage — score d'audit absent", () => {
+  const render = (audit: unknown) =>
+    closerPage({
+      user,
+      leads: [lead({ website_url: "https://exemple.fr", audit_data: JSON.stringify(audit) })],
+      scope: "all",
+      view: "kanban",
+      origin: "https://crm.test",
+    });
+
+  it("un audit sans score ou à score nul n'affiche aucune mention de score", () => {
+    for (const audit of [{ summary: "x" }, { summary: "x", score: null }]) {
+      const html = render(audit);
+      assert.ok(!html.includes("Score :"), JSON.stringify(audit));
+      assert.ok(!/\/100\b/.test(html), JSON.stringify(audit));
+      assert.ok(html.includes("Site en ligne"), "le badge de repli reste affiché");
+    }
+  });
+
+  it("un score mesuré (bilan) reste affiché", () => {
+    assert.ok(render({ score: 62 }).includes("Score : 62/100"));
+  });
+});
+
+describe("closerPage — panneau sans argument", () => {
+  const html = closerPage({ user, leads: [lead({})], scope: "all", view: "kanban", origin: "https://crm.test" });
+  it("aucun argument de repli inventé : la section « Arguments » se masque quand la liste est vide", () => {
+    assert.ok(!html.includes("Barre d'appel d'urgence mobile collante"));
+    assert.ok(!html.includes("Design moderne ultra-rapide"));
+    assert.match(html, /advSection\.classList\.toggle\('hidden', advItems\.length === 0\)/);
+  });
+});
+
+describe("closerPage — JavaScript client", () => {
+  it("chaque <script> inline se compile (aucune erreur de syntaxe)", () => {
+    const html = closerPage({ user, leads: [lead({})], scope: "all", view: "kanban", origin: "https://crm.test" });
+    const scripts = inlineScripts(html).filter((s) => s.trim());
+    assert.ok(scripts.length > 0);
+    for (const code of scripts) assert.doesNotThrow(() => new vm.Script(code));
   });
 });

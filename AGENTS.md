@@ -10,7 +10,7 @@ Si `AGENTS.local.md` existe à la racine, lis-le aussi : il contient les préfé
 ## Pile
 
 - **`lead-dashboard-web/`** : Hono 4 sur Cloudflare Pages Functions, D1 (SQLite), R2 (`lead-media`), Workers AI,
-  wrangler 3. Interface rendue côté serveur en chaînes de caractères, Tailwind v3 par CDN, JavaScript client inline.
+  wrangler 4 (Node 22 requis). Interface rendue côté serveur en chaînes de caractères, Tailwind v3 par CDN, JavaScript client inline.
 - **`lead-engine-cli/`** : Node 22, TypeScript lancé par `tsx` (pas de build), Playwright/Chromium, zod, nodemailer.
 - **`shared/`** : TypeScript sans dépendance, importé par les deux (registre des besoins, envoi d'emails).
 - **npm**, un `package-lock.json` par sous-projet. Pas de framework front, pas de bundler, pas d'ORM, pas de linter.
@@ -19,13 +19,15 @@ Si `AGENTS.local.md` existe à la racine, lis-le aussi : il contient les préfé
 
 ```bash
 npm --prefix lead-engine-cli install && npm --prefix lead-dashboard-web install
+nvm use                               # Node 22 (.nvmrc) : wrangler 4 refuse Node 20, les scripts s'arrêtent avec un message
 npm run dev:web                       # CRM local sur http://localhost:8788 (D1 dans /tmp/lead-d1-state)
+npm run db:local:reset                # vide puis recrée la base locale (schema.sql + seed.sql), jamais la production
 npm run worker                        # worker vers REMOTE_APP_URL du .env ; worker:prod pour la production
 npm run prep -- --query "plombier" --city "Lyon" --limit 5   # préparation sans LLM, dépose dans queue/pending
 npm run sync-queue                    # pousse les dossiers complétés vers REMOTE_APP_URL (sync-queue:prod : production)
 npm run typecheck && npm test         # ce que lance la CI
 npm --prefix lead-dashboard-web test  # dashboard : tsc + tests
-npm run test:functional               # tests HTTP, démarrent leur serveur sur le port 8789, hors CI
+npm run test:functional               # tests HTTP, démarrent leur serveur sur le port 8789 (aussi lancés par la CI)
 ```
 
 ## Sources de vérité
@@ -72,9 +74,10 @@ npm run test:functional               # tests HTTP, démarrent leur serveur sur 
 - **Options des scripts de la racine** : ils relaient leurs arguments au CLI (`npm run prep -- --query … --city …`)
   grâce au `--` final de chaque script de `package.json` ; un script relais ajouté sans ce `--` perd ses options.
 - **Modifier une définition de besoin dans le code ne change pas la production** : la base fait foi.
-- **Liaisons absentes en local** : avec `--d1=DB` en ligne de commande (`npm run dev:web`), wrangler ignore celles de
-  `wrangler.toml` : ni `MEDIA` (R2) ni `AI`. Sans bucket, la route des photos redirige vers l'image d'origine ; pour
-  tester les photos, lancer avec `--r2=MEDIA` (voir `lead-dashboard-web/AGENTS.md`).
+- **Liaisons en local (wrangler 4)** : `npm run dev:web` lance `wrangler pages dev` depuis `lead-dashboard-web/dev-local/`,
+  dont `wrangler.toml` est un lien vers `wrangler.local.toml` : `DB` et `MEDIA` (R2) sont locaux, **pas de `AI`**
+  (wrangler 4 la rendrait distante, donc facturée) ; les routes gèrent son absence. Ne pas lancer `wrangler pages dev`
+  depuis `lead-dashboard-web/` : il lirait `wrangler.toml` (production) et brancherait `AI` en distant.
 
 ## Avant de livrer
 

@@ -27,7 +27,7 @@ Google Maps / liste de domaines
 | `lead-engine-cli/` | Moteur de collecte et de génération (scraping Maps, inspection, LLM, flyer, sync) | Mac local (Node + Playwright) |
 | `lead-dashboard-web/` | CRM / back-office / API (Hono sur Cloudflare Pages Functions + D1 + Workers AI) | Cloudflare Pages |
 | `agency-landing-web/` | Landing publique de l'agence (3 offres + formulaire « rappel ») | Statique, poste sur `/api/public/inbound-lead` |
-| `tests/` | Tests fonctionnels HTTP contre un `wrangler pages dev` local (port 8789) | Local uniquement (hors CI) |
+| `tests/` | Tests fonctionnels HTTP contre un `wrangler pages dev` local (port 8789) | Local et CI (étape « Tests fonctionnels ») |
 | `.agents/skills/` | Skills Antigravity : `leadengine` (workflow 0 €) et `artisan-frontend-craft` (règles de design) | Agent IA local |
 | `DESIGN_SYSTEM.md` / `DESIGN_ARCHETYPES.md` | Design system du CRM / archétypes visuels des démos par métier | Doc |
 
@@ -88,7 +88,7 @@ rappel programmé à +1 h (ou au créneau choisi), battlecard et « démo » pla
 | Worker `POST /api/worker/claim` | Passe le plus ancien job `queued` en `running` (UPDATE…RETURNING) + renvoie `model_settings` |
 | Progression | `POST /api/worker/jobs/:id/progress` ; la réponse `{cancel:true}` stoppe le worker |
 | Annuler | `status='cancelled'` (pris en compte au prochain rapport de progression) |
-| Planification | Table `scheduled_scans` ; le **worker** décide de l'échéance (heure locale du Mac) puis appelle `…/trigger` |
+| Planification | Table `scheduled_scans` ; le **worker** décide de l'échéance (heure de Paris, fenêtre de 2 h après `time_of_day`) puis appelle `…/trigger`, seul à écrire `last_run_at` (« Lancer maintenant » n'y touche pas) ; la vérification tourne dans sa propre boucle (30 s), pas bloquée par un scan. Limite : la fenêtre ne passe pas minuit (un passage prévu à 22 h ou plus n'a que le reste de la journée de Paris) ; une heure illisible refuse la planification, avec un log par jour |
 | Modèles IA | `model_settings` (demo / audit / battlecard) poussés au worker à chaque claim |
 | Catalogue modèles | Le worker pousse au démarrage une liste statique + modèles Gemini découverts (`/api/worker/models/sync`) |
 | Coupe-circuit | `POST /api/admin/models/circuit-breaker` (voir audit : n'arrête pas réellement les appels) |
@@ -192,10 +192,10 @@ est la table `users`.
 | `npm run worker[:prod]` | Worker piloté par le dashboard |
 | `npm --prefix lead-engine-cli run regen:demos:prod` | Régénère les démos de **tous** les leads de prod via Workers AI |
 | `npm run dev:web` | Dashboard local (port 8788, état D1 dans `/tmp/lead-d1-state`) |
-| `npm run typecheck` · `npm test` · `npm run test:functional` | Qualité (les tests fonctionnels exigent un serveur sur 8789) |
+| `npm run typecheck` · `npm test` · `npm run test:functional` | Qualité (les tests fonctionnels démarrent leur serveur sur 8789 ; la CI les lance aussi) |
 
 ## 11. CI / déploiement
 
-- GitHub Actions (`.github/workflows/ci-cd.yml`) : install, typecheck, `npm test` (tests unitaires uniquement).
+- GitHub Actions (`.github/workflows/ci-cd.yml`) : install, typecheck, `npm test` (tests unitaires), puis les tests fonctionnels (`npm run test:functional`).
   **Plus aucun déploiement** depuis Actions (commit `701c315`).
 - Déploiement : build natif Cloudflare Pages connecté au dépôt (le build exécute aussi les tests du dashboard).

@@ -22,6 +22,10 @@ n'y teste rien de destructif.
 **Retour arrière** : dans Deployments, « Rollback » sur le déploiement précédent, puis `git revert` du commit fautif
 par une PR. Le schéma D1 n'est pas annulé par un retour arrière (voir `docs/agents/donnees-d1.md`).
 
+Wrangler 4 (`lead-dashboard-web/package.json`) exige Node 22 : les commandes `npx wrangler …` de ce document et de
+`docs/agents/donnees-d1.md` (`pages secret put`, `d1 export`, `d1 execute`, `pages deployment list --project-name
+lead-dashboard`) gardent la même syntaxe qu'avec wrangler 3 ; toujours préciser `--local` ou `--remote`.
+
 ## 2. Ressources Cloudflare
 
 Déclarées dans `lead-dashboard-web/wrangler.toml`, lu par Pages :
