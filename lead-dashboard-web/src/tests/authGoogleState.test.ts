@@ -24,6 +24,9 @@ function fakeEnv() {
             ? { id: "u_alice", name: "Alice", role: "closer", is_active: 1, phone_quota_weekly: 50 }
             : null;
         }
+        if (/LOWER\(email\) = \?/i.test(sql)) {
+          return args[0] === "alice@gmail.com" ? { id: "u_alice", access_token: "tok_alice", is_active: 1 } : null;
+        }
         return null;
       },
       all: async () => ({ results: [] }),
@@ -119,5 +122,39 @@ describe("OAuth Google : state lié à la session et à un nonce", () => {
     const { call } = mount();
     const res = await call(cb(state({ mode: "calendar", nonce: "n1" })), "lead_session=tok_alice; oauth_state_nonce=n1");
     assert.match(res.headers.get("set-cookie") || "", /oauth_state_nonce=;/);
+  });
+
+  it("state valide en base64 mais sans objet (btoa(\"null\")) : invalid_state, cookie effacé, pas d'erreur 500", async () => {
+    stubGoogle();
+    const { call, writes } = mount();
+    for (const raw of ["null", "5", '"x"', "[]"]) {
+      const res = await call(cb(btoa(raw)), "lead_session=tok_alice; oauth_state_nonce=n1");
+      assert.equal(res.status, 302, raw);
+      assert.match(res.headers.get("location") || "", /invalid_state/, raw);
+      assert.match(res.headers.get("set-cookie") || "", /oauth_state_nonce=;/, raw);
+    }
+    assert.equal(writes.length, 0);
+  });
+
+  it("connexion Google (mode login) avec nonce valide : redirection vers / et cookie de session", async () => {
+    stubGoogle();
+    const { call, writes } = mount();
+    const res = await call(cb(state({ mode: "login", nonce: "n1" })), "oauth_state_nonce=n1");
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.get("location"), "/");
+    const setCookie = res.headers.get("set-cookie") || "";
+    assert.match(setCookie, /lead_session=tok_alice/);
+    assert.match(setCookie, /HttpOnly/i);
+    assert.doesNotMatch(setCookie, /lead_session=tok_alice[^,]*Secure/i, "requête http : pas de Secure");
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].args[4], "u_alice");
+  });
+
+  it("cookie de session Secure sur une requête https", async () => {
+    stubGoogle();
+    const { call } = mount();
+    const res = await call(`https://crm.example.test${cb(state({ mode: "login", nonce: "n1" }))}`, "oauth_state_nonce=n1");
+    const session = (res.headers.get("set-cookie") || "").split(/,(?=\s*\w+=)/).find((c) => c.includes("lead_session="));
+    assert.match(session!, /Secure/i);
   });
 });

@@ -105,7 +105,13 @@ authGoogleRoutes.get("/auth/google/callback", async (c) => {
 
   let parsedState: { mode?: string; nonce?: string };
   try {
-    parsedState = JSON.parse(atob(stateStr));
+    const raw: unknown = JSON.parse(atob(stateStr));
+    // `btoa("null")`, un nombre ou un tableau se décodent sans erreur mais ne sont pas un state émis par /auth/google.
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      deleteCookie(c, NONCE_COOKIE, { path: "/auth/google" });
+      return c.redirect(`${origin}/?view=kanban&google_error=invalid_state`);
+    }
+    parsedState = raw as { mode?: string; nonce?: string };
   } catch {
     deleteCookie(c, NONCE_COOKIE, { path: "/auth/google" });
     return c.redirect(`${origin}/login`);
