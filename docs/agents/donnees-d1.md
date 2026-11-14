@@ -28,12 +28,18 @@ explicitement à l'insertion.
 
 **Piège** : chaque instruction de `ensureAuthSchema` ignore ses erreurs (`.catch(() => undefined)`). Une DDL fausse
 échoue sans bruit : vérifie la table ou la colonne en local
-(`npx wrangler d1 execute DB --local --persist-to=/tmp/lead-d1-state --command "PRAGMA table_info(<table>)"`).
+(`npx wrangler d1 execute DB --local --config=wrangler.local.toml --persist-to=/tmp/lead-d1-state --command "PRAGMA table_info(<table>)"`).
 
 **Ce que `ensureAuthSchema` ne sait pas faire** : changer une contrainte `CHECK`, renommer ou supprimer une colonne.
 SQLite impose alors de reconstruire la table (modèle : `migrations/0004_leads_status_pending_generation_v2.sql`),
 lancée à la main en production après sauvegarde :
 `npx wrangler d1 execute lead-dashboard-db --remote --file=migrations/NNNN_….sql`.
+
+## Base locale
+
+`npm run db:local:reset` (racine) vide puis recrée la base lue par `npm run dev:web` : `schema.sql` puis `seed.sql`.
+Ne vise jamais la production. Pour toute commande `wrangler d1 execute` locale à la main, ajouter
+`--config=wrangler.local.toml` (sinon le fichier SQLite écrit n'est pas celui de `pages dev`).
 
 ## Production (OBLIGATOIRE)
 

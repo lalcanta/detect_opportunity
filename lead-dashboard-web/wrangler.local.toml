@@ -1,0 +1,9 @@
+# Configuration réservée au local, utilisée par scripts/db-local-reset.mjs.
+# L'identifiant "DB" est celui que `wrangler pages dev --d1=DB` donne à sa base : c'est ce qui fait écrire
+# `wrangler d1 execute` dans le même fichier SQLite que le CRM local (avec celui de wrangler.toml, c'est un autre fichier).
+name = "lead-dashboard-local"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "DB"
+database_id = "DB"

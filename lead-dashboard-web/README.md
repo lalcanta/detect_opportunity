@@ -7,8 +7,7 @@ Plateforme de closing (Cloudflare Pages Functions + Hono + D1). Reçoit les lead
 npm install
 npx wrangler d1 create lead-dashboard-db     # copier le database_id dans wrangler.toml
 cp .env.example .dev.vars                    # puis éditer
-npm run db:init:local
-npm run db:seed:local                        # comptes de démo LOCAUX (jetons publics, jamais en prod)
+npm run db:local:reset                       # crée la base locale + comptes de démo LOCAUX (jetons publics, jamais en prod)
 npm run dev                                  # http://localhost:8788
 ```
 
