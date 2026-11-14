@@ -303,11 +303,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
           score,
           summary,
           weaknesses,
-          recommendations: [
-            "Site moderne Tailwind ultra-rapide optimisé pour mobile",
-            "Bouton d'urgence cliquable direct avec sticky call bar",
-            "Mise en valeur des avis Google 5 étoiles et devis express",
-          ],
+          recommendations: [], // rien d'inventé : le panneau du closer lit les arguments de la battlecard
           loadTimeMs: meta.loadTimeMs,
           isResponsive: meta.isResponsive,
           dominantColors: meta.dominantColors || [],

@@ -45,8 +45,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
 Pour situer : je suis développeur backend depuis 14 ans (architecture, robustesse système) et je conçois des briques de QA réseau et d'automatisation CI/CD pour les équipes techniques.
 
-En inspectant la cascade réseau au premier chargement de {{domain}} (session Chromium vierge, sans clic sur le bandeau de consentement), certains scripts s'exécutent immédiatement :
-{{trackers_list}}
+{{qa_trackers_intro}}
 
 Dans 9 cas sur 10, c'est simplement un tag marketing mal conditionné dans Google Tag Manager, ou une petite régression passée inaperçue lors d'un déploiement.
 
@@ -83,7 +82,7 @@ Bonne journée,
     label: "Audit Performance — Temps de chargement mobile",
     opportunities: ["*"],
     stage: "proof",
-    subject: "[Audit Perf] Temps de chargement mobile sur {{domain}} (diagnostic rapide)",
+    subject: "Quelques points relevés sur {{domain}}",
     body: `{{greeting}}
 
 {{perf_audit_intro}}
@@ -154,6 +153,8 @@ export function buildTemplateVars(lead: TemplateLeadInput): Record<string, strin
     stackCompliment += `${stackCompliment ? " " : ""}Le travail sur votre stack (${stack.join(", ")}) est propre.`;
   }
 
+  const trackersList = (trackers.length ? trackers : weaknesses).map((t) => `- ${t}`).join("\n");
+
   return {
     company_name: lead.company_name,
     agency_name: lead.company_name,
@@ -165,7 +166,11 @@ export function buildTemplateVars(lead: TemplateLeadInput): Record<string, strin
     stack: stack.join(", "),
     awards: awards.join(", "),
     stack_compliment: stackCompliment,
-    trackers_list: (trackers.length ? trackers : weaknesses).map((t) => `- ${t}`).join("\n"),
+    trackers_list: trackersList,
+    // Sans traceur à citer, l'introduction disparaît avec la liste (même principe que perf_audit_intro).
+    qa_trackers_intro: trackersList
+      ? `En inspectant la cascade réseau au premier chargement de ${domain} (session Chromium vierge, sans clic sur le bandeau de consentement), certains scripts s'exécutent immédiatement :\n${trackersList}`
+      : "",
     // Sans faiblesse mesurée, pas de « quelques points » suivi de rien : le paragraphe devient une simple proposition.
     perf_audit_intro: weaknesses.length
       ? `En regardant ${domain}, j'ai relevé quelques points sur votre site :\n${weaknessesList}\n\nJe peux vous détailler chacun d'eux si cela vous est utile.`

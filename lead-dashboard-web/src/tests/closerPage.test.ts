@@ -98,3 +98,12 @@ describe("closerPage — score d'audit absent", () => {
     assert.ok(render({ score: 62 }).includes("Score : 62/100"));
   });
 });
+
+describe("closerPage — panneau sans argument", () => {
+  const html = closerPage({ user, leads: [lead({})], scope: "all", view: "kanban", origin: "https://crm.test" });
+  it("aucun argument de repli inventé : la section « Arguments » se masque quand la liste est vide", () => {
+    assert.ok(!html.includes("Barre d'appel d'urgence mobile collante"));
+    assert.ok(!html.includes("Design moderne ultra-rapide"));
+    assert.match(html, /advSection\.classList\.toggle\('hidden', advItems\.length === 0\)/);
+  });
+});

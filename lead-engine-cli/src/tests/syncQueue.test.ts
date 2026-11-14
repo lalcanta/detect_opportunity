@@ -196,7 +196,15 @@ describe("syncQueue — dossiers de bilan et démo de site complémentaire", () 
       await writeFile(metaPath, JSON.stringify({ ...meta, loadTimeMs: 6200 }));
     });
     const ad = payloads[0]!.audit_data as Record<string, unknown>;
-    assert.equal(ad.score ?? null, null);
+    assert.equal(ad.score, null);
+  });
+
+  it("dossier sans bilan : aucune recommandation par défaut inventée", async () => {
+    const { payloads } = await withQueue(() =>
+      mkLead("s3", { "demo.html": "<!DOCTYPE html><p>démo</p>", "battlecard.json": BC }, "website_redesign"),
+    );
+    const ad = payloads[0]!.audit_data as Record<string, unknown>;
+    assert.deepEqual(ad.recommendations, []);
   });
 
   it("dossier bilan : le score du bilan (audit_facts.json) est repris", async () => {

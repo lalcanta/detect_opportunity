@@ -640,7 +640,7 @@ publicRoutes.post("/api/public/inbound-lead", async (c) => {
       `Demande entrante directe (${tierLabel})`,
       websiteUrl ? `Site existant déclaré : ${websiteUrl}` : "Création ou refonte souhaitée",
     ],
-    score: 85,
+    score: null, // aucune mesure : pas de score inventé
   };
 
   const battlecardData = {

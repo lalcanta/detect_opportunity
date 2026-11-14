@@ -335,7 +335,7 @@ function calendarView(leads: LeadRow[], user: User, origin: string, scope: strin
       const aAds = aAudit?.paid_ads_detected?.length ?? 0;
       const bAds = bAudit?.paid_ads_detected?.length ?? 0;
       if (bAds !== aAds) return bAds - aAds;
-      return (aAudit?.score ?? 50) - (bAudit?.score ?? 50) // sans score mesuré : rang neutre, jamais affiché;
+      return (aAudit?.score ?? 50) - (bAudit?.score ?? 50); // sans score mesuré : rang neutre, jamais affiché
     })
     .slice(0, 9);
 
@@ -1591,11 +1591,9 @@ function openSidepanel(id) {
       ? lead.battlecard.ourAdvantages
       : ((lead.audit && Array.isArray(lead.audit.recommendations) && lead.audit.recommendations.length > 0)
           ? lead.audit.recommendations
-          : [
-              "Barre d'appel d'urgence mobile collante en bas d'écran",
-              'Mise en valeur immédiate des ' + (lead.google_reviews_count || '') + ' avis Google (' + (lead.google_rating || '5') + '★)',
-              'Design moderne ultra-rapide avec reprise du vrai logo client'
-            ]);
+          : []);
+    var advSection = advList.closest('section');
+    if (advSection) advSection.classList.toggle('hidden', advItems.length === 0);
     advItems.slice(0, 3).forEach(function(a) {
       var li = document.createElement('li');
       li.className = 'flex gap-2';
