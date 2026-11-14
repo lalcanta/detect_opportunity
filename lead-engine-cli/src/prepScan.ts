@@ -158,9 +158,11 @@ export async function runPrepScan(
         websiteFilter: webFilter,
         onProgress: async (msg) => {
           log("maps", msg);
-          if (hooks.onProgress) {
-            const cont = await hooks.onProgress(0, opts.limit, `Scraping Maps : ${msg}`);
-            if (cont === false) cancelled = true;
+          if (!hooks.onProgress) return;
+          const cont = await hooks.onProgress(0, opts.limit, `Scraping Maps : ${msg}`);
+          if (cont === false) {
+            cancelled = true;
+            return false; // arrête la lecture de Google Maps, comme scanRunner
           }
         },
       });
