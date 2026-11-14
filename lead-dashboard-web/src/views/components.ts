@@ -145,9 +145,19 @@ export function renderGoogleRatingBadge(
   </span>`;
 }
 
-/** Le score n'apparaît que s'il a été mesuré (bilan, audit réel) : absent ou nul, le badge de repli s'affiche. */
-export function renderAuditScoreBadge(score: number | null | undefined, websiteUrl: string | null | undefined): string {
+/**
+ * Score d'un lead. « Score » seulement s'il est mesuré (bilan, `scoreSource: "measured"`) ; sinon c'est l'estimation
+ * du modèle de langage (ou un ancien score sans origine), affichée « Estimation IA ». Absent : badge de repli.
+ */
+export function renderAuditScoreBadge(
+  score: number | null | undefined,
+  websiteUrl: string | null | undefined,
+  scoreSource?: string | null,
+): string {
   if (typeof score === "number" && Number.isFinite(score)) {
+    if (scoreSource !== "measured") {
+      return `<span class="text-[10px] font-medium px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200/80" title="Estimation du modèle de langage, pas une mesure">Estimation IA : ${score}/100</span>`;
+    }
     const cls =
       score < 50
         ? "bg-rose-50 text-rose-700 border border-rose-200/80"

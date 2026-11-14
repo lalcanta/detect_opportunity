@@ -145,6 +145,8 @@ export interface SiteAudit {
   weaknesses: string[];
   /** Score mesuré ; null quand aucune mesure ne permet d'en calculer un (jamais de valeur inventée). */
   score: number | null;
+  /** Origine du score : mesuré (bilan) ou estimé par le modèle de langage (audit d'une démo de site). */
+  scoreSource?: "measured" | "ai_estimate";
 }
 
 export interface Objection {
