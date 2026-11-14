@@ -58,7 +58,7 @@ const all = (html: string, re: RegExp, group = 0) => [...html.matchAll(re)].map(
 export function detectTagIdsInHtml(html: string): HtmlTagIds {
   return {
     analytics: uniq([...all(html, /\bG-[A-Z0-9]{6,12}\b/g), ...all(html, /\bUA-\d{4,10}-\d{1,4}\b/g), ...all(html, /\bGTM-[A-Z0-9]{4,10}\b/g)]),
-    googleAds: uniq(all(html, /\bAW-\d{6,12}\b/g)),
+    googleAds: uniq([...all(html, /\bAW-\d{6,12}\b/g), ...all(html, /\bgoogle_conversion_id\s*=\s*(\d{6,12})/g, 1).map((n) => `AW-${n}`)]),
     metaPixel: uniq([
       ...all(html, /fbq\s*\(\s*['"]init['"]\s*,\s*['"]?(\d{10,20})/g, 1),
       ...all(html, /facebook\.com\/tr\/?\?(?:[^"'\s>]*&(?:amp;)?)?id=(\d{10,20})/g, 1),

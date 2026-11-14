@@ -280,12 +280,18 @@ describe("bilan visibilité — prospect sans fiche Maps (scan par liste de doma
 });
 
 describe("bilan acquisition — bandeau de consentement", () => {
-  it("identifiants trouvés : « présent (déclenché après consentement) »", () => {
+  it("identifiants trouvés : « présent dans la page (déclenché par le bandeau cookies, non vérifié) »", () => {
     const h = acq([], lead(), insp({ cmpDetected: "Axeptio", trackersFound: [], paidAdsDetected: [], htmlTagIds: { analytics: ["GTM-ABCD12"], googleAds: [], metaPixel: [] } }));
-    assert.ok(h.includes("Google Tag Manager — présent (déclenché après consentement)"));
+    assert.ok(h.includes("Google Tag Manager — présent dans la page (déclenché par le bandeau cookies, non vérifié)"));
+    assert.ok(!h.includes("déclenché après consentement"));
     assert.ok(!h.includes("Aucun outil de suivi détecté"));
     assert.ok(!h.includes("Aucun pixel publicitaire détecté"));
     assert.ok(!h.includes("Installer"));
+  });
+  it("identifiant Google Ads sans pixel réseau : libellé prudent", () => {
+    const h = acq([], lead(), insp({ cmpDetected: "Axeptio", trackersFound: [], paidAdsDetected: [], htmlTagIds: { analytics: [], googleAds: ["AW-123456789"], metaPixel: [] } }));
+    assert.ok(h.includes("présent dans la page (déclenché par le bandeau cookies, non vérifié)"));
+    assert.ok(!h.includes("déclenché après consentement"));
   });
   it("aucun identifiant : non mesuré, jamais « aucun »", () => {
     const h = acq([], lead(), insp({ cmpDetected: "Axeptio", trackersFound: [], paidAdsDetected: [], htmlTagIds: { analytics: [], googleAds: [], metaPixel: [] } }));
