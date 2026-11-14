@@ -7,6 +7,9 @@ Complète `AGENTS.md` à la racine, qui reste valable ici.
   `npm run worker -- --local`.
 - **Worker** : `src/worker.ts` interroge le CRM (scans, planifications, génération, envoi SMTP si `SMTP_HOST`).
 - **Workflow d'un lead** : `src/workflow/runner.ts` exécute les nœuds du besoin par vagues parallèles.
+- **Consignes de texte** : la consigne des textes commerciaux (mode complet comme `prompt_battlecard.md` du mode
+  préparation) est assemblée par `src/workflow/pitchPrompt.ts` à partir des nœuds exécutés (`pitchFacts.ts`).
+  Ne pas la réécrire à la main dans `prepScan.ts` ni dans les générateurs.
 - **Scan de test** : `npm run scan -- --query "…" --city "…" --limit 1 --dry-run` écrit dans `output/` sans
   synchroniser.
 - **Sélecteurs Google Maps** (`.hfpxzc`, `.DUwDvf`…) : ils changent sans prévenir ; un scan qui ne trouve plus rien

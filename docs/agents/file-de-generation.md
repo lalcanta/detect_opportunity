@@ -13,7 +13,7 @@ Pour chacun, détermine ce qui manque :
 | `meta.json` | Données prospect (lecture seule). `opportunity_type` = type d'offre ; `primary_channel` = canal du premier contact (`phone`, `email` ou `contact_form`) ; `contacts` = contacts trouvés ; `site_images` = vraies photos de son site, à utiliser en priorité dans la démo. |
 | `prompt_demo.md` | Consigne pour `demo.html` |
 | `prompt_site_demo.md` | (bilans visibilité / acquisition, si une démo de site est demandée) Consigne pour `site_demo.html` |
-| `prompt_battlecard.md` | Consigne pour `battlecard.json` |
+| `prompt_battlecard.md` | Consigne pour `battlecard.json`, assemblée par `workflow/pitchPrompt.ts` à partir des constats des nœuds exécutés (les seuls chiffres citables) |
 | `audit_facts.json` | (audit QA et bilans) Constats **mesurés** — à reprendre tels quels, ne rien inventer |
 | `screenshot.png` | Capture du site actuel, à regarder avant d'écrire la démo |
 

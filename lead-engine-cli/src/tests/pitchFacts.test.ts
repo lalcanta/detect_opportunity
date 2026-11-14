@@ -167,6 +167,12 @@ describe("bilans", () => {
     const url = `${DEMO}/site`;
     assert.ok(values(input({ def: visibility, siteDemoUrl: url })).some((v) => v.includes(url)));
   });
+  it("démo complémentaire : complément éventuel, le bilan reste le lien principal, pas une maquette", () => {
+    const a = proofAngle(input({ def: visibility, siteDemoUrl: `${DEMO}/site` }));
+    assert.match(a, /complément éventuel/);
+    assert.match(a, /le lien principal reste le bilan/);
+    assert.match(a, /pas une maquette de site/);
+  });
   it("sans démo complémentaire : interdit de proposer un nouveau site", () => {
     assert.match(proofAngle(input({ def: acquisition })), /ne propose pas de nouveau site/);
   });

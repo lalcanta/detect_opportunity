@@ -8,22 +8,20 @@ import {
   DEFAULT_OPPORTUNITY_ID,
   demoHighlightsInstruction,
   describeRejection,
-  messageToneInstruction,
   findOpportunity,
   getOpportunityOrDefault,
-  isReportProof,
   needsInspectionToQualify,
   opportunityIdOf,
   pitchGeneratorFor,
   resolveWebsiteFilter,
-  type ChannelId,
 } from "../../shared/opportunities";
 import { buildLeadContacts, UnqualifiedLeadError } from "./opportunities/qualify";
 import { companyFacts, runLeadWorkflow, type Dossier } from "./workflow/runner";
 import { loadRemoteOpportunities } from "./opportunities/remote";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { mapsSeoAuditFields } from "./workflow/auditFields";
-import { bilanBattlecardRules, buildBilanQueueFiles } from "./queueReports";
+import { buildBilanQueueFiles, prepPitchInput } from "./queueReports";
+import { buildPitchPrompt } from "./workflow/pitchPrompt";
 import { siteDemoFocus } from "./opportunities/siteDemo";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
 import { pushLead } from "./sync/pushLead";
@@ -438,18 +436,14 @@ ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rati
       const isAsyncQaOffer = pitchGenerator === "tracker_cold_email";
 
       let promptBattlecard = "";
-      if (pitchGenerator === "llm_cold_email") {
-        promptBattlecard = buildWrittenPitchPrompt({
-          lead,
-          leadDir,
-          oppLabel,
-          pitchFocus: opts.pitch_focus || def.commercial.pitchFocus,
-          tone: messageToneInstruction(def.commercial.tone),
-          channel: primaryChannel,
-          demoUrl: `${cfg.REMOTE_APP_URL}/demos/${id}`,
-          proofLabel: bilan ? (def.proof.kind === "visibility_report" ? "bilan de visibilité locale" : "bilan d'acquisition") : null,
-          contactFormUrl: inspection?.contactForm?.url ?? null,
-        });
+      if (pitchGenerator === "llm_cold_email" || pitchGenerator === "llm_phone_battlecard") {
+        // Consigne assemblée par nœud (workflow/pitchPrompt.ts), la même qu'en mode complet.
+        promptBattlecard = `# Consigne de génération du battlecard
+
+Enregistre le JSON valide dans : \`${leadDir}/battlecard.json\`
+
+${buildPitchPrompt(prepPitchInput(dossier, bilan, cfg.REMOTE_APP_URL), pitchGenerator)}
+`;
       } else if (isAsyncQaOffer) {
         promptBattlecard = `# RÔLE & PERSONA
 Tu es un agent d'automatisation chargé de rédiger des emails d'approche personnalisés de confrère à confrère pour Loïc Alcantara.
@@ -502,58 +496,7 @@ loic.alcantara@gmail.com | https://www.linkedin.com/in/loicalcantara/
 }
 \`\`\`
 `;
-      } else {
-        promptBattlecard = `# Consigne de Génération Battlecard Commerciale pour Antigravity
-
-Tu dois générer le fichier \`battlecard.json\` pour aider le closer à contacter cet artisan.
-Enregistre le JSON valide directement dans :
-\`${leadDir}/battlecard.json\`
-
-## Angle de Vente : ${oppLabel}
-${battlecardSalesAngle(demoFocus, lead)}
-
-${messageToneInstruction(def.commercial.tone) ? `## Ton\n${messageToneInstruction(def.commercial.tone)}\n\n` : ""}## Format
-FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; ourAdvantages 3 puces de 12 mots maximum ; currentSiteCritique 3 constats courts et vérifiables ; accroche (callScript / openingPitch) 60 mots maximum ; 3 objections, réponses de 2 phrases maximum ; coldEmail.body 120 mots maximum. N'invente ni avis, ni certification, ni chiffre absent des données.
-
-## Schéma JSON Requis :
-\`\`\`json
-{
-  "closerBrief": "Petit laïus de 2-3 phrases pour la closer : explique-lui clairement pourquoi notre solution est supérieure à ce que ${lead.name} a aujourd'hui${meta.key_people.length ? ` (dirigeant identifié : ${meta.key_people.join(", ")})` : ""} et quel est l'angle d'attaque idéal.",
-  "ourAdvantages": [
-    "Avantage concret 1 de notre solution face à la leur (ex: barre d'appel d'urgence mobile collante)",
-    "Avantage concret 2 (ex: mise en valeur immédiate des ${lead.reviewsCount || 0} avis Google à ${lead.rating || 5}★)",
-    "Avantage concret 3 (ex: chargement instantané et reprise de leur vrai logo)"
-  ],
-  "executiveSummary": "2 phrases résumant la situation du prospect et l'angle commercial (${oppType}).",
-  "currentSiteCritique": [
-    "Faiblesse ou opportunité 1",
-    "Faiblesse ou opportunité 2",
-    "Faiblesse ou opportunité 3"
-  ],
-  "openingPitch": "Script mot-à-mot percutant pour le closer lors des 30 premières secondes d'appel${meta.key_people.length ? ` en demandant ${meta.key_people[0]}` : ""}, centré sur le besoin (${oppType}).",
-  "objections": [
-    {
-      "objection": "Je n'ai pas le temps, rappelez plus tard",
-      "response": "Réponse désarmante et empathique"
-    },
-    {
-      "objection": "J'ai déjà tout ce qu'il me faut",
-      "response": "Argument axé sur le manque à gagner face aux concurrents de la zone"
-    },
-    {
-      "objection": "C'est trop cher / combien ça coûte ?",
-      "response": "Argument de retour sur investissement"
-    }
-  ],
-  "coldEmail": {
-    "subject": "Objet d'email personnalisé pour ${lead.name}",
-    "body": "Email court et chaleureux adapté au contexte exact de ${lead.name} (${lead.activity} à ${lead.city}), ${bilan ? "présentant le bilan préparé pour lui (lien /demos/" + id + ") et un de ses constats, sans le présenter comme une maquette de site" : "expliquant les avantages de la démo préparée pour lui par rapport à sa situation actuelle"}."
-  }
-}
-\`\`\`
-`;
       }
-      if (bilan && isReportProof(def.proof.kind)) promptBattlecard += bilanBattlecardRules({ kind: def.proof.kind, siteDemoUrl: bilan.siteDemoUrl });
       await writeFile(`${leadDir}/prompt_battlecard.md`, promptBattlecard);
 
       preparedLeads.push({
@@ -605,74 +548,6 @@ FORMAT COURT (le closer lit pendant l'appel) : closerBrief 2 phrases maximum ; o
   } finally {
     await browser.close().catch(() => undefined);
   }
-}
-
-/** « Angle de vente » de la consigne de battlecard, selon l'angle de la preuve (bilan ou démo de site). */
-export function battlecardSalesAngle(focus: string, lead: Pick<MapsLead, "reviewsCount" | "rating">): string {
-  if (focus === "reviews") {
-    return `Le prospect a actuellement ${lead.reviewsCount || 0} avis Google (${lead.rating || 5}★). L'argumentaire doit se concentrer sur les avis manqués face aux concurrents locaux, la réputation et le pack de collecte d'avis QR / NFC.`;
-  }
-  if (focus === "seo_local") {
-    return "Le prospect manque de visibilité sur les recherches Google Maps locales. L'argumentaire porte sur le gain de positionnement et les appels générés.";
-  }
-  if (focus === "ads_acquisition") {
-    return "L'argumentaire porte sur la mesure et la conversion des visiteurs : suivi des conversions, pixels publicitaires et page d'arrivée relevés par le bilan d'acquisition, face aux concurrents de la recherche.";
-  }
-  return "Le prospect a besoin d'un site web moderne et rapide convertissant le trafic smartphone en appels téléphoniques.";
-}
-
-/** Consigne Antigravity pour un premier message écrit (email ou formulaire de contact), hors audit QA. */
-export function buildWrittenPitchPrompt(p: {
-  lead: MapsLead;
-  leadDir: string;
-  oppLabel: string;
-  pitchFocus: string;
-  /** Consigne de ton choisie dans l'onglet Besoins, ou chaîne vide. */
-  tone: string;
-  channel: ChannelId;
-  demoUrl: string;
-  /** Preuve « bilan » : le lien ouvre ce bilan, pas une maquette de site ; null pour une démo de site. */
-  proofLabel?: string | null;
-  contactFormUrl: string | null;
-}): string {
-  const link = p.proofLabel ? `le lien du ${p.proofLabel}` : "le lien de la démo";
-  const viaForm = p.channel === "contact_form";
-  return `# Consigne de Génération du Message Écrit pour Antigravity
-
-Tu dois générer le fichier \`battlecard.json\` : le premier message de prospection écrit pour ce prospect.
-Enregistre le JSON valide directement dans :
-\`${p.leadDir}/battlecard.json\`
-
-## Canal
-${viaForm ? `Formulaire de contact du site (${p.contactFormUrl ?? "URL dans meta.json"}) : texte brut, 900 caractères maximum, l'objet sert seulement de titre interne.` : "Email : objet court et personnalisé."}
-
-## Offre
-- Type d'offre : ${p.oppLabel}
-- Angle : ${p.pitchFocus}
-- ${p.proofLabel ? `Lien du ${p.proofLabel} préparé pour lui (un bilan, pas une maquette de site)` : "Lien de la démo préparée pour lui"} : ${p.demoUrl}
-
-## Prospect
-- Nom : ${p.lead.name}
-- Métier : ${p.lead.activity || ""}
-- Ville : ${p.lead.city || ""}
-- Note Google : ${p.lead.rating ?? "n/a"}/5 (${p.lead.reviewsCount ?? 0} avis)
-- Données d'inspection : voir \`meta.json\` dans le même dossier.
-
-## Règles
-- Vouvoiement, ${p.tone ? p.tone.charAt(0).toLowerCase() + p.tone.slice(1).replace(/\.$/, "") : "ton chaleureux et professionnel"}, un seul constat précis, ${link}.
-- Terminer par une question simple qui appelle une réponse écrite.
-- Pas de promesse chiffrée, pas de jargon.
-- Dernière ligne : « Pour ne plus recevoir de message de notre part, répondez simplement STOP. »
-
-## Schéma JSON Requis
-\`\`\`json
-{
-  "closerBrief": "2 phrases : contexte du prospect et angle retenu.",
-  "ourAdvantages": ["Avantage 1", "Avantage 2", "Avantage 3"],
-  "coldEmail": { "subject": "Objet", "body": "Message complet" }
-}
-\`\`\`
-`;
 }
 
 export async function prepScan(): Promise<void> {

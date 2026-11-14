@@ -10,6 +10,8 @@ import { acquisitionScore, scoreActions, visibilityScore } from "./generator/rep
 import { generateVisibilityReportHtml } from "./generator/visibilityReportGenerator";
 import { siteDemoUrl } from "./opportunities/siteDemo";
 import type { MapsLead, SiteInspection } from "./types";
+import type { PitchInput } from "./workflow/pitchFacts";
+import { pitchInputFromDossier, type Dossier } from "./workflow/runner";
 
 export interface BilanQueueFiles {
   demoHtml: string;
@@ -71,26 +73,18 @@ export async function buildBilanQueueFiles(p: {
   return { demoHtml, auditFacts, siteDemoUrl: demoUrl, competitorPixels: competitorPixels ?? null };
 }
 
-/** Règles ajoutées à `prompt_battlecard.md` d'un bilan : chiffres tirés de `audit_facts.json` uniquement. */
-export function bilanBattlecardRules(p: { kind: "visibility_report" | "acquisition_report"; siteDemoUrl: string | null }): string {
-  const visibility = p.kind === "visibility_report";
-  const label = visibility ? "bilan de visibilité locale" : "bilan d'acquisition";
-  const angle = visibility
-    ? "abonnement de visibilité locale (fiche Google, avis, référencement du site)"
-    : "abonnement d'acquisition (suivi des conversions, pixels publicitaires, page d'arrivée)";
-  const stay = visibility ? "la visibilité locale" : "l'acquisition (suivi, pixels, page d'arrivée)";
-  return `
-## Bilan déjà généré : règles du message (impératif)
-- \`demo.html\` (le ${label}) est déjà écrit : ne le réécris pas. Le lien \`/demos/<id>\` du message ouvre ce bilan,
-  pas une maquette de site : présente-le comme le ${label}. Cite **uniquement** les faits de \`audit_facts.json\`
-  (score, critères, rang Maps avec la recherche telle qu'elle a été lancée et sa date, concurrents, pixels des
-  concurrents, actions). N'invente aucun chiffre : ni appels perdus, ni chiffre d'affaires, ni trafic.
-- Un pixel « non vérifié » (\`null\`) n'est pas « aucun pixel » : ne l'affirme jamais.
-- Angle commercial : ${angle}, pour corriger les points relevés par le bilan.
-${
-  p.siteDemoUrl
-    ? `- Une démo de site complémentaire est demandée (${p.siteDemoUrl}) : mentionne la refonte du site comme un complément éventuel, jamais comme l'offre principale ; le lien principal reste le bilan.`
-    : `- Aucune démo de site n'est demandée : reste sur ${stay}, sans proposer de nouveau site.`
-}
-`;
+/**
+ * Entrée de la consigne des textes commerciaux en mode préparation : celle du dossier, sauf le bilan et les pixels des
+ * concurrents, que la file écrit elle-même (le dossier n'a pas d'audit, la preuve n'étant pas générée par le modèle).
+ */
+export function prepPitchInput(dossier: Dossier, bilan: BilanQueueFiles | null, remoteAppUrl: string): PitchInput {
+  const base = pitchInputFromDossier(dossier, remoteAppUrl);
+  if (!bilan) return { ...base, report: null, competitorPixels: null, siteDemoUrl: null };
+  const facts = bilan.auditFacts as { score: { score: number }; weaknesses: string[] };
+  return {
+    ...base,
+    report: { score: facts.score.score, actions: facts.weaknesses },
+    competitorPixels: bilan.competitorPixels,
+    siteDemoUrl: bilan.siteDemoUrl,
+  };
 }
