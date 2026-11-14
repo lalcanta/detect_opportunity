@@ -27,6 +27,18 @@ export const LEAD_CONTACTS_DDL = `CREATE TABLE IF NOT EXISTS lead_contacts (
   UNIQUE (lead_id, kind, value)
 )`;
 
+/**
+ * Version 17 : les jobs déjà `running` au déploiement n'ont pas de battement (colonne neuve). Sans ce remplissage,
+ * le nettoyage les verrait muets depuis leur démarrage et les passerait en échec alors que le worker est vivant.
+ * Idempotent : ne touche que les jobs sans battement.
+ */
+export async function backfillRunningHeartbeats(db: D1Database): Promise<void> {
+  await db
+    .prepare("UPDATE scan_jobs SET heartbeat_at = CURRENT_TIMESTAMP WHERE status = 'running' AND heartbeat_at IS NULL")
+    .run()
+    .catch(() => undefined);
+}
+
 export async function ensureAuthSchema(db: D1Database): Promise<void> {
   if (migrationChecked >= AUTH_SCHEMA_VERSION) return;
   try {
@@ -59,6 +71,7 @@ export async function ensureAuthSchema(db: D1Database): Promise<void> {
     for (const sql of alterCols) {
       await db.prepare(sql).run().catch(() => undefined);
     }
+    await backfillRunningHeartbeats(db);
 
     await db.prepare(LEAD_CONTACTS_DDL).run().catch(() => undefined);
     await db.prepare(LEAD_ACTIVITIES_DDL).run().catch(() => undefined);

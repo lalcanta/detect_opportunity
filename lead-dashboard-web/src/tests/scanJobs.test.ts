@@ -7,7 +7,7 @@ import { getPlatformProxy } from "wrangler";
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { scanRoutes } from "../routes/scans";
-import { ensureAuthSchema } from "../auth";
+import { backfillRunningHeartbeats, ensureAuthSchema } from "../auth";
 import { MAX_LOG_LINES, failStaleJobs, isStaleJob } from "../services/scanJobs";
 
 const now = new Date("2026-11-14T12:00:00.000Z");
@@ -153,5 +153,31 @@ describe("« Lancer maintenant » et last_run_at (D1 réelle via miniflare)", ()
     const res = await app.request("/api/worker/scheduled-scans/1/trigger", { method: "POST", headers: { Authorization: "Bearer secret-test" } }, { DB: db, SYNC_SECRET_TOKEN: "secret-test" });
     assert.equal(res.status, 200);
     assert.ok(Date.parse((await lastRun())!) > Date.now() - 60_000);
+  });
+});
+
+describe("migration v17 : battement des jobs déjà en cours (D1 réelle via miniflare)", () => {
+  it("ensureAuthSchema appelle le remplissage juste après les ALTER TABLE", () => {
+    const src = readFileSync(new URL("../auth.ts", import.meta.url), "utf8");
+    assert.ok(src.indexOf("ADD COLUMN heartbeat_at") < src.indexOf("await backfillRunningHeartbeats(db);"));
+  });
+
+  it("donne un battement aux jobs running qui n'en ont pas, sans toucher aux autres", async () => {
+    const proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: fileURLToPath(new URL("../../wrangler.local.toml", import.meta.url)), persist: false });
+    try {
+      const db = proxy.env.DB;
+      const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf8");
+      const ddl = /CREATE TABLE IF NOT EXISTS scan_jobs \([\s\S]*?\n\);/.exec(schema)![0];
+      await db.prepare(ddl.replace(/--[^\n]*/g, "").replace(/\s+/g, " ")).run();
+      const old = "2026-01-01 00:00:00";
+      await db.prepare("INSERT INTO scan_jobs (id, query, city, status, started_at, heartbeat_at) VALUES (1,'q','c','running',?1,NULL), (2,'q','c','queued',?1,NULL), (3,'q','c','running',?1,?1)").bind(old).run();
+      await backfillRunningHeartbeats(db);
+      const hb = async (id: number) => (await db.prepare("SELECT heartbeat_at FROM scan_jobs WHERE id = ?1").bind(id).first<{ heartbeat_at: string | null }>())!.heartbeat_at;
+      assert.ok(Date.parse((await hb(1))!.replace(" ", "T") + "Z") > Date.now() - 60_000, "running sans battement : rempli");
+      assert.equal(await hb(2), null);
+      assert.equal(await hb(3), old);
+    } finally {
+      await proxy.dispose();
+    }
   });
 });
