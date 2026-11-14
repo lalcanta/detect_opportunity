@@ -7,8 +7,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "wrangler pages dev --cwd=dev-local --ip 0.0.0.0 --d1=DB --compatibility-date=2024-11-01 --persist-to=/tmp/lead-d1-state",
-    "dev:test": "wrangler pages dev --cwd=dev-local --port 8789 --ip 127.0.0.1 --d1=DB --compatibility-date=2024-11-01 --persist-to=/tmp/lead-d1-test-state",
+    "dev": "node scripts/require-node22.mjs && wrangler pages dev --cwd=dev-local --ip 0.0.0.0 --d1=DB --compatibility-date=2024-11-01 --persist-to=/tmp/lead-d1-state",
+    "dev:test": "node scripts/require-node22.mjs && wrangler pages dev --cwd=dev-local --port 8789 --ip 127.0.0.1 --d1=DB --compatibility-date=2024-11-01 --persist-to=/tmp/lead-d1-test-state",
     "db:local:reset": "node scripts/db-local-reset.mjs",
     "db:rotate-seed-credentials:local": "wrangler d1 execute DB --local --config=wrangler.local.toml --persist-to=/tmp/lead-d1-state --file=migrations/0002_rotate_public_seed_credentials.sql",
     "db:rotate-seed-credentials:remote": "wrangler d1 execute lead-dashboard-db --remote --file=migrations/0002_rotate_public_seed_credentials.sql",

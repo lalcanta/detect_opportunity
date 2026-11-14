@@ -2,6 +2,8 @@ import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error module .mjs sans déclaration de types
+import { requireNode22 } from "../lead-dashboard-web/scripts/require-node22.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +64,8 @@ export async function isTestServerRunning(): Promise<boolean> {
  * Démarre le serveur de test dédié sur le port 8789 s'il n'est pas déjà lancé.
  */
 export async function ensureTestServer(): Promise<void> {
+  // Avant tout : sous Node 20, wrangler 4 échoue en silence (stdio ignoré) et on attendrait 15 s pour rien.
+  requireNode22();
   if (await isTestServerRunning()) {
     resetTestDatabase();
     return;

@@ -4,6 +4,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireNode22 } from './require-node22.mjs';
+
+requireNode22();
 
 const racine = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const etat = '/tmp/lead-d1-state'; // même dossier que le script `dev` de package.json
