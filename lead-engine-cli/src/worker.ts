@@ -514,46 +514,81 @@ interface RemoteScheduledScan {
   last_run_at?: string | null;
 }
 
-/**
- * Vérifie si une programmation doit être déclenchée à l'instant présent.
- * Compare l'heure courante (format HH:mm) et le jour de la semaine (1=Lundi..7=Dimanche)
- * tout en s'assurant qu'elle n'a pas déjà tourné dans la journée actuelle.
- */
-export function shouldTriggerScheduledScan(sched: RemoteScheduledScan, now = new Date()): boolean {
-  const currentHour = String(now.getHours()).padStart(2, "0");
-  const currentMin = String(now.getMinutes()).padStart(2, "0");
-  const currentTimeStr = `${currentHour}:${currentMin}`;
+/** Fuseau d'évaluation des planifications : l'heure saisie dans le CRM est une heure de Paris, quel que soit le Mac. */
+export const SCHEDULE_TIMEZONE = "Europe/Paris";
+/** Un passage n'est lancé que dans les 2 h qui suivent `time_of_day` ; au-delà il est sauté pour la journée. */
+export const SCHEDULE_WINDOW_MINUTES = 120;
 
-  // Jour ISO : 1 = Lundi, ..., 7 = Dimanche
-  const day = now.getDay() === 0 ? 7 : now.getDay();
-  const days = sched.days_of_week === "*" ? [1, 2, 3, 4, 5, 6, 7] : sched.days_of_week.split(",").map((x) => parseInt(x.trim(), 10));
+const parisFormat = new Intl.DateTimeFormat("en-CA", {
+  timeZone: SCHEDULE_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
 
-  if (!days.includes(day)) return false;
-
-  // L'heure prévue doit être atteinte (ou dans la fenêtre courante)
-  if (currentTimeStr < sched.time_of_day) return false;
-
-  // S'assure qu'elle n'a pas déjà été exécutée aujourd'hui
-  if (sched.last_run_at) {
-    const lastDate = new Date(sched.last_run_at);
-    if (
-      lastDate.getFullYear() === now.getFullYear() &&
-      lastDate.getMonth() === now.getMonth() &&
-      lastDate.getDate() === now.getDate()
-    ) {
-      return false;
-    }
-  }
-
-  return true;
+/** Date, jour ISO (1=lundi..7=dimanche) et minutes depuis minuit d'un instant, en heure de Paris. */
+function parisParts(d: Date): { date: string; isoDay: number; minutes: number } {
+  const p: Record<string, string> = {};
+  for (const part of parisFormat.formatToParts(d)) p[part.type] = part.value;
+  const isoDay = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(p.weekday ?? "") + 1;
+  return { date: `${p.year}-${p.month}-${p.day}`, isoDay, minutes: Number(p.hour) * 60 + Number(p.minute) };
 }
+
+/** `last_run_at` est un ISO UTC (écrit par le CRM) ; une ancienne valeur D1 « YYYY-MM-DD HH:MM:SS » est aussi en UTC. */
+function parseStoredDate(value: string): Date | null {
+  const iso = /(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value.replace(" ", "T")}Z`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export type ScheduleDecision = "due" | "wrong_day" | "too_early" | "window_missed" | "already_ran";
+
+/**
+ * Décide si une planification doit être déclenchée à `now`, en heure de Paris :
+ * jour coché (1=lundi..7=dimanche ou `*`), heure atteinte, au plus 2 h après `time_of_day`,
+ * et pas déjà lancée par le planificateur le même jour de Paris.
+ */
+export function scheduleDecision(sched: RemoteScheduledScan, now = new Date()): ScheduleDecision {
+  const cur = parisParts(now);
+  const days = sched.days_of_week.trim() === "*" ? [1, 2, 3, 4, 5, 6, 7] : sched.days_of_week.split(",").map((x) => parseInt(x.trim(), 10));
+  if (!days.includes(cur.isoDay)) return "wrong_day";
+
+  const [h, m] = sched.time_of_day.split(":").map((x) => parseInt(x, 10));
+  const planned = (h || 0) * 60 + (m || 0);
+  if (cur.minutes < planned) return "too_early";
+
+  if (sched.last_run_at) {
+    const last = parseStoredDate(sched.last_run_at);
+    if (last && parisParts(last).date === cur.date) return "already_ran";
+  }
+  if (cur.minutes >= planned + SCHEDULE_WINDOW_MINUTES) return "window_missed";
+  return "due";
+}
+
+export function isScheduleDue(sched: RemoteScheduledScan, now = new Date()): boolean {
+  return scheduleDecision(sched, now) === "due";
+}
+
+/** Passages sautés déjà journalisés (planification + jour de Paris), pour ne pas répéter la ligne toutes les 30 s. */
+const skippedLogged = new Set<string>();
 
 async function checkAndTriggerSchedules(cfg: Config): Promise<void> {
   try {
     const res = await api<{ scheduled: RemoteScheduledScan[] }>(cfg, "/api/worker/scheduled-scans", undefined, "GET");
     const now = new Date();
     for (const s of res.scheduled || []) {
-      if (shouldTriggerScheduledScan(s, now)) {
+      const decision = scheduleDecision(s, now);
+      if (decision === "window_missed") {
+        const key = `${s.id}@${now.toLocaleDateString("en-CA", { timeZone: SCHEDULE_TIMEZONE })}`;
+        if (!skippedLogged.has(key)) {
+          skippedLogged.add(key);
+          log("worker", `⏭️ Programmation #${s.id} "${s.label}" sautée aujourd'hui : fenêtre de ${SCHEDULE_WINDOW_MINUTES / 60} h après ${s.time_of_day} dépassée`);
+        }
+      } else if (decision === "due") {
         log("worker", `⏰ Déclenchement automatique de la programmation #${s.id} "${s.label}" (${s.time_of_day})`);
         await api(cfg, `/api/worker/scheduled-scans/${s.id}/trigger`, {}).catch((err: Error) =>
           log("worker", `⚠️ Déclenchement de la programmation #${s.id} échoué : ${err.message}`),

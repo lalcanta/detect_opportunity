@@ -6,6 +6,7 @@ import { Miniflare } from "miniflare";
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { scanRoutes } from "../routes/scans";
+import { ensureAuthSchema } from "../auth";
 import { MAX_LOG_LINES, failStaleJobs, isStaleJob } from "../services/scanJobs";
 
 const now = new Date("2026-11-14T12:00:00.000Z");
@@ -110,5 +111,44 @@ describe("route de progression du worker (D1 réelle via miniflare)", () => {
     assert.equal(lines.length, MAX_LOG_LINES);
     assert.match(lines[0], /\] l6$/);
     assert.match(lines[299], /\] l305$/);
+  });
+});
+
+describe("« Lancer maintenant » et last_run_at (D1 réelle via miniflare)", () => {
+  let mf: Miniflare;
+  let db: D1Database;
+  let app: Hono<AppEnv>;
+
+  before(async () => {
+    mf = new Miniflare({ modules: true, script: "export default { fetch() { return new Response('') } }", d1Databases: { DB: "run-now-test" } });
+    db = (await mf.getD1Database("DB")) as unknown as D1Database;
+    const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf8");
+    for (const table of ["users", "scan_jobs", "scheduled_scans"]) {
+      const ddl = new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\([\\s\\S]*?\\n\\);`).exec(schema)![0];
+      await db.prepare(ddl.replace(/--[^\n]*/g, "").replace(/\s+/g, " ")).run();
+    }
+    await ensureAuthSchema(db);
+    await db.prepare("INSERT INTO users (name, email, invite_code, access_token, role, is_active) VALUES ('Admin','a@x.fr','inv','tok-admin','admin',1)").run();
+    await db.prepare("INSERT INTO scheduled_scans (id, label, cron_expr, query, city, last_run_at) VALUES (1,'Test','x','plombier','Lyon','2026-11-10T07:31:00.000Z')").run();
+    app = new Hono<AppEnv>();
+    app.route("/", scanRoutes);
+  });
+  after(async () => {
+    await mf.dispose();
+  });
+
+  const lastRun = async () => (await db.prepare("SELECT last_run_at FROM scheduled_scans WHERE id = 1").first<{ last_run_at: string | null }>())!.last_run_at;
+
+  it("run-now crée le job sans toucher à last_run_at", async () => {
+    const res = await app.request("/api/admin/scheduled-scans/1/run-now", { method: "POST", headers: { Cookie: "lead_session=tok-admin" } }, { DB: db });
+    assert.equal(res.status, 200);
+    assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM scan_jobs").first<{ n: number }>())!.n, 1);
+    assert.equal(await lastRun(), "2026-11-10T07:31:00.000Z");
+  });
+
+  it("le déclenchement planifié (/trigger) écrit last_run_at", async () => {
+    const res = await app.request("/api/worker/scheduled-scans/1/trigger", { method: "POST", headers: { Authorization: "Bearer secret-test" } }, { DB: db, SYNC_SECRET_TOKEN: "secret-test" });
+    assert.equal(res.status, 200);
+    assert.ok(Date.parse((await lastRun())!) > Date.now() - 60_000);
   });
 });

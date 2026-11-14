@@ -276,10 +276,7 @@ scanRoutes.post("/api/admin/scheduled-scans/:id/run-now", requireUser("admin"), 
     )
     .run();
 
-  await c.env.DB.prepare("UPDATE scheduled_scans SET last_run_at = ? WHERE id = ?")
-    .bind(new Date().toISOString(), id)
-    .run();
-
+  // Lancement manuel : ne touche pas à last_run_at, réservé au passage planifié du jour (route /trigger).
   return c.json({ ok: true, job_id: res.meta.last_row_id });
 });
 

@@ -88,7 +88,7 @@ rappel programmé à +1 h (ou au créneau choisi), battlecard et « démo » pla
 | Worker `POST /api/worker/claim` | Passe le plus ancien job `queued` en `running` (UPDATE…RETURNING) + renvoie `model_settings` |
 | Progression | `POST /api/worker/jobs/:id/progress` ; la réponse `{cancel:true}` stoppe le worker |
 | Annuler | `status='cancelled'` (pris en compte au prochain rapport de progression) |
-| Planification | Table `scheduled_scans` ; le **worker** décide de l'échéance (heure locale du Mac) puis appelle `…/trigger` |
+| Planification | Table `scheduled_scans` ; le **worker** décide de l'échéance (heure de Paris, fenêtre de 2 h après `time_of_day`) puis appelle `…/trigger`, seul à écrire `last_run_at` (« Lancer maintenant » n'y touche pas) |
 | Modèles IA | `model_settings` (demo / audit / battlecard) poussés au worker à chaque claim |
 | Catalogue modèles | Le worker pousse au démarrage une liste statique + modèles Gemini découverts (`/api/worker/models/sync`) |
 | Coupe-circuit | `POST /api/admin/models/circuit-breaker` (voir audit : n'arrête pas réellement les appels) |
