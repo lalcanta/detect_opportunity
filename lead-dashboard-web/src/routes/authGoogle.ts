@@ -1,11 +1,36 @@
 import { Hono } from "hono";
-import { setCookie } from "hono/cookie";
+import type { Context } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv } from "../types";
-import { ensureAuthSchema, requireUser, SESSION_COOKIE } from "../auth";
+import { ensureAuthSchema, generateRandomHex, getSessionUser, requireUser, SESSION_COOKIE } from "../auth";
 import { exchangeGoogleCode, getGoogleAuthUrl } from "../services/googleCalendar";
 import { loginPage } from "../views/login";
 
 export const authGoogleRoutes = new Hono<AppEnv>();
+
+/** Cookie portant le nonce du flux OAuth en cours ; comparé à celui du `state` au retour de Google. */
+const NONCE_COOKIE = "oauth_state_nonce";
+const NONCE_TTL_SECONDS = 600;
+
+/** Génère un nonce, le pose en cookie HttpOnly de courte durée et le renvoie pour l'inclure dans le `state`. */
+function issueOauthNonce(c: Context<AppEnv>): string {
+  const nonce = generateRandomHex(16);
+  setCookie(c, NONCE_COOKIE, nonce, {
+    httpOnly: true,
+    secure: new URL(c.req.url).protocol === "https:",
+    sameSite: "Lax",
+    path: "/auth/google",
+    maxAge: NONCE_TTL_SECONDS,
+  });
+  return nonce;
+}
+
+/** Vrai si le nonce du `state` est celui du cookie posé à l'aller ; efface toujours le cookie (usage unique). */
+function consumeOauthNonce(c: Context<AppEnv>, stateNonce: unknown): boolean {
+  const cookieNonce = getCookie(c, NONCE_COOKIE);
+  deleteCookie(c, NONCE_COOKIE, { path: "/auth/google" });
+  return typeof stateNonce === "string" && !!cookieNonce && cookieNonce === stateNonce;
+}
 
 /**
  * GET /auth/google/login
@@ -26,7 +51,7 @@ authGoogleRoutes.get("/auth/google/login", async (c) => {
   const redirectUri = `${origin}/auth/google/callback`;
   const stateObj = {
     mode: "login",
-    rand: Math.random().toString(36).substring(2),
+    nonce: issueOauthNonce(c),
     created: Date.now(),
   };
   const state = btoa(JSON.stringify(stateObj));
@@ -39,15 +64,13 @@ authGoogleRoutes.get("/auth/google/login", async (c) => {
  * Redirige l'utilisateur connecté vers l'écran d'autorisation Google OAuth 2.0 (Google Calendar).
  */
 authGoogleRoutes.get("/auth/google", requireUser("closer"), async (c) => {
-  const user = c.get("user");
   const origin = new URL(c.req.url).origin;
   const redirectUri = `${origin}/auth/google/callback`;
 
-  // Construction d'un state sécurisé liant l'utilisateur
+  // Le state ne porte pas l'utilisateur : au retour, c'est la session qui le désigne. Seul le nonce le lie au navigateur.
   const stateObj = {
     mode: "calendar",
-    userId: user.id,
-    rand: Math.random().toString(36).substring(2),
+    nonce: issueOauthNonce(c),
     created: Date.now(),
   };
   const state = btoa(JSON.stringify(stateObj));
@@ -69,6 +92,7 @@ authGoogleRoutes.get("/auth/google/callback", async (c) => {
   const redirectUri = `${origin}/auth/google/callback`;
 
   if (query.error) {
+    deleteCookie(c, NONCE_COOKIE, { path: "/auth/google" });
     console.error("Google OAuth error:", query.error);
     return c.redirect(`${origin}/?view=kanban&google_error=${encodeURIComponent(query.error)}`);
   }
@@ -79,11 +103,25 @@ authGoogleRoutes.get("/auth/google/callback", async (c) => {
     return c.redirect(`${origin}/login`);
   }
 
-  let parsedState: { mode?: string; userId?: string };
+  let parsedState: { mode?: string; nonce?: string };
   try {
     parsedState = JSON.parse(atob(stateStr));
   } catch {
+    deleteCookie(c, NONCE_COOKIE, { path: "/auth/google" });
     return c.redirect(`${origin}/login`);
+  }
+
+  // Le state doit être celui émis pour ce navigateur (nonce du cookie), sinon la requête est rejetée.
+  if (!consumeOauthNonce(c, parsedState.nonce)) {
+    return c.redirect(`${origin}/?view=kanban&google_error=invalid_state`);
+  }
+
+  // Mode calendrier : la session désigne l'utilisateur, jamais le state ; sans session, rien n'est écrit.
+  let sessionUserId: string | null = null;
+  if (parsedState.mode !== "login") {
+    const sessionUser = await getSessionUser(c);
+    if (!sessionUser) return c.redirect(`${origin}/login`);
+    sessionUserId = sessionUser.id;
   }
 
   try {
@@ -137,10 +175,7 @@ authGoogleRoutes.get("/auth/google/callback", async (c) => {
     }
 
     // Mode "calendar" (utilisateur déjà connecté)
-    const userId = parsedState.userId;
-    if (!userId) {
-      return c.redirect(`${origin}/?view=kanban&google_error=invalid_state`);
-    }
+    const userId = sessionUserId;
 
     await c.env.DB.prepare(
       `UPDATE users
