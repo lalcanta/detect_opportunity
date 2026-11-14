@@ -33,3 +33,6 @@ Resend et Brevo interdisent la prospection à froid dans leurs conditions : pour
 - [x] **Générateurs dédiés** pour Référencement local et Publicité : bilans de visibilité et d'acquisition + démo de site conditionnelle. Reste à activer les deux besoins (onglet Besoins) : décision de Loïc après relecture des bilans de test.
 - [ ] **Vérification par captures** à ajouter au skill `leadengine`.
 - [ ] Mettre à jour wrangler 3 → 4 (avertissement à chaque commande).
+- [ ] **Closer limité à l'ancien besoin `website`** : un closer dont `allowed_opportunities` ne contient que `website`
+      (besoin archivé) ne voit pas les leads `website_redesign` / `website_creation`. Aucun cas en production au
+      14/11/2026 ; à traiter si un closer est créé avec cette seule valeur.

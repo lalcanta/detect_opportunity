@@ -11,7 +11,7 @@ Complète `AGENTS.md` à la racine, qui reste valable ici.
   est le moyen d'avoir une config locale sans `AI` (voir `AGENTS.md` à la racine).
 - **Interface** : lire `docs/agents/interface-crm.md` avant de toucher à `src/views/`.
 - **Secrets et variables lus par le dashboard** : `src/types.ts` (`Bindings`) fait foi ; procédure dans `docs/deploiement.md`.
-- **Base locale en une commande** : `npm run db:local:reset` (à la racine ou ici ; arrêter `npm run dev` avant) recrée
+- **Base locale en une commande** : `npm run db:local:reset` (à la racine ou ici ; arrêter `npm run dev` avant) vide toute la base locale puis recrée
   la base lue par `npm run dev:web` (`/tmp/lead-d1-state`), applique `schema.sql` puis `seed.sql` (jetons publics, local
   uniquement). Le script passe par `wrangler.local.toml` (`database_id = "DB"`) : avec le `database_id` de
   `wrangler.toml`, `wrangler d1 execute` écrirait dans un autre fichier SQLite que `pages dev`. Il refuse toute option

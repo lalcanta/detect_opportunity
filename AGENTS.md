@@ -19,7 +19,9 @@ Si `AGENTS.local.md` existe à la racine, lis-le aussi : il contient les préfé
 
 ```bash
 npm --prefix lead-engine-cli install && npm --prefix lead-dashboard-web install
+nvm use                               # Node 22 (.nvmrc) : wrangler 4 refuse Node 20, les scripts s'arrêtent avec un message
 npm run dev:web                       # CRM local sur http://localhost:8788 (D1 dans /tmp/lead-d1-state)
+npm run db:local:reset                # vide puis recrée la base locale (schema.sql + seed.sql), jamais la production
 npm run worker                        # worker vers REMOTE_APP_URL du .env ; worker:prod pour la production
 npm run prep -- --query "plombier" --city "Lyon" --limit 5   # préparation sans LLM, dépose dans queue/pending
 npm run sync-queue                    # pousse les dossiers complétés vers REMOTE_APP_URL (sync-queue:prod : production)

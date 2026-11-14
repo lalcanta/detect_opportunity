@@ -6,6 +6,10 @@ const BASE_URL = process.env.TEST_APP_URL || TEST_BASE_URL;
 const CLOSER_COOKIE = "lead_session=cls_d7e12e4e0eee45d8654fd44439726210";
 const ADMIN_COOKIE = "lead_session=adm_9e86b81a2886a9c4de99f1eb10580218";
 const SYNC_SECRET = TEST_SYNC_SECRET;
+/** Tous les besoins qu'un admin peut accorder à un closer : liste unique de la suite. */
+const ALL_OPPORTUNITIES = ["website", "website_creation", "website_redesign", "audit_qa_trackers", "google_reviews", "seo_local", "ads_acquisition", "custom"];
+/** Idem sans l'audit QA / traceurs (les parcours qui ne le testent pas). */
+const OPPORTUNITIES_WITHOUT_QA = ALL_OPPORTUNITIES.filter((o) => o !== "audit_qa_trackers");
 
 describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR BASE DÉDIÉE)", () => {
   // Réinitialisation automatique de la base de test dédiée avant l'exécution de la suite
@@ -27,7 +31,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
         body: JSON.stringify({
-          opportunities: ["website", "website_creation", "website_redesign", "google_reviews", "seo_local", "ads_acquisition", "custom"],
+          opportunities: OPPORTUNITIES_WITHOUT_QA,
         }),
       });
       assert.equal(res.status, 200);
@@ -1072,18 +1076,18 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       assert.ok(html.includes("opp=website_redesign"));
     });
 
-    it("L'Admin réactive ['website', 'google_reviews', 'seo_local', 'ads_acquisition', 'custom'] pour le closer 1", async () => {
+    it("L'Admin réactive tous les besoins (hors audit QA) pour le closer 1", async () => {
       const res = await fetch(`${BASE_URL}/api/admin/users/u_closer1/opportunities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
         body: JSON.stringify({
-          opportunities: ["website", "website_creation", "website_redesign", "google_reviews", "seo_local", "ads_acquisition", "custom"],
+          opportunities: OPPORTUNITIES_WITHOUT_QA,
         }),
       });
       assert.equal(res.status, 200);
       const json = await res.json() as { ok: boolean; allowed_opportunities: string[] };
       assert.equal(json.ok, true);
-      assert.equal(json.allowed_opportunities.length, 7);
+      assert.equal(json.allowed_opportunities.length, OPPORTUNITIES_WITHOUT_QA.length);
     });
 
     it("Après réactivation, le Closer 1 peut immédiatement accéder et verrouiller son lead 'google_reviews'", async () => {
@@ -1132,7 +1136,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       await fetch(`${BASE_URL}/api/admin/users/u_closer1/opportunities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
-        body: JSON.stringify({ opportunities: ["website", "website_creation", "website_redesign", "audit_qa_trackers", "google_reviews", "seo_local", "ads_acquisition", "custom"] }),
+        body: JSON.stringify({ opportunities: ALL_OPPORTUNITIES }),
       });
       const res = await fetch(`${BASE_URL}/api/sync`, {
         method: "POST",
@@ -1303,7 +1307,7 @@ describe("SUITE COMPLÈTE DE TESTS FONCTIONNELS (API, CRM & DASHBOARD LIVE SUR B
       await fetch(`${BASE_URL}/api/admin/users/u_closer1/opportunities`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: ADMIN_COOKIE },
-        body: JSON.stringify({ opportunities: ["website", "website_creation", "website_redesign", "audit_qa_trackers", "google_reviews", "seo_local", "ads_acquisition", "custom"] }),
+        body: JSON.stringify({ opportunities: ALL_OPPORTUNITIES }),
       });
     });
   });
