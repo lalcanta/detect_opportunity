@@ -61,12 +61,12 @@ export async function scrapeMaps(opts: ScrapeOptions): Promise<ScrapeResult> {
       if (!sq) continue;
       if (allUrls.size >= targetCandidates) break;
       await progress(`Recherche Maps (${qIdx + 1}/${subQueries.length}) : ciblage "${sq}"... (0/${targetQualified} qualifiés · ${allUrls.size} potentiels repérés)`, 0, allUrls.size);
+      if (stopped) break;
       const targetUrl =
         opts.lat != null && opts.lng != null
           ? `https://www.google.com/maps/search/${encodeURIComponent(sq)}/@${opts.lat},${opts.lng},${zoom}z?hl=fr`
           : `https://www.google.com/maps/search/${encodeURIComponent(`${sq} ${opts.city}`)}?hl=fr`;
 
-      if (stopped) break;
       log("maps", `Navigation vers : ${targetUrl}`);
       await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
       await acceptConsent(page);
