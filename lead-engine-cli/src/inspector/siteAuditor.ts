@@ -9,6 +9,28 @@ const auditSchema = z.object({
   score: z.number().min(0).max(100),
 });
 
+/** Au-delà, un temps de chargement mesuré est présenté comme une faiblesse. */
+export const SLOW_LOAD_MS = 3000;
+
+/**
+ * Audit de repli quand l'inspection ou le LLM ne fournit rien : uniquement des mesures de l'inspection.
+ * Sans mesure : pas de score (null) et pas de faiblesse ; jamais de valeur inventée.
+ */
+export function buildFallbackAudit(inspection: SiteInspection | null): SiteAudit {
+  const weaknesses: string[] = [];
+  if (inspection?.error) weaknesses.push(`Site inaccessible lors de l'inspection (${inspection.error})`);
+  if (inspection?.isResponsive === false) weaknesses.push("Site non adapté aux écrans de smartphone (mesuré à l'inspection)");
+  if (!inspection?.error && typeof inspection?.loadTimeMs === "number" && inspection.loadTimeMs > SLOW_LOAD_MS) {
+    weaknesses.push(`Temps de chargement mesuré : ${inspection.loadTimeMs} ms`);
+  }
+  const summary = inspection?.error
+    ? `Site inaccessible lors de l'inspection (${inspection.error}).`
+    : weaknesses.length > 0
+      ? `Mesures de l'inspection : ${weaknesses.join(" ; ")}.`
+      : "Aucune analyse détaillée disponible : seules les mesures de l'inspection sont exploitables.";
+  return { summary, weaknesses, score: null };
+}
+
 /** TASK_FAST : audit technique synthétique à partir des mesures + capture. */
 export async function auditSite(
   router: ModelRouter,
@@ -16,19 +38,7 @@ export async function auditSite(
   inspection: SiteInspection | null,
   usageSink: TokenUsageRecord[],
 ): Promise<SiteAudit> {
-  const fallbackAudit: SiteAudit = {
-    summary: inspection?.error
-      ? `Site inaccessible ou très lent (${inspection.error})`
-      : inspection?.isResponsive === false
-        ? `Site existant mais non adapté aux mobiles et lent au chargement (${inspection.loadTimeMs || 1500} ms).`
-        : `Site web artisanal nécessitant une modernisation visuelle et de meilleurs points de contact.`,
-    weaknesses: [
-      inspection?.isResponsive === false ? "Non adapté aux écrans smartphones (expérience mobile dégradée)" : "Design vieillissant sans mise en valeur des avis clients",
-      "Absence de bouton d'appel direct ou de devis instantané",
-      "Temps de chargement ou performances perfectibles",
-    ],
-    score: inspection?.isResponsive === false ? 35 : 55,
-  };
+  const fallbackAudit = buildFallbackAudit(inspection);
 
   if (!inspection || inspection.error || !inspection.screenshot) {
     return fallbackAudit;

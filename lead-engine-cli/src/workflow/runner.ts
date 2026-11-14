@@ -138,7 +138,7 @@ function genContext(d: Dossier, env: WorkflowEnv): GenerationContext {
 /** Entrée de la consigne des textes commerciaux, tirée du dossier (mêmes règles en mode préparation). */
 export function pitchInputFromDossier(d: Dossier, remoteAppUrl: string): PitchInput {
   if (!d.primaryChannel) throw new Error("lead non qualifié");
-  const report = isReportProof(d.def.proof.kind) && d.audit ? { score: d.audit.score, actions: d.audit.weaknesses } : null;
+  const report = isReportProof(d.def.proof.kind) && d.audit && d.audit.score !== null ? { score: d.audit.score, actions: d.audit.weaknesses } : null;
   return {
     def: d.def,
     lead: d.lead,

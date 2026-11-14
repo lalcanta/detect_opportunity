@@ -56,7 +56,7 @@ export function buildTrackerAudit(inspection: SiteInspection | null): SiteAudit 
   const trackers = inspection?.trackersFound ?? [];
   const cmp = inspection?.cmpDetected;
   return {
-    score: trackers.length > 0 ? Math.max(20, 75 - trackers.length * 15) : 70,
+    score: trackers.length > 0 ? Math.max(20, 75 - trackers.length * 15) : null, // sans traceur : aucune mesure à chiffrer
     summary:
       trackers.length > 0
         ? `${trackers.length} traceur(s) tiers exécuté(s) à froid avant consentement (${trackers.join(", ")})${cmp ? ` malgré la présence de ${cmp}` : ""}.`
@@ -64,7 +64,7 @@ export function buildTrackerAudit(inspection: SiteInspection | null): SiteAudit 
     weaknesses:
       trackers.length > 0
         ? trackers.map((t) => `${t} déclenché avant consentement CMP`)
-        : ["Vérifier l'initialisation par défaut du Google Consent Mode v2"],
+        : [],
   };
 }
 
