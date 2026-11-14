@@ -10,7 +10,7 @@ Si `AGENTS.local.md` existe à la racine, lis-le aussi : il contient les préfé
 ## Pile
 
 - **`lead-dashboard-web/`** : Hono 4 sur Cloudflare Pages Functions, D1 (SQLite), R2 (`lead-media`), Workers AI,
-  wrangler 3. Interface rendue côté serveur en chaînes de caractères, Tailwind v3 par CDN, JavaScript client inline.
+  wrangler 4 (Node 22 requis). Interface rendue côté serveur en chaînes de caractères, Tailwind v3 par CDN, JavaScript client inline.
 - **`lead-engine-cli/`** : Node 22, TypeScript lancé par `tsx` (pas de build), Playwright/Chromium, zod, nodemailer.
 - **`shared/`** : TypeScript sans dépendance, importé par les deux (registre des besoins, envoi d'emails).
 - **npm**, un `package-lock.json` par sous-projet. Pas de framework front, pas de bundler, pas d'ORM, pas de linter.
@@ -72,9 +72,9 @@ npm run test:functional               # tests HTTP, démarrent leur serveur sur 
 - **Options des scripts de la racine** : ils relaient leurs arguments au CLI (`npm run prep -- --query … --city …`)
   grâce au `--` final de chaque script de `package.json` ; un script relais ajouté sans ce `--` perd ses options.
 - **Modifier une définition de besoin dans le code ne change pas la production** : la base fait foi.
-- **Liaisons absentes en local** : avec `--d1=DB` en ligne de commande (`npm run dev:web`), wrangler ignore celles de
-  `wrangler.toml` : ni `MEDIA` (R2) ni `AI`. Sans bucket, la route des photos redirige vers l'image d'origine ; pour
-  tester les photos, lancer avec `--r2=MEDIA` (voir `lead-dashboard-web/AGENTS.md`).
+- **Liaisons en local (wrangler 4)** : `npm run dev:web` lit `wrangler.toml` en plus de `--d1=DB` : `MEDIA` (R2) est
+  un bucket local vide (persisté dans `/tmp/lead-d1-state`) et `AI` est **distant** (appels réels à Workers AI,
+  facturables, compte Cloudflare connecté requis ; wrangler l'annonce au démarrage). La base D1 reste locale.
 
 ## Avant de livrer
 

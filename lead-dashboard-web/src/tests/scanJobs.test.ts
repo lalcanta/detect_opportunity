@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { after, before } from "node:test";
-import { Miniflare } from "miniflare";
+import { getPlatformProxy } from "wrangler";
 import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import { scanRoutes } from "../routes/scans";
@@ -41,21 +41,22 @@ describe("failStaleJobs", () => {
 });
 
 describe("route de progression du worker (D1 réelle via miniflare)", () => {
-  let mf: Miniflare;
+  let proxy: Awaited<ReturnType<typeof getPlatformProxy<{ DB: D1Database }>>>;
   let db: D1Database;
   let app: Hono<AppEnv>;
   const TOKEN = "secret-test";
 
   before(async () => {
-    mf = new Miniflare({ modules: true, script: "export default { fetch() { return new Response('') } }", d1Databases: { DB: "scan-jobs-test" } });
-    db = (await mf.getD1Database("DB")) as unknown as D1Database;
+    // D1 en mémoire (wrangler.local.toml ne déclare que DB) ; un proxy par suite = une base vierge.
+    proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: new URL("../../wrangler.local.toml", import.meta.url).pathname, persist: false });
+    db = proxy.env.DB;
     const ddl = /CREATE TABLE IF NOT EXISTS scan_jobs \([\s\S]*?\n\);/.exec(readFileSync(new URL("../../schema.sql", import.meta.url), "utf8"))![0];
     await db.prepare(ddl.replace(/--[^\n]*/g, "").replace(/\s+/g, " ")).run();
     app = new Hono<AppEnv>();
     app.route("/", scanRoutes);
   });
   after(async () => {
-    await mf.dispose();
+    await proxy.dispose();
   });
 
   const insert = async (status: string, logs: string | null = null, heartbeat: string | null = null) => {
@@ -115,13 +116,14 @@ describe("route de progression du worker (D1 réelle via miniflare)", () => {
 });
 
 describe("« Lancer maintenant » et last_run_at (D1 réelle via miniflare)", () => {
-  let mf: Miniflare;
+  let proxy: Awaited<ReturnType<typeof getPlatformProxy<{ DB: D1Database }>>>;
   let db: D1Database;
   let app: Hono<AppEnv>;
 
   before(async () => {
-    mf = new Miniflare({ modules: true, script: "export default { fetch() { return new Response('') } }", d1Databases: { DB: "run-now-test" } });
-    db = (await mf.getD1Database("DB")) as unknown as D1Database;
+    // D1 en mémoire (wrangler.local.toml ne déclare que DB) ; un proxy par suite = une base vierge.
+    proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: new URL("../../wrangler.local.toml", import.meta.url).pathname, persist: false });
+    db = proxy.env.DB;
     const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf8");
     for (const table of ["users", "scan_jobs", "scheduled_scans"]) {
       const ddl = new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\([\\s\\S]*?\\n\\);`).exec(schema)![0];
@@ -134,7 +136,7 @@ describe("« Lancer maintenant » et last_run_at (D1 réelle via miniflare)", ()
     app.route("/", scanRoutes);
   });
   after(async () => {
-    await mf.dispose();
+    await proxy.dispose();
   });
 
   const lastRun = async () => (await db.prepare("SELECT last_run_at FROM scheduled_scans WHERE id = 1").first<{ last_run_at: string | null }>())!.last_run_at;
