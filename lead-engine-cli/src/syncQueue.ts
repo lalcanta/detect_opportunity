@@ -1,3 +1,4 @@
+import { assertKnownOptions } from "./utils/cliArgs";
 import { PITCH_KIND_BY_GENERATOR, getOpportunityOrDefault, isChannelId, opportunityIdOf, pitchGeneratorFor } from "../../shared/opportunities";
 import { readdir, readFile, rename, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -360,6 +361,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  assertKnownOptions({});
   loadRemoteOpportunities(loadConfig())
     .then(() => syncQueue())
     .catch((err) => {

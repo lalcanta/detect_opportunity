@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { loadConfig } from "./config";
 import { ModelRouter } from "./llm/modelRouter";
 import { runScan } from "./scanRunner";
+import { assertKnownOptions, type CliOptionSpec } from "./utils/cliArgs";
 
 import { ALL_OPPORTUNITY_IDS, DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID, DEFAULT_OPPORTUNITY_ID } from "../../shared/opportunities";
 
@@ -13,7 +14,14 @@ const USAGE = `Usage: npm run scan -- --query "plombier" --city "Lyon" [--limit 
   --dry-run         Ne synchronise pas : écrit les résultats dans ./output
 Pour piloter les scans depuis le dashboard : npm run worker`;
 
+/** Options acceptées par `npm run scan` ; toute autre arrête la commande (voir `utils/cliArgs.ts`). */
+const SCAN_CLI_OPTIONS: CliOptionSpec = {
+  values: ["--query", "--domains", "--city", "--limit", "--opportunity", "--target", "--website-filter", "--lat", "--lng", "--radius"],
+  flags: ["--cdp", "--dry-run"],
+};
+
 async function main(): Promise<void> {
+  assertKnownOptions(SCAN_CLI_OPTIONS, USAGE);
   const { values } = parseArgs({
     options: {
       query: { type: "string" },

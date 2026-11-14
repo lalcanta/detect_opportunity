@@ -1,3 +1,4 @@
+import { assertKnownOptions } from "./utils/cliArgs";
 import { loadConfig, type Config } from "./config";
 import { ModelRouter } from "./llm/modelRouter";
 import { runScan } from "./scanRunner";
@@ -566,6 +567,7 @@ async function checkAndTriggerSchedules(cfg: Config): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  assertKnownOptions({});
   const cfg = loadConfig();
   const router = new ModelRouter(cfg);
   log("worker", `En écoute des scans et planifications automatiques sur ${cfg.REMOTE_APP_URL} (Ctrl+C pour arrêter)`);

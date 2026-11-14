@@ -1,3 +1,4 @@
+import { assertKnownOptions, type CliOptionSpec } from "./utils/cliArgs";
 import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { chromium, type Browser, type BrowserContext } from "playwright";
@@ -55,7 +56,17 @@ export interface PrepScanResult {
   preparedLeads: Array<{ id: string; name: string; city: string; phone: string | null; dir: string }>;
 }
 
+/** Options acceptées par `npm run prep` ; toute autre arrête la commande (voir `utils/cliArgs.ts`). */
+export const PREP_CLI_OPTIONS: CliOptionSpec = {
+  values: [
+    "--query", "-q", "--domains", "--urls", "-d", "--city", "-c", "--limit", "-l", "--lat", "--lng", "--radius",
+    "--target", "--need", "--opportunity", "-t", "--filter", "--website-filter", "--pitch-focus",
+  ],
+  flags: ["--cdp"],
+};
+
 function parseArgs(): PrepScanOptions {
+  assertKnownOptions(PREP_CLI_OPTIONS);
   const args = process.argv.slice(2);
   const opts: PrepScanOptions = {
     query: "plombier",

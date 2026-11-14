@@ -1,3 +1,4 @@
+import { assertKnownOptions } from "./utils/cliArgs";
 import * as fs from "node:fs";
 import { execSync } from "node:child_process";
 import { generateCraftHtmlForLead } from "./craftTemplates";
@@ -6,6 +7,7 @@ import { injectTracker } from "./generator/demoGenerator";
 const LEAD_ID_RE = /^[a-f0-9]{8,64}$/;
 
 async function run() {
+  assertKnownOptions({});
   console.log("=== RÉGÉNÉRATION ARTISANALE HAUTE COUTURE (MODE CLI) ===");
   const raw = fs.readFileSync("../scratch_leads.json", "utf8");
   const data = JSON.parse(raw);

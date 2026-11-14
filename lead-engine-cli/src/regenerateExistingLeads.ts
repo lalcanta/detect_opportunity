@@ -1,3 +1,4 @@
+import { assertKnownOptions } from "./utils/cliArgs";
 import { opportunityIdOf } from "../../shared/opportunities";
 import { execSync } from "node:child_process";
 import { loadConfig } from "./config";
@@ -25,6 +26,7 @@ interface D1Lead {
 }
 
 async function main() {
+  assertKnownOptions({});
   const cfg = loadConfig({ REMOTE_APP_URL: "https://lead-dashboard-8bx.pages.dev" });
   log("regen", `Configuration chargée : ${cfg.REMOTE_APP_URL}`);
 

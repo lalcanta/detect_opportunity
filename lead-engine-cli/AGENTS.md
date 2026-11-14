@@ -5,6 +5,10 @@ Complète `AGENTS.md` à la racine, qui reste valable ici.
 - **Configuration** : `src/config.ts` (schéma zod) fait foi pour les variables du `.env` ; `--prod` remplace
   `REMOTE_APP_URL` par `REMOTE_APP_URL_PROD`, `--local` par le CRM local (`http://127.0.0.1:8788`) :
   `npm run worker -- --local`.
+- **Options de ligne de commande** : chaque point d'entrée déclare ses options et appelle `assertKnownOptions`
+  (`src/utils/cliArgs.ts`) ; une option inconnue arrête la commande avant toute action, avec une suggestion. Une
+  nouvelle option se déclare dans la liste de son point d'entrée (`--prod`, `--remote`, `--local`, `--help` sont
+  acceptées partout).
 - **Worker** : `src/worker.ts` interroge le CRM (scans, planifications, génération, envoi SMTP si `SMTP_HOST`).
 - **Workflow d'un lead** : `src/workflow/runner.ts` exécute les nœuds du besoin par vagues parallèles.
 - **Consignes de texte** : la consigne des textes commerciaux (mode complet comme `prompt_battlecard.md` du mode
