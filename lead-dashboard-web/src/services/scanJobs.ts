@@ -21,13 +21,17 @@ export function isStaleJob(job: { status: string; heartbeat_at?: string | null; 
   return Number.isFinite(t) && now.getTime() - t > STALE_JOB_MS;
 }
 
-/** Ajoute une ligne aux logs et ne garde que les 300 dernières. */
-export function appendLog(logs: string | null | undefined, line: string | null): string | null {
-  if (!line) return logs ?? null;
-  const lines = logs ? logs.split("\n") : [];
-  lines.push(line);
-  return lines.slice(-MAX_LOG_LINES).join("\n");
-}
+/**
+ * Expression SQL (paramètre ?5 = nouvelle ligne) : ajoute la ligne à `logs` et ne garde que les MAX_LOG_LINES dernières.
+ * Utilisée dans l'UPDATE de progression : l'ajout reste atomique, sans lecture préalable.
+ */
+export const APPEND_LOG_SQL = `WITH RECURSIVE joined(v) AS (
+    SELECT CASE WHEN logs IS NULL OR logs = '' THEN ?5 ELSE logs || char(10) || ?5 END
+  ), cut(s, n) AS (
+    SELECT v, MAX(0, length(v) - length(replace(v, char(10), '')) + 1 - ${MAX_LOG_LINES}) FROM joined
+    UNION ALL
+    SELECT substr(s, instr(s, char(10)) + 1), n - 1 FROM cut WHERE n > 0
+  ) SELECT s FROM cut WHERE n = 0`;
 
 /** Passe en `failed` les jobs `running` sans signe de vie depuis plus de 10 minutes (même règle que `isStaleJob`). */
 export async function failStaleJobs(db: D1Database, now: Date = new Date()): Promise<void> {

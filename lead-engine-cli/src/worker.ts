@@ -96,7 +96,9 @@ export async function withHeartbeat<T>(beat: () => Promise<unknown>, run: () => 
 async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Promise<void> {
   const report = (b: Record<string, unknown>): Promise<{ cancel?: boolean }> =>
     api<{ cancel?: boolean }>(cfg, `/api/worker/jobs/${job.id}/progress`, b);
-  await withHeartbeat(() => report({ status: "running" }), () => runJob(cfg, router, job, report));
+  // Le battement n'envoie aucun statut : il ne met à jour que heartbeat_at. Si le CRM répond `cancel` (job annulé ou déclaré mort),
+  // le prochain rapport de progression le renverra aussi et le scan s'arrête.
+  await withHeartbeat(() => report({}), () => runJob(cfg, router, job, report));
 }
 
 async function runJob(cfg: Config, router: ModelRouter, job: RemoteJob, report: (b: Record<string, unknown>) => Promise<{ cancel?: boolean }>): Promise<void> {

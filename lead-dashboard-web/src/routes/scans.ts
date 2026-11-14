@@ -5,7 +5,7 @@ import { bearerMatches, requireUser } from "../auth";
 import { jobModeBadge } from "../views/jobMode";
 import { isActiveScan, renderLiveScanCard, renderScanRows } from "../views/liveScanCard";
 import { readStoredOpportunities } from "../services/opportunityStore";
-import { appendLog, failStaleJobs } from "../services/scanJobs";
+import { APPEND_LOG_SQL, failStaleJobs } from "../services/scanJobs";
 
 export const scanRoutes = new Hono<AppEnv>();
 
@@ -379,33 +379,37 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
   if (!bearerMatches(c.req.header("Authorization"), c.env.SYNC_SECRET_TOKEN)) return c.json({ error: "unauthorized" }, 401);
   const id = c.req.param("id");
   const b = await c.req.json<ProgressBody>().catch(() => ({}) as ProgressBody);
-  const cur = await c.env.DB.prepare("SELECT status, logs FROM scan_jobs WHERE id = ?").bind(id).first<{ status: string; logs: string | null }>();
+  const cur = await c.env.DB.prepare("SELECT status FROM scan_jobs WHERE id = ?").bind(id).first<{ status: string }>();
   if (!cur) return c.json({ error: "not_found" }, 404);
-  if (cur.status === "cancelled") return c.json({ cancel: true });
+  // Job annulé ou déclaré mort : le worker doit l'abandonner. Un job terminé ne repasse jamais en `running`.
+  if (cur.status === "cancelled" || cur.status === "failed") return c.json({ cancel: true });
+  if (cur.status === "done") return c.json({ cancel: false });
 
   const finished = b.status === "done" || b.status === "failed";
   const now = new Date();
   const timeStr = now.toISOString().slice(11, 19);
   const logLine = b.log_entry ? `[${timeStr}] ${b.log_entry}` : null;
 
+  // Ajout et troncature des logs dans le même UPDATE (atomique) ; sans nouvelle ligne, `logs` n'est pas touché.
+  // La garde sur `status` couvre une course avec le nettoyage ou la fin du job.
   await c.env.DB.prepare(
     `UPDATE scan_jobs SET
        status = COALESCE(?1, status),
        processed = COALESCE(?2, processed),
        total = COALESCE(?3, total),
        message = COALESCE(?4, message),
-       logs = ?5,
+       logs = CASE WHEN ?5 IS NULL THEN logs ELSE (${APPEND_LOG_SQL}) END,
        heartbeat_at = ?7,
        finished_at = CASE WHEN ?6 = 1 THEN ?7 ELSE finished_at END,
        effective_mode = COALESCE(?9, effective_mode)
-     WHERE id = ?8`,
+     WHERE id = ?8 AND status IN ('queued','running')`,
   )
     .bind(
       b.status ?? null,
       b.processed ?? null,
       b.total ?? null,
       b.message?.slice(0, 500) ?? null,
-      appendLog(cur.logs, logLine),
+      logLine,
       finished ? 1 : 0,
       now.toISOString(),
       id,
