@@ -65,9 +65,8 @@ export const PREP_CLI_OPTIONS: CliOptionSpec = {
   flags: ["--cdp"],
 };
 
-function parseArgs(): PrepScanOptions {
-  assertKnownOptions(PREP_CLI_OPTIONS);
-  const args = process.argv.slice(2);
+/** Lit les arguments de `npm run prep` (forme `--opt valeur` ou `--opt=valeur`) ; pure, donc testable. */
+export function parsePrepArgs(args: string[]): PrepScanOptions {
   const opts: PrepScanOptions = {
     query: "plombier",
     city: "Bordeaux",
@@ -78,28 +77,38 @@ function parseArgs(): PrepScanOptions {
   };
 
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--query" || arg === "-q") opts.query = args[++i] || opts.query;
+    const raw = args[i] ?? "";
+    // `--opt=valeur` : coupé au premier `=` ; sinon la valeur est l'argument suivant.
+    const eq = raw.startsWith("--") ? raw.indexOf("=") : -1;
+    const arg = eq > 0 ? raw.slice(0, eq) : raw;
+    const inline = eq > 0 ? raw.slice(eq + 1) : undefined;
+    const next = (): string | undefined => inline ?? args[++i];
+    if (arg === "--query" || arg === "-q") opts.query = next() || opts.query;
     else if (arg === "--domains" || arg === "--urls" || arg === "-d") {
-      opts.query = `domains:${args[++i] || ""}`;
+      opts.query = `domains:${next() || ""}`;
       if (opts.opportunity_type === DEFAULT_OPPORTUNITY_ID) opts.opportunity_type = DEFAULT_DIRECT_DOMAINS_OPPORTUNITY_ID;
-    } else if (arg === "--city" || arg === "-c") opts.city = args[++i] || opts.city;
-    else if (arg === "--limit" || arg === "-l") opts.limit = parseInt(args[++i] || "5", 10);
-    else if (arg === "--lat") opts.lat = parseFloat(args[++i] || "0");
-    else if (arg === "--lng") opts.lng = parseFloat(args[++i] || "0");
-    else if (arg === "--radius") opts.radius_km = parseFloat(args[++i] || "10");
+    } else if (arg === "--city" || arg === "-c") opts.city = next() || opts.city;
+    else if (arg === "--limit" || arg === "-l") opts.limit = parseInt(next() || "5", 10);
+    else if (arg === "--lat") opts.lat = parseFloat(next() || "0");
+    else if (arg === "--lng") opts.lng = parseFloat(next() || "0");
+    else if (arg === "--radius") opts.radius_km = parseFloat(next() || "10");
     else if (arg === "--cdp") opts.cdp = true;
     else if (arg === "--target" || arg === "--need" || arg === "--opportunity" || arg === "-t") {
-      opts.opportunity_type = args[++i] || opts.opportunity_type;
+      opts.opportunity_type = next() || opts.opportunity_type;
     } else if (arg === "--filter" || arg === "--website-filter") {
-      const f = args[++i];
+      const f = next();
       if (f === "no_website" || f === "has_website" || f === "all") opts.website_filter = f;
     } else if (arg === "--pitch-focus") {
-      opts.pitch_focus = args[++i];
+      opts.pitch_focus = next();
     }
   }
 
   return opts;
+}
+
+function parseArgs(): PrepScanOptions {
+  assertKnownOptions(PREP_CLI_OPTIONS);
+  return parsePrepArgs(process.argv.slice(2));
 }
 
 export async function runPrepScan(

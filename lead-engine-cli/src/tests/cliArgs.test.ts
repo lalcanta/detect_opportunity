@@ -1,10 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findUnknownOption, suggestOption } from "../utils/cliArgs";
-import { PREP_CLI_OPTIONS } from "../prepScan";
+import { PREP_CLI_OPTIONS, parsePrepArgs } from "../prepScan";
+import { SCAN_CLI_OPTIONS } from "../utils/scanCliOptions";
 
 const SPEC = { values: ["--query", "--opportunity", "--lat", "--website-filter"], flags: ["--cdp", "--dry-run"] };
 
@@ -42,20 +43,56 @@ describe("findUnknownOption", () => {
   });
 });
 
-describe("points d'entrée : option inconnue", () => {
-  const cliDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-  const tsx = path.join(cliDir, "node_modules/.bin/tsx");
-  for (const entry of ["index.ts", "prepScan.ts", "syncQueue.ts", "worker.ts", "regenerateExistingLeads.ts"]) {
-    it(`${entry} s'arrête avant toute action`, () => {
-      const res = spawnSync(tsx, [`src/${entry}`, "--opportunity_type", "seo"], {
-        cwd: cliDir,
-        encoding: "utf8",
-        timeout: 60_000,
-        env: { PATH: process.env.PATH, HOME: process.env.HOME },
-      });
-      assert.equal(res.status, 1);
-      assert.match(res.stderr, /Option inconnue : --opportunity_type/);
-      assert.doesNotMatch(res.stdout, /Configuration|scan|Préparation/i);
+const srcDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const source = (file: string): string => readFileSync(path.join(srcDir, file), "utf8");
+const declared = (spec: { values?: string[]; flags?: string[] }): Set<string> => new Set([...(spec.values ?? []), ...(spec.flags ?? [])]);
+
+describe("points d'entrée : option inconnue (sans rien exécuter)", () => {
+  const LISTES = { scan: SCAN_CLI_OPTIONS, prep: PREP_CLI_OPTIONS, "sans option propre": {} };
+  for (const [nom, liste] of Object.entries(LISTES)) {
+    it(`${nom} : --opportunity_type est refusé`, () => {
+      assert.match(findUnknownOption(["--opportunity_type", "seo"], liste) ?? "", /Option inconnue : --opportunity_type/);
     });
   }
+
+  it("scan : toutes les options lues par parseArgs de index.ts sont déclarées (et inversement)", () => {
+    const src = source("index.ts");
+    const bloc = src.slice(src.indexOf("options: {"), src.indexOf("strict:"));
+    const lues = new Set([...bloc.matchAll(/^\s+"?([\w-]+)"?: \{ type/gm)].map((m) => `--${m[1]}`));
+    assert.ok(lues.size >= 10, "options de parseArgs introuvables dans index.ts");
+    assert.deepEqual([...lues].sort(), [...declared(SCAN_CLI_OPTIONS)].sort());
+    assert.match(src, /assertKnownOptions\(SCAN_CLI_OPTIONS/);
+  });
+
+  it("prep : tous les littéraux comparés à un argument dans parsePrepArgs sont déclarés (et inversement)", () => {
+    const src = source("prepScan.ts");
+    const corps = src.slice(src.indexOf("export function parsePrepArgs"), src.indexOf("function parseArgs()"));
+    const lus = new Set([...corps.matchAll(/arg === "(-{1,2}[\w-]+)"/g)].map((m) => m[1] as string));
+    assert.ok(lus.size >= 15, "littéraux de parsePrepArgs introuvables");
+    assert.deepEqual([...lus].sort(), [...declared(PREP_CLI_OPTIONS)].sort());
+    assert.match(src, /assertKnownOptions\(PREP_CLI_OPTIONS/);
+  });
+
+  it("les autres points d'entrée appellent la garde et ne lisent aucune option propre", () => {
+    for (const file of ["syncQueue.ts", "worker.ts", "regenerateExistingLeads.ts", "regenerateCraftDemos.ts"]) {
+      const src = source(file);
+      assert.match(src, /assertKnownOptions\(\{\}\)/, `${file} sans garde`);
+      assert.doesNotMatch(src, /process\.argv(?!\[1\])/, `${file} lit process.argv`);
+    }
+  });
+});
+
+describe("parsePrepArgs", () => {
+  it("lit --opportunity=seo_local comme --opportunity seo_local", () => {
+    assert.equal(parsePrepArgs(["--opportunity=seo_local"]).opportunity_type, "seo_local");
+    assert.equal(parsePrepArgs(["--opportunity", "seo_local"]).opportunity_type, "seo_local");
+  });
+
+  it("coupe au premier = (la valeur peut en contenir) et lit les autres options", () => {
+    const o = parsePrepArgs(["--query=a=b", "--limit=3", "--website-filter=no_website", "--cdp"]);
+    assert.equal(o.query, "a=b");
+    assert.equal(o.limit, 3);
+    assert.equal(o.website_filter, "no_website");
+    assert.equal(o.cdp, true);
+  });
 });
