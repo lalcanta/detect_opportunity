@@ -127,6 +127,12 @@ describe("queueReports — consigne de préparation", () => {
     assert.ok(buildPitchPrompt(prepPitchInput(d, null, APP), "llm_cold_email").includes(seo.commercial.pitchFocus));
   });
 
+  it("angle fait d'espaces : l'angle de la définition est conservé", () => {
+    const d = dossier(seo);
+    assert.ok(buildPitchPrompt(prepPitchInput(d, null, APP, "   "), "llm_cold_email").includes(seo.commercial.pitchFocus));
+    assert.ok(buildPitchPrompt(prepPitchInput(d, null, APP, "  angle  "), "llm_cold_email").includes("angle"));
+  });
+
   it("démo de site : pas de bilan dans l'entrée", () => {
     const p = prepPitchInput(dossier(getOpportunityOrDefault("website_redesign")), null, APP);
     assert.equal(p.report, null);

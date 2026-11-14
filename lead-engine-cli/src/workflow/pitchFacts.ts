@@ -49,6 +49,11 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 /** Fiche Google Maps réelle derrière le prospect (sinon métier, ville, note et avis sont de remplissage). */
 const hasListing = (lead: MapsLead): boolean => !lead.noMapsListing;
 
+/** Comparaison de noms sans casse, sans accents et sans espaces superflus. */
+const normName = (s: string): string => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+/** Retire des dirigeants un nom identique à celui de l'entreprise (ce n'est pas une personne). */
+const withoutCompanyName = (people: string[], companyName: string): string[] => people.filter((n) => normName(n) !== normName(companyName));
+
 function excerpt(text: string): string {
   const t = text.replace(/\s+/g, " ").trim();
   if (t.length <= MAX_EXCERPT) return t;
@@ -115,16 +120,17 @@ const seoOnPage: Contribution = ({ lead, inspection: i }) => {
 };
 
 /** Dirigeant cité sur le site (les noms venus de SIRENE, fusionnés dans l'inspection, sont retirés). */
-const contactsLegal: Contribution = ({ inspection: i, sirene }) => {
+const contactsLegal: Contribution = ({ lead, inspection: i, sirene }) => {
   const fromSirene = new Set(sirene?.keyPeople ?? []);
-  const people = (i?.keyPeople ?? []).filter((n) => !fromSirene.has(n));
+  const people = withoutCompanyName((i?.keyPeople ?? []).filter((n) => !fromSirene.has(n)), lead.name);
   return people.length ? [fact("Dirigeant cité sur le site", people.join(", "))] : null;
 };
 
-const dirigeantSirene: Contribution = ({ sirene }) => {
+const dirigeantSirene: Contribution = ({ lead, sirene }) => {
   if (!sirene) return null;
   const facts: PitchFact[] = [];
-  if (sirene.keyPeople.length) facts.push(fact("Dirigeant (registre SIRENE)", sirene.keyPeople.join(", ")));
+  const people = withoutCompanyName(sirene.keyPeople, lead.name);
+  if (people.length) facts.push(fact("Dirigeant (registre SIRENE)", people.join(", ")));
   const created = dateFr(sirene.createdAt);
   if (created) facts.push(fact("Date de création de l'entreprise", created));
   return nonEmpty(facts);
@@ -140,14 +146,16 @@ const freshnessSsl: Contribution = ({ inspection: i }) => {
   const facts: PitchFact[] = [];
   if (typeof i.isHttps === "boolean") facts.push(fact("HTTPS", i.isHttps ? "site servi en HTTPS" : "site servi en HTTP, non sécurisé"));
   if (isNum(i.copyrightYear)) facts.push(fact("Année du copyright", String(i.copyrightYear)));
-  if (i.obsolescenceSignals?.length) facts.push(fact("Signaux d'obsolescence", i.obsolescenceSignals.join(" ; ")));
+  // L'année du copyright est déjà citée : le signal qui la répète est écarté.
+  const signals = (i.obsolescenceSignals ?? []).filter((s) => !(isNum(i.copyrightYear) && /copyright/i.test(s)));
+  if (signals.length) facts.push(fact("Signaux d'obsolescence", signals.join(" ; ")));
   return nonEmpty(facts);
 };
 
 const techStack: Contribution = ({ inspection: i }) =>
   i?.stack?.length ? [fact("Technologie du site", i.stack.join(", "))] : null;
 
-/** Pixels publicitaires : relevés à la visite, ou seulement présents dans la page derrière le bandeau cookies. */
+/** Pixels publicitaires : présents sur la page d'accueil, ou seulement présents dans la page derrière le bandeau cookies. */
 const adsPixelSpy: Contribution = ({ inspection: i }) => {
   if (!i) return null;
   // Pixels non relevés à la visite : les identifiants lus derrière le bandeau restent des constats, l'absence non.
@@ -157,13 +165,13 @@ const adsPixelSpy: Contribution = ({ inspection: i }) => {
   const facts: PitchFact[] = [];
   if (pixels.length) {
     const value = pixels
-      .map((px) => `${px} : ${afterConsent.includes(px) ? CONSENT_GATED_LABEL : "relevé à la visite de la page"}`)
+      .map((px) => `${px} : ${afterConsent.includes(px) ? CONSENT_GATED_LABEL : "présent sur la page d'accueil"}`)
       .join(" ; ");
     facts.push(fact("Pixels publicitaires", value));
   } else {
     facts.push(fact("Pixels publicitaires", consentGated
       ? "aucun relevé à la visite ; bandeau cookies présent, un pixel déclenché après accord n'est pas vérifié"
-      : "aucun relevé à la visite de la page"));
+      : "aucun pixel publicitaire relevé sur la page d'accueil"));
   }
   const ids = consentGated ? [...(i.htmlTagIds?.googleAds ?? []), ...(i.htmlTagIds?.metaPixel ?? [])] : [];
   if (ids.length) facts.push(fact("Identifiants publicitaires lus dans la page", ids.join(", ")));
@@ -279,10 +287,10 @@ export function proofAngle(p: PitchInput): string {
   }
   if (kind === "audit_report") return "";
   const constat = kind === "visibility_report"
-    ? visibilityConstat(p.lead)
-    : "un constat sur le suivi des conversions, les pixels publicitaires ou la page d'arrivée";
+    ? `: ${visibilityConstat(p.lead)}`
+    : ", sur le suivi des conversions, les pixels publicitaires ou la page d'arrivée";
   const demo = p.siteDemoUrl
     ? "La démo de site complémentaire n'est qu'un complément éventuel ; le lien principal reste le bilan."
     : "Aucune démo de site n'est produite : ne propose pas de nouveau site.";
-  return `Présente le ${reportLabel(p)} préparé pour lui (lien principal), un bilan chiffré de sa situation et pas une maquette de site, avec un seul constat : ${constat}. ${demo}`;
+  return `Présente le ${reportLabel(p)} préparé pour lui (lien principal), un bilan chiffré de sa situation et pas une maquette de site, avec un seul constat${constat}. ${demo}`;
 }

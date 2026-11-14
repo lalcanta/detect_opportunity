@@ -189,3 +189,111 @@ describe("angle de la démo de site", () => {
     assert.ok(values(input()).includes(DEMO));
   });
 });
+
+/** Un cas « nœud exécuté » et un cas « nœud sauté » par contribution (exigence de la spec). */
+describe("contribution de chaque nœud : exécuté, sauté, valeur vide", () => {
+  const withInspection = (extra: Partial<SiteInspection>): SiteInspection => ({ ...baseInspection, ...extra });
+  const cases: { node: string; present: RegExp; inspection?: SiteInspection | null; sirene?: PitchInput["sirene"]; empty: Partial<PitchInput> }[] = [
+    {
+      node: "contacts_legal", present: /Dirigeant cité sur le site/,
+      inspection: withInspection({ keyPeople: ["Paul Martin"] }), empty: { inspection: withInspection({ keyPeople: [] }) },
+    },
+    {
+      node: "dirigeant_sirene", present: /Dirigeant \(registre SIRENE\)/,
+      sirene: { siren: "1", keyPeople: ["Paul Martin"], createdAt: null }, empty: { sirene: { siren: "1", keyPeople: [], createdAt: null } },
+    },
+    {
+      node: "perf_mobile", present: /Affichage sur téléphone/,
+      inspection: withInspection({ isResponsive: false }), empty: { inspection: withInspection({ isResponsive: null }) },
+    },
+    {
+      node: "freshness_ssl", present: /HTTPS/,
+      inspection: withInspection({ isHttps: true }), empty: { inspection: withInspection({}) },
+    },
+    {
+      node: "tech_stack", present: /Technologie du site/,
+      inspection: withInspection({ stack: ["WordPress"] }), empty: { inspection: withInspection({ stack: [] }) },
+    },
+    {
+      node: "social_links", present: /Réseaux sociaux/,
+      inspection: withInspection({ socialLinks: { facebook: ["https://fb.com/x"], instagram: [], linkedin: [] } }),
+      empty: { inspection: withInspection({ socialLinks: { facebook: [], instagram: [], linkedin: [] } }) },
+    },
+    {
+      node: "contact_form", present: /Formulaire de contact/,
+      inspection: withInspection({ contactForm: { url: "https://m.fr/contact", fields: [] } as unknown as SiteInspection["contactForm"] }),
+      empty: { inspection: withInspection({}) },
+    },
+  ];
+  for (const c of cases) {
+    const base: Partial<PitchInput> = { inspection: c.inspection ?? baseInspection, sirene: c.sirene ?? null };
+    it(`${c.node} exécuté : constat présent`, () => {
+      assert.ok(labels(input({ ...base, trace: [run(c.node)] })).some((l) => c.present.test(l)));
+    });
+    it(`${c.node} sauté : aucun constat`, () => {
+      assert.ok(!labels(input({ ...base, trace: [run(c.node, "skipped")] })).some((l) => c.present.test(l)));
+    });
+    it(`${c.node} sans valeur : aucun constat`, () => {
+      assert.ok(!labels(input({ ...c.empty, trace: [run(c.node)] })).some((l) => c.present.test(l)));
+    });
+  }
+  it("proofAngle d'un audit RGPD : chaîne vide", () => {
+    assert.equal(proofAngle(input({ def: getOpportunityOrDefault("audit_qa_trackers") })), "");
+  });
+});
+
+describe("pixels publicitaires : libellés sans affirmer un déclenchement", () => {
+  it("pixel relevé : « présent sur la page d'accueil »", () => {
+    const inspection = { ...baseInspection, paidAdsDetected: ["Meta Ads (Facebook Pixel)"] };
+    const vs = values(input({ inspection, trace: [run("ads_pixel_spy")] }));
+    assert.ok(vs.some((v) => v.includes("Meta Ads (Facebook Pixel) : présent sur la page d'accueil")), vs.join("\n"));
+    assert.ok(!vs.some((v) => /visite/.test(v)));
+  });
+  it("aucun pixel : « aucun pixel publicitaire relevé sur la page d'accueil »", () => {
+    const vs = values(input({ inspection: { ...baseInspection, paidAdsDetected: [] }, trace: [run("ads_pixel_spy")] }));
+    assert.ok(vs.includes("aucun pixel publicitaire relevé sur la page d'accueil"), vs.join("\n"));
+  });
+});
+
+describe("dirigeant identique au nom de l'entreprise", () => {
+  const lead = { ...baseLead, name: "Artisan JD" };
+  it("contacts_legal écarte le nom de l'entreprise (casse, accents, espaces)", () => {
+    const inspection = { ...baseInspection, keyPeople: ["  ARTISAN   jd "] };
+    assert.ok(!labels(input({ lead, inspection, trace: [run("contacts_legal")] })).some((l) => /Dirigeant/.test(l)));
+  });
+  it("contacts_legal garde les autres noms", () => {
+    const inspection = { ...baseInspection, keyPeople: ["Artisan JD", "Jean Dupont"] };
+    assert.ok(values(input({ lead, inspection, trace: [run("contacts_legal")] })).includes("Jean Dupont"));
+  });
+  it("dirigeant_sirene écarte le nom de l'entreprise", () => {
+    const sirene = { siren: "1", keyPeople: ["artisan jd"], createdAt: "2015-03-01" };
+    const ls = labels(input({ lead: { ...lead, name: "Artisân JD" }, sirene, trace: [run("dirigeant_sirene")] }));
+    assert.ok(!ls.some((l) => /Dirigeant/.test(l)), ls.join("\n"));
+    assert.ok(ls.some((l) => /création/.test(l)));
+  });
+});
+
+describe("freshness_ssl : copyright cité une seule fois", () => {
+  it("l'année est citée : le signal de copyright n'est pas répété", () => {
+    const inspection = {
+      ...baseInspection, copyrightYear: 2018, obsolescenceSignals: ["Site non mis à jour depuis 2018 (Copyright © 2018)", "2 image(s) cassée(s) sur la page d'accueil"],
+    };
+    const facts = pitchFacts(input({ inspection, trace: [run("freshness_ssl")] }));
+    assert.ok(facts.some((f) => f.label === "Année du copyright" && f.value === "2018"));
+    const signals = facts.find((f) => f.label === "Signaux d'obsolescence");
+    assert.equal(signals?.value, "2 image(s) cassée(s) sur la page d'accueil");
+  });
+  it("seul signal = copyright : aucun fait de signaux", () => {
+    const inspection = { ...baseInspection, copyrightYear: 2018, obsolescenceSignals: ["Site non mis à jour depuis 2018 (Copyright © 2018)"] };
+    assert.ok(!labels(input({ inspection, trace: [run("freshness_ssl")] })).includes("Signaux d'obsolescence"));
+  });
+});
+
+describe("angle d'acquisition", () => {
+  it("un seul constat, sur le suivi des conversions, les pixels publicitaires ou la page d'arrivée", () => {
+    assert.match(
+      proofAngle(input({ def: getOpportunityOrDefault("ads_acquisition") })),
+      /avec un seul constat, sur le suivi des conversions, les pixels publicitaires ou la page d'arrivée/,
+    );
+  });
+});

@@ -80,7 +80,8 @@ export async function buildBilanQueueFiles(p: {
 export function prepPitchInput(dossier: Dossier, bilan: BilanQueueFiles | null, remoteAppUrl: string, pitchFocus?: string | null): PitchInput {
   const input = pitchInputFromDossier(dossier, remoteAppUrl);
   // Angle demandé en ligne de commande (`--pitch_focus`) : prioritaire sur celui de la définition.
-  const base = pitchFocus ? { ...input, def: { ...input.def, commercial: { ...input.def.commercial, pitchFocus } } } : input;
+  const focus = pitchFocus?.trim();
+  const base = focus ? { ...input, def: { ...input.def, commercial: { ...input.def.commercial, pitchFocus: focus } } } : input;
   if (!bilan) return { ...base, report: null, competitorPixels: null, siteDemoUrl: null };
   const facts = bilan.auditFacts as { score: { score: number }; weaknesses: string[] };
   return {
