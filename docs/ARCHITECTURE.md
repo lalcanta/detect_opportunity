@@ -27,7 +27,7 @@ Google Maps / liste de domaines
 | `lead-engine-cli/` | Moteur de collecte et de génération (scraping Maps, inspection, LLM, flyer, sync) | Mac local (Node + Playwright) |
 | `lead-dashboard-web/` | CRM / back-office / API (Hono sur Cloudflare Pages Functions + D1 + Workers AI) | Cloudflare Pages |
 | `agency-landing-web/` | Landing publique de l'agence (3 offres + formulaire « rappel ») | Statique, poste sur `/api/public/inbound-lead` |
-| `tests/` | Tests fonctionnels HTTP contre un `wrangler pages dev` local (port 8789) | Local uniquement (hors CI) |
+| `tests/` | Tests fonctionnels HTTP contre un `wrangler pages dev` local (port 8789) | Local et CI (étape « Tests fonctionnels ») |
 | `.agents/skills/` | Skills Antigravity : `leadengine` (workflow 0 €) et `artisan-frontend-craft` (règles de design) | Agent IA local |
 | `DESIGN_SYSTEM.md` / `DESIGN_ARCHETYPES.md` | Design system du CRM / archétypes visuels des démos par métier | Doc |
 
@@ -192,7 +192,7 @@ est la table `users`.
 | `npm run worker[:prod]` | Worker piloté par le dashboard |
 | `npm --prefix lead-engine-cli run regen:demos:prod` | Régénère les démos de **tous** les leads de prod via Workers AI |
 | `npm run dev:web` | Dashboard local (port 8788, état D1 dans `/tmp/lead-d1-state`) |
-| `npm run typecheck` · `npm test` · `npm run test:functional` | Qualité (les tests fonctionnels exigent un serveur sur 8789) |
+| `npm run typecheck` · `npm test` · `npm run test:functional` | Qualité (les tests fonctionnels démarrent leur serveur sur 8789 ; la CI les lance aussi) |
 
 ## 11. CI / déploiement
 

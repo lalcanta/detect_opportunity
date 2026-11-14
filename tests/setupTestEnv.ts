@@ -8,6 +8,12 @@ const __dirname = path.dirname(__filename);
 
 export const TEST_PORT = 8789;
 export const TEST_BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
+/**
+ * Jeton de synchronisation du serveur de test : injecté par `--binding`, donc indépendant de tout `.dev.vars`
+ * (absent en CI). Valeur factice, valable uniquement pour ce serveur local ; surchargeable via TEST_SYNC_SECRET
+ * quand TEST_APP_URL vise un autre serveur de test.
+ */
+export const TEST_SYNC_SECRET = process.env.TEST_SYNC_SECRET || "test-sync-secret-local-only";
 export const TEST_DB_DIR = "/tmp/lead-d1-test-state/v3/d1/miniflare-D1DatabaseObject";
 export const TEST_DB_FILE = path.join(TEST_DB_DIR, "e7352547963de7050bd7d94658afc4fe78b61811b7815da12d90be8e863abf4d.sqlite");
 
@@ -80,6 +86,7 @@ export async function ensureTestServer(): Promise<void> {
       "--d1=DB",
       "--compatibility-date=2024-11-01",
       "--persist-to=/tmp/lead-d1-test-state",
+      `--binding=SYNC_SECRET_TOKEN=${TEST_SYNC_SECRET}`,
     ],
     {
       cwd: dashboardDir,

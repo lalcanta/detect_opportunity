@@ -25,7 +25,7 @@ npm run prep -- --query "plombier" --city "Lyon" --limit 5   # préparation sans
 npm run sync-queue                    # pousse les dossiers complétés vers REMOTE_APP_URL (sync-queue:prod : production)
 npm run typecheck && npm test         # ce que lance la CI
 npm --prefix lead-dashboard-web test  # dashboard : tsc + tests
-npm run test:functional               # tests HTTP, démarrent leur serveur sur le port 8789, hors CI
+npm run test:functional               # tests HTTP, démarrent leur serveur sur le port 8789 (aussi lancés par la CI)
 ```
 
 ## Sources de vérité
