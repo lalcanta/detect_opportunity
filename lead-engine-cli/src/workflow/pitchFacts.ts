@@ -6,6 +6,7 @@
  */
 import { WORKFLOW_NODES, isReportProof, type ChannelId, type OpportunityDefinition } from "../../../shared/opportunities";
 import type { CompetitorPixels } from "../collector/competitorPixels";
+import { bilanLabel } from "../copywriter/bilanPitch";
 import { dateFr } from "../generator/reportLayout";
 import { titleKeywords } from "../opportunities/siteDemo";
 import { CONSENT_GATED_LABEL, trackingView } from "../generator/reportScoring";
@@ -39,6 +40,8 @@ export interface PitchInput {
 type Contribution = (p: PitchInput) => PitchFact[] | null;
 
 const MAX_REVIEWS = 2;
+/** Note minimale d'un avis citable : un avis moyen ou négatif n'est jamais mis en avant. */
+const MIN_REVIEW_RATING = 4;
 const MAX_EXCERPT = 200;
 
 const fact = (label: string, value: string): PitchFact => ({ label, value });
@@ -83,9 +86,14 @@ const mapsListing: Contribution = ({ lead }) => {
   if (lead.city?.trim()) facts.push(fact("Ville", lead.city.trim()));
   const rating = ratingText(lead.rating, lead.reviewsCount);
   if (rating) facts.push(fact("Note Google", rating));
-  for (const r of (lead.recentReviews ?? []).filter((r) => r.text?.trim()).slice(0, MAX_REVIEWS)) {
+  // Avis citables : texte lu et note lue d'au moins 4/5, les mieux notés d'abord (tri stable).
+  const citable = (lead.recentReviews ?? [])
+    .filter((r) => r.text?.trim() && isNum(r.rating) && r.rating >= MIN_REVIEW_RATING)
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, MAX_REVIEWS);
+  for (const r of citable) {
     const author = r.author?.trim();
-    facts.push(fact("Avis client", `${quote(excerpt(r.text))}${author ? ` — ${author}` : ""}`));
+    facts.push(fact("Avis client", `${quote(excerpt(r.text))}${author ? ` — ${author}` : ""}, ${r.rating}/5`));
   }
   const query = lead.mapsQuery?.trim();
   const date = dateFr(lead.mapsCheckedAt);
@@ -191,8 +199,8 @@ const socialLinks: Contribution = ({ inspection: i }) => {
 const contactForm: Contribution = ({ inspection: i }) =>
   i?.contactForm ? [fact("Formulaire de contact", `présent sur ${i.contactForm.url}`)] : null;
 
-const reportLabel = (p: PitchInput): string =>
-  p.def.proof.kind === "visibility_report" ? "bilan de visibilité locale" : "bilan d'acquisition";
+/** Libellé du bilan de la preuve (à n'appeler que pour une preuve « bilan »). */
+const reportLabel = (p: PitchInput): string => bilanLabel(p.def.proof.kind === "visibility_report" ? "visibility_report" : "acquisition_report");
 
 /** Preuve « bilan » : lien principal, score et actions prioritaires (et pixels des concurrents pour l'acquisition). */
 const reportProof: Contribution = (p) => {
@@ -210,6 +218,9 @@ const reportProof: Contribution = (p) => {
   }
   return facts;
 };
+
+/** Preuve « audit_report » : le rapport d'audit préparé est le lien principal. */
+const auditProof: Contribution = (p) => [fact("Lien du rapport d'audit", p.demoUrl)];
 
 const demoProof: Contribution = (p) => [fact("Lien de la démo de site", p.demoUrl)];
 
@@ -230,15 +241,14 @@ const CONTRIBUTIONS: Partial<Record<string, Contribution>> = {
   social_links: socialLinks,
   contact_form: contactForm,
   demo_web: demoProof,
+  audit_report: auditProof,
   visibility_report: reportProof,
   acquisition_report: reportProof,
   site_demo: siteDemo,
 };
 
 /** Nœuds qui contribuent sans dépendre de la trace : la fiche Maps, la preuve du besoin et la démo complémentaire. */
-function contributesAlways(nodeId: string, def: OpportunityDefinition): boolean {
-  const node = WORKFLOW_NODES.find((n) => n.id === nodeId);
-  if (!node) return false;
+function contributesAlways(node: (typeof WORKFLOW_NODES)[number], def: OpportunityDefinition): boolean {
   if (node.id === "maps_search" || node.binding.kind === "site_demo") return true;
   return node.binding.kind === "proof" && node.binding.proof === def.proof.kind;
 }
@@ -249,7 +259,7 @@ export function pitchFacts(p: PitchInput): PitchFact[] {
   return WORKFLOW_NODES.flatMap((node) => {
     const contribution = CONTRIBUTIONS[node.id];
     if (!contribution) return [];
-    if (!contributesAlways(node.id, p.def) && !done.has(node.id)) return [];
+    if (!contributesAlways(node, p.def) && !done.has(node.id)) return [];
     return contribution(p) ?? [];
   });
 }
@@ -285,7 +295,9 @@ export function proofAngle(p: PitchInput): string {
       ? "Présente la maquette de site préparée pour lui (lien principal) face à son site actuel."
       : "Présente la maquette de site préparée pour lui (lien principal) : il n'a pas de site aujourd'hui.";
   }
-  if (kind === "audit_report") return "";
+  if (kind === "audit_report") {
+    return "Présente le rapport d'audit préparé pour lui (lien principal), avec un seul constat tiré des constats mesurés.";
+  }
   const constat = kind === "visibility_report"
     ? `: ${visibilityConstat(p.lead)}`
     : ", sur le suivi des conversions, les pixels publicitaires ou la page d'arrivée";

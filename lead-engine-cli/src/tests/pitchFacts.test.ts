@@ -75,7 +75,25 @@ describe("avis cités", () => {
     const lead = { ...baseLead, recentReviews: [1, 2, 3].map((n) => ({ author: `A${n}`, rating: 5, text: long, relativeDate: "" })) };
     const reviews = pitchFacts(input({ lead })).filter((f) => f.label === "Avis client");
     assert.equal(reviews.length, 2);
-    for (const r of reviews) assert.ok(/^« (.+) » — A\d$/.exec(r.value)![1]!.length <= 200, r.value);
+    for (const r of reviews) assert.ok(/^« (.+) » — A\d, 5\/5$/.exec(r.value)![1]!.length <= 200, r.value);
+  });
+  const review = (author: string, rating: number, text = `Avis de ${author}`) => ({ author, rating, text, relativeDate: "" });
+  const reviewFacts = (recentReviews: MapsLead["recentReviews"]) =>
+    pitchFacts(input({ lead: { ...baseLead, recentReviews } })).filter((f) => f.label === "Avis client");
+  it("un avis à 1 étoile n'est jamais cité", () => {
+    const facts = reviewFacts([review("Colère", 1), review("Bof", 3)]);
+    assert.equal(facts.length, 0, JSON.stringify(facts));
+  });
+  it("un avis sans note lue n'est jamais cité", () => {
+    const noRating = { author: "Anonyme", text: "Sans note", relativeDate: "" } as unknown as MapsLead["recentReviews"][number];
+    assert.equal(reviewFacts([noRating]).length, 0);
+  });
+  it("avis triés par note décroissante, seuls 4 et 5 étoiles, note affichée", () => {
+    const facts = reviewFacts([review("Moyen", 3), review("Bien", 4), review("Colère", 1), review("Top", 5), review("Bien2", 4)]);
+    assert.equal(facts.length, 2);
+    assert.match(facts[0]!.value, /Avis de Top.* 5\/5/);
+    assert.match(facts[1]!.value, /Avis de Bien.* 4\/5/);
+    assert.ok(!facts.some((f) => /Colère|Moyen/.test(f.value)));
   });
   it("aucun avis lu : aucun fait « Avis »", () => {
     assert.ok(!labels(input()).some((l) => /^Avis/.test(l)));
@@ -237,8 +255,16 @@ describe("contribution de chaque nœud : exécuté, sauté, valeur vide", () => 
       assert.ok(!labels(input({ ...c.empty, trace: [run(c.node)] })).some((l) => c.present.test(l)));
     });
   }
-  it("proofAngle d'un audit RGPD : chaîne vide", () => {
-    assert.equal(proofAngle(input({ def: getOpportunityOrDefault("audit_qa_trackers") })), "");
+  it("preuve audit_report : lien du rapport d'audit parmi les constats", () => {
+    const facts = pitchFacts(input({ def: getOpportunityOrDefault("audit_qa_trackers") }));
+    const link = facts.find((f) => f.label === "Lien du rapport d'audit");
+    assert.equal(link?.value, DEMO);
+  });
+  it("proofAngle d'une preuve audit_report : phrase neutre, un seul constat, sans mesure", () => {
+    const a = proofAngle(input({ def: getOpportunityOrDefault("audit_qa_trackers") }));
+    assert.match(a, /rapport d'audit préparé/);
+    assert.match(a, /un seul constat/);
+    assert.doesNotMatch(a, /\d/);
   });
 });
 
