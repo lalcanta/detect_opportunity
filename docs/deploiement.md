@@ -65,7 +65,7 @@ sur le dernier déploiement de production).
 **Changer `SYNC_SECRET_TOKEN`** (jeton exposé, ou par précaution) : depuis la racine, sous Node 22,
 `npm run secret:rotate-sync`. Le script génère un jeton sans l'afficher, le pose en secret Cloudflare et le recopie dans
 `lead-engine-cli/.env` et `lead-dashboard-web/.dev.vars` s'ils existent. Ensuite : « Retry deployment » sur le dernier
-déploiement de production, puis redémarrer le worker (`npm run worker:prod`) ; entre les deux, le worker reçoit des 401.
+déploiement de production (même commit, nouvel identifiant de déploiement ; une fusion dans `main` suffit aussi), puis redémarrer le worker (`npm run worker:prod`) ; entre les deux, le worker reçoit des 401.
 
 ## 4. Worker (Mac)
 
