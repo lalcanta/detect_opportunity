@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isScheduleDue, scheduleDecision } from "../worker";
+import { isScheduleDue, runScheduleLoop, scheduleDecision, skipLogLine } from "../worker";
 
 const sched = (over: Record<string, unknown> = {}) => ({
   id: 1,
@@ -60,5 +60,36 @@ describe("isScheduleDue (heure de Paris)", () => {
     assert.equal(isScheduleDue(s, new Date("2026-10-26T07:30:00Z")), true);
     assert.equal(scheduleDecision(s, new Date("2026-10-26T06:30:00Z")), "too_early"); // 07:30 Paris
     assert.equal(scheduleDecision(s, new Date("2026-10-26T09:30:00Z")), "window_missed"); // 10:30 Paris
+  });
+});
+
+describe("time_of_day illisible", () => {
+  it("vide ou invalide : refusé, jamais minuit", () => {
+    for (const t of ["", "abc", "25:00", "08:75", "8h30"]) {
+      assert.equal(scheduleDecision(sched({ time_of_day: t }), new Date("2026-11-12T08:00:00Z")), "invalid_time", t);
+    }
+    assert.equal(isScheduleDue(sched({ time_of_day: "8:30" }), new Date("2026-11-12T08:00:00Z")), true);
+  });
+  it("une ligne de log par planification et par jour", () => {
+    const s = sched({ id: 77, time_of_day: "" });
+    const d1 = new Date("2026-11-12T08:00:00Z");
+    assert.match(skipLogLine(s, "invalid_time", d1)!, /#77.*illisible/);
+    assert.equal(skipLogLine(s, "invalid_time", new Date("2026-11-12T09:00:00Z")), null);
+    assert.ok(skipLogLine(s, "invalid_time", new Date("2026-11-13T08:00:00Z")));
+    const w = sched({ id: 78 });
+    assert.match(skipLogLine(w, "window_missed", d1)!, /sautée/);
+    assert.equal(skipLogLine(w, "window_missed", d1), null);
+    assert.equal(skipLogLine(w, "due", d1), null);
+  });
+});
+
+describe("runScheduleLoop", () => {
+  it("vérifie à intervalle régulier sans attendre un job en cours et survit aux erreurs", async () => {
+    let calls = 0;
+    let jobDone = false;
+    const longJob = new Promise<void>((r) => setTimeout(() => { jobDone = true; r(); }, 80));
+    const loop = runScheduleLoop(async () => { calls++; if (calls === 2) throw new Error("réseau"); }, 10, () => jobDone);
+    await Promise.all([loop, longJob]);
+    assert.ok(calls >= 4, `vérifications pendant le job : ${calls}`);
   });
 });
