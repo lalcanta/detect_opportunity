@@ -72,6 +72,36 @@ describe("syncQueue — aucune faiblesse inventée (démo de site préparée en 
   });
 });
 
+describe("syncQueue — secours sans mesure inventée (battlecard absente)", () => {
+  const empty = { callScript: "Bonjour", objections: [] };
+  const url = "https://app.test/demos/s1";
+  const fallback = (meta: { opportunity_type?: string }, facts: { kind?: string } | null = null) =>
+    (buildQueueBattlecard({ id: "s1", company_name: "Plombier Dupont", ...meta }, empty, facts, APP) as { battlecard: { ourAdvantages?: string[]; whatsappText?: string } }).battlecard;
+
+  it("aucun avantage inventé : liste vide quand l'agent n'en a pas écrit", () => {
+    assert.deepEqual(fallback({ opportunity_type: "website_redesign" }).ourAdvantages, []);
+    assert.deepEqual(fallback({}).ourAdvantages, []);
+  });
+  it("secours WhatsApp d'une démo de site : nomme la démo, avec le lien, sans mesure", () => {
+    const w = fallback({ opportunity_type: "website_redesign" }).whatsappText ?? "";
+    assert.ok(w.includes(url) && /démo/i.test(w), w);
+    assert.doesNotMatch(w.replace(url, ""), /futur site|\d/);
+  });
+  it("secours WhatsApp d'un bilan de visibilité : nomme le bilan, jamais une démo de site", () => {
+    const w = fallback({ opportunity_type: "seo_local" }).whatsappText ?? "";
+    assert.ok(w.includes(url) && w.includes("bilan de visibilité locale"), w);
+    assert.doesNotMatch(w, /démo|futur site/i);
+  });
+  it("secours WhatsApp d'un bilan d'acquisition : nomme le bilan", () => {
+    const w = fallback({ opportunity_type: "ads_acquisition" }).whatsappText ?? "";
+    assert.ok(w.includes(url) && w.includes("bilan d'acquisition"), w);
+  });
+  it("audit_facts.kind prime sur le type d'opportunité", () => {
+    const w = fallback({ opportunity_type: "website_redesign" }, { kind: "visibility_report" }).whatsappText ?? "";
+    assert.ok(w.includes("bilan de visibilité locale"), w);
+  });
+});
+
 describe("syncQueue — purge du manifeste (audit 1.7)", () => {
   it("doit retirer les leads dont le dossier n'est plus dans pending", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "lead-queue-"));
