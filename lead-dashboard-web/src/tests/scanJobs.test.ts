@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { after, before } from "node:test";
 import { getPlatformProxy } from "wrangler";
 import { Hono } from "hono";
@@ -48,7 +49,7 @@ describe("route de progression du worker (D1 réelle via miniflare)", () => {
 
   before(async () => {
     // D1 en mémoire (wrangler.local.toml ne déclare que DB) ; un proxy par suite = une base vierge.
-    proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: new URL("../../wrangler.local.toml", import.meta.url).pathname, persist: false });
+    proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: fileURLToPath(new URL("../../wrangler.local.toml", import.meta.url)), persist: false });
     db = proxy.env.DB;
     const ddl = /CREATE TABLE IF NOT EXISTS scan_jobs \([\s\S]*?\n\);/.exec(readFileSync(new URL("../../schema.sql", import.meta.url), "utf8"))![0];
     await db.prepare(ddl.replace(/--[^\n]*/g, "").replace(/\s+/g, " ")).run();
@@ -122,7 +123,7 @@ describe("« Lancer maintenant » et last_run_at (D1 réelle via miniflare)", ()
 
   before(async () => {
     // D1 en mémoire (wrangler.local.toml ne déclare que DB) ; un proxy par suite = une base vierge.
-    proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: new URL("../../wrangler.local.toml", import.meta.url).pathname, persist: false });
+    proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: fileURLToPath(new URL("../../wrangler.local.toml", import.meta.url)), persist: false });
     db = proxy.env.DB;
     const schema = readFileSync(new URL("../../schema.sql", import.meta.url), "utf8");
     for (const table of ["users", "scan_jobs", "scheduled_scans"]) {

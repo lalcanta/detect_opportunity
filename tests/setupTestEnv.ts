@@ -64,7 +64,8 @@ export async function ensureTestServer(): Promise<void> {
   resetTestDatabase();
 
   const rootDir = path.resolve(__dirname, "..");
-  const dashboardDir = path.join(rootDir, "lead-dashboard-web");
+  // dev-local/ : config locale sans liaison AI (wrangler 4 la rendrait distante, donc facturée).
+  const dashboardDir = path.join(rootDir, "lead-dashboard-web", "dev-local");
 
   const child = spawn(
     "npx",
@@ -72,7 +73,6 @@ export async function ensureTestServer(): Promise<void> {
       "wrangler",
       "pages",
       "dev",
-      "public",
       "--port",
       String(TEST_PORT),
       "--ip",

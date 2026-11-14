@@ -2,8 +2,15 @@
 # L'identifiant "DB" est celui que `wrangler pages dev --d1=DB` donne à sa base : c'est ce qui fait écrire
 # `wrangler d1 execute` dans le même fichier SQLite que le CRM local (avec celui de wrangler.toml, c'est un autre fichier).
 name = "lead-dashboard-local"
+pages_build_output_dir = "../public" # lu depuis dev-local/ (lien wrangler.toml vers ce fichier)
 
 [[d1_databases]]
 binding = "DB"
 database_name = "DB"
 database_id = "DB"
+
+# Photos et logos : bucket R2 local (pages dev le persiste dans --persist-to). Pas de liaison AI : en wrangler 4 elle
+# serait distante (appels facturés) ; les routes gèrent son absence.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "lead-media"

@@ -72,9 +72,10 @@ npm run test:functional               # tests HTTP, démarrent leur serveur sur 
 - **Options des scripts de la racine** : ils relaient leurs arguments au CLI (`npm run prep -- --query … --city …`)
   grâce au `--` final de chaque script de `package.json` ; un script relais ajouté sans ce `--` perd ses options.
 - **Modifier une définition de besoin dans le code ne change pas la production** : la base fait foi.
-- **Liaisons en local (wrangler 4)** : `npm run dev:web` lit `wrangler.toml` en plus de `--d1=DB` : `MEDIA` (R2) est
-  un bucket local vide (persisté dans `/tmp/lead-d1-state`) et `AI` est **distant** (appels réels à Workers AI,
-  facturables, compte Cloudflare connecté requis ; wrangler l'annonce au démarrage). La base D1 reste locale.
+- **Liaisons en local (wrangler 4)** : `npm run dev:web` lance `wrangler pages dev` depuis `lead-dashboard-web/dev-local/`,
+  dont `wrangler.toml` est un lien vers `wrangler.local.toml` : `DB` et `MEDIA` (R2) sont locaux, **pas de `AI`**
+  (wrangler 4 la rendrait distante, donc facturée) ; les routes gèrent son absence. Ne pas lancer `wrangler pages dev`
+  depuis `lead-dashboard-web/` : il lirait `wrangler.toml` (production) et brancherait `AI` en distant.
 
 ## Avant de livrer
 
