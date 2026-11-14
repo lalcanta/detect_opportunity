@@ -36,7 +36,8 @@ async function main() {
     console.error(`Node 22 requis (wrangler 4), Node ${process.versions.node} actif : lance \`nvm use\` puis recommence.`);
     process.exit(1);
   }
-  const wrangler = join(WEB, "node_modules", ".bin", "wrangler");
+  // Lancé avec le Node courant : `.bin/wrangler` (`#!/usr/bin/env node`) prendrait le premier Node du PATH.
+  const wrangler = join(WEB, "node_modules", "wrangler", "bin", "wrangler.js");
   if (!existsSync(wrangler)) {
     console.error("wrangler introuvable : lance `npm --prefix lead-dashboard-web install`.");
     process.exit(1);
@@ -57,7 +58,7 @@ async function main() {
   const token = `sync_${randomBytes(32).toString("hex")}`;
 
   console.log(`→ Secret Cloudflare ${NAME} (${PROJECT})…`);
-  const put = spawnSync(wrangler, ["pages", "secret", "put", NAME, "--project-name", PROJECT], {
+  const put = spawnSync(process.execPath, [wrangler, "pages", "secret", "put", NAME, "--project-name", PROJECT], {
     cwd: WEB,
     input: token,
     stdio: ["pipe", "inherit", "inherit"],
