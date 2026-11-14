@@ -55,3 +55,22 @@ describe("closerPage — données injectées dans le script", () => {
     assert.ok(main.includes("\\u003c/script>"), "le < doit être échappé en \\u003c");
   });
 });
+
+describe("closerPage — filtre des besoins", () => {
+  const oppLinks = (html: string): string[] => [...new Set([...html.matchAll(/(?:[?&;])opp=([\w-]+)/g)].map((m) => m[1]!))];
+
+  it("l'admin ne voit que les besoins actifs, ni brouillon ni archivé", () => {
+    const links = oppLinks(closerPage({ user, leads: [], scope: "all", view: "list", origin: "https://crm.test" }));
+    assert.ok(links.includes("website_redesign"), "besoin actif proposé");
+    for (const id of ["seo_local", "ads_acquisition", "website", "custom"]) assert.ok(!links.includes(id), `${id} ne doit pas être proposé`);
+  });
+
+  it("un closer ne voit que ses besoins actifs, et le compteur ne compte qu'eux", () => {
+    const closer: User = { ...user, id: "c1", role: "closer", allowed_opportunities: JSON.stringify(["website_redesign", "seo_local"]) };
+    const html = closerPage({ user: closer, leads: [], scope: "mine", view: "list", origin: "https://crm.test" });
+    const links = oppLinks(html);
+    assert.ok(links.includes("website_redesign"));
+    assert.ok(!links.includes("seo_local"));
+    assert.ok(html.includes("Tous mes besoins (1)"));
+  });
+});
