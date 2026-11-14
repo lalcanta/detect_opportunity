@@ -30,7 +30,8 @@ interface CloserProps {
 interface AuditData {
   summary?: string;
   weaknesses?: string[];
-  score?: number;
+  /** Absent ou nul tant qu'aucune mesure n'existe (bilan, audit réel). */
+  score?: number | null;
   loadTimeMs?: number | null;
   isResponsive?: boolean | null;
   dominantColors?: string[];
@@ -334,7 +335,7 @@ function calendarView(leads: LeadRow[], user: User, origin: string, scope: strin
       const aAds = aAudit?.paid_ads_detected?.length ?? 0;
       const bAds = bAudit?.paid_ads_detected?.length ?? 0;
       if (bAds !== aAds) return bAds - aAds;
-      return (aAudit?.score ?? 50) - (bAudit?.score ?? 50);
+      return (aAudit?.score ?? 50) - (bAudit?.score ?? 50) // sans score mesuré : rang neutre, jamais affiché;
     })
     .slice(0, 9);
 

@@ -145,8 +145,9 @@ export function renderGoogleRatingBadge(
   </span>`;
 }
 
-export function renderAuditScoreBadge(score: number | undefined, websiteUrl: string | null | undefined): string {
-  if (score !== undefined) {
+/** Le score n'apparaît que s'il a été mesuré (bilan, audit réel) : absent ou nul, le badge de repli s'affiche. */
+export function renderAuditScoreBadge(score: number | null | undefined, websiteUrl: string | null | undefined): string {
+  if (typeof score === "number" && Number.isFinite(score)) {
     const cls =
       score < 50
         ? "bg-rose-50 text-rose-700 border border-rose-200/80"

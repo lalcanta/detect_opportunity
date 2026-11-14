@@ -188,6 +188,24 @@ describe("syncQueue — dossiers de bilan et démo de site complémentaire", () 
     for (const [k, v] of Object.entries(fields)) assert.deepEqual(ad[k], v, k);
   });
 
+  it("dossier sans bilan : aucun score dans audit_data, même pour un site lent", async () => {
+    const { payloads } = await withQueue(async () => {
+      await mkLead("s1", { "demo.html": "<!DOCTYPE html><p>démo</p>", "battlecard.json": BC }, "website_redesign");
+      const metaPath = path.join("queue", "pending", "s1", "meta.json");
+      const meta = JSON.parse(await readFile(metaPath, "utf-8"));
+      await writeFile(metaPath, JSON.stringify({ ...meta, loadTimeMs: 6200 }));
+    });
+    const ad = payloads[0]!.audit_data as Record<string, unknown>;
+    assert.equal(ad.score ?? null, null);
+  });
+
+  it("dossier bilan : le score du bilan (audit_facts.json) est repris", async () => {
+    const { payloads } = await withQueue(async () => {
+      await mkLead("s2", { "demo.html": "<!DOCTYPE html><p>bilan</p>", "battlecard.json": BC, "audit_facts.json": JSON.stringify({ kind: "visibility_report", score: { score: 62 } }) });
+    });
+    assert.equal((payloads[0]!.audit_data as Record<string, unknown>).score, 62);
+  });
+
   it("laisse en attente un bilan dont prompt_site_demo.md n'a pas son site_demo.html, avec la raison", async () => {
     const { result, payloads } = await withQueue(() =>
       mkLead("b2", { "demo.html": "<!DOCTYPE html><p>bilan</p>", "battlecard.json": BC, "prompt_site_demo.md": "consigne" }),

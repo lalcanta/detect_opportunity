@@ -74,3 +74,27 @@ describe("closerPage — filtre des besoins", () => {
     assert.ok(html.includes("Tous mes besoins (1)"));
   });
 });
+
+describe("closerPage — score d'audit absent", () => {
+  const render = (audit: unknown) =>
+    closerPage({
+      user,
+      leads: [lead({ website_url: "https://exemple.fr", audit_data: JSON.stringify(audit) })],
+      scope: "all",
+      view: "kanban",
+      origin: "https://crm.test",
+    });
+
+  it("un audit sans score ou à score nul n'affiche aucune mention de score", () => {
+    for (const audit of [{ summary: "x" }, { summary: "x", score: null }]) {
+      const html = render(audit);
+      assert.ok(!html.includes("Score :"), JSON.stringify(audit));
+      assert.ok(!/\/100\b/.test(html), JSON.stringify(audit));
+      assert.ok(html.includes("Site en ligne"), "le badge de repli reste affiché");
+    }
+  });
+
+  it("un score mesuré (bilan) reste affiché", () => {
+    assert.ok(render({ score: 62 }).includes("Score : 62/100"));
+  });
+});
