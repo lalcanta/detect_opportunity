@@ -140,6 +140,9 @@ export function buildTemplateVars(lead: TemplateLeadInput): Record<string, strin
   const weaknesses = asStringArray(audit.weaknesses);
   const reportUrl = typeof audit.report_url === "string" && audit.report_url ? audit.report_url : lead.demo_url;
 
+  const domain = extractDomain(lead.website_url) || lead.company_name;
+  const weaknessesList = weaknesses.map((w) => `- ${w}`).join("\n");
+
   const firstName = keyPeople[0]?.split(" ")[0] ?? "";
   const greeting = firstName
     ? `Hello ${firstName} & l'équipe ${lead.company_name},`
@@ -154,7 +157,7 @@ export function buildTemplateVars(lead: TemplateLeadInput): Record<string, strin
   return {
     company_name: lead.company_name,
     agency_name: lead.company_name,
-    domain: extractDomain(lead.website_url) || lead.company_name,
+    domain,
     city: lead.city ?? "",
     activity: lead.activity ?? "",
     key_people: firstName,
@@ -165,9 +168,9 @@ export function buildTemplateVars(lead: TemplateLeadInput): Record<string, strin
     trackers_list: (trackers.length ? trackers : weaknesses).map((t) => `- ${t}`).join("\n"),
     // Sans faiblesse mesurée, pas de « quelques points » suivi de rien : le paragraphe devient une simple proposition.
     perf_audit_intro: weaknesses.length
-      ? `En testant ${extractDomain(lead.website_url) || lead.company_name} sur mobile, j'ai relevé quelques points qui pénalisent le chargement :\n${weaknesses.map((w) => `- ${w}`).join("\n")}\n\nRien de dramatique, mais ce sont des corrections rapides avec un vrai impact sur le taux de conversion mobile.`
-      : `Je me suis intéressé à ${extractDomain(lead.website_url) || lead.company_name} et je peux vous envoyer un diagnostic rapide du chargement sur mobile.`,
-    weaknesses_list: weaknesses.map((w) => `- ${w}`).join("\n"),
+      ? `En regardant ${domain}, j'ai relevé quelques points sur votre site :\n${weaknessesList}\n\nJe peux vous détailler chacun d'eux si cela vous est utile.`
+      : `Je me suis intéressé à ${domain} et je peux vous envoyer un diagnostic rapide du chargement sur mobile.`,
+    weaknesses_list: weaknessesList,
     report_url: reportUrl,
     demo_url: lead.demo_url,
     sender_name: SENDER.name,

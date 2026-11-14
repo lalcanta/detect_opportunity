@@ -94,5 +94,10 @@ describe("RÈGLES MÉTIER : Templating Email (contrôle humain, aucun envoi auto
       assert.match(out, /relevé quelques points/);
       assert.match(out, /- Copyright 2018/);
     });
+    it("intro neutre : ne présente pas les points comme une cause de lenteur ni promet d'impact", () => {
+      const out = render({ weaknesses: ["Copyright 2018"] });
+      assert.match(out, /j'ai relevé quelques points sur votre site :/);
+      assert.doesNotMatch(out, /pénalis|chargement|conversion/i);
+    });
   });
 });
