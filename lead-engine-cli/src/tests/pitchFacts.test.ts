@@ -173,6 +173,9 @@ describe("bilans", () => {
     assert.match(a, /le lien principal reste le bilan/);
     assert.match(a, /pas une maquette de site/);
   });
+  it("acquisition : l'angle ne parle jamais de visibilité", () => {
+    assert.doesNotMatch(proofAngle(input({ def: acquisition })), /visibilit/i);
+  });
   it("sans démo complémentaire : interdit de proposer un nouveau site", () => {
     assert.match(proofAngle(input({ def: acquisition })), /ne propose pas de nouveau site/);
   });

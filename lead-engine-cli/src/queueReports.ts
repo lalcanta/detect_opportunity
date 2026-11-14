@@ -77,8 +77,10 @@ export async function buildBilanQueueFiles(p: {
  * Entrée de la consigne des textes commerciaux en mode préparation : celle du dossier, sauf le bilan et les pixels des
  * concurrents, que la file écrit elle-même (le dossier n'a pas d'audit, la preuve n'étant pas générée par le modèle).
  */
-export function prepPitchInput(dossier: Dossier, bilan: BilanQueueFiles | null, remoteAppUrl: string): PitchInput {
-  const base = pitchInputFromDossier(dossier, remoteAppUrl);
+export function prepPitchInput(dossier: Dossier, bilan: BilanQueueFiles | null, remoteAppUrl: string, pitchFocus?: string | null): PitchInput {
+  const input = pitchInputFromDossier(dossier, remoteAppUrl);
+  // Angle demandé en ligne de commande (`--pitch_focus`) : prioritaire sur celui de la définition.
+  const base = pitchFocus ? { ...input, def: { ...input.def, commercial: { ...input.def.commercial, pitchFocus } } } : input;
   if (!bilan) return { ...base, report: null, competitorPixels: null, siteDemoUrl: null };
   const facts = bilan.auditFacts as { score: { score: number }; weaknesses: string[] };
   return {

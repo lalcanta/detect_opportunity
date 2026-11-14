@@ -442,7 +442,7 @@ ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rati
 
 Enregistre le JSON valide dans : \`${leadDir}/battlecard.json\`
 
-${buildPitchPrompt(prepPitchInput(dossier, bilan, cfg.REMOTE_APP_URL), pitchGenerator)}
+${buildPitchPrompt(prepPitchInput(dossier, bilan, cfg.REMOTE_APP_URL, opts.pitch_focus), pitchGenerator)}
 `;
       } else if (isAsyncQaOffer) {
         promptBattlecard = `# RÔLE & PERSONA

@@ -103,16 +103,28 @@ describe("queueReports — consigne de préparation", () => {
     usage: [], trace: SCAN_MODULE_IDS.map((m) => ({ node: m, wave: 1, status: "done" as const, ms: 0 })),
   });
 
-  it("même consigne que le mode complet pour le même bilan", async () => {
-    const d = dossier(seo);
+  it("même consigne que le mode complet pour le même bilan (appel, message écrit, formulaire de contact)", async () => {
     const bilan = await buildBilanQueueFiles({ def: seo, lead, inspection: null, leadId: "l1", remoteAppUrl: APP });
     assert.ok(bilan);
     const facts = bilan.auditFacts as { score: { score: number }; weaknesses: string[] };
-    const full = { ...d, audit: { summary: "", weaknesses: facts.weaknesses, score: facts.score.score } };
-    assert.equal(
-      buildPitchPrompt(prepPitchInput(d, bilan, APP), "llm_phone_battlecard"),
-      buildPitchPrompt(pitchInputFromDossier(full, APP), "llm_phone_battlecard"),
-    );
+    const cases = [["phone", "llm_phone_battlecard"], ["email", "llm_cold_email"], ["contact_form", "llm_cold_email"]] as const;
+    for (const [channel, generator] of cases) {
+      const d = { ...dossier(seo), primaryChannel: channel };
+      const full = { ...d, audit: { summary: "", weaknesses: facts.weaknesses, score: facts.score.score } };
+      assert.equal(
+        buildPitchPrompt(prepPitchInput(d, bilan, APP), generator),
+        buildPitchPrompt(pitchInputFromDossier(full, APP), generator),
+        channel,
+      );
+    }
+  });
+
+  it("angle demandé en ligne de commande : prioritaire sur celui de la définition", () => {
+    const d = dossier(seo);
+    const out = buildPitchPrompt(prepPitchInput(d, null, APP, "angle demandé ce jour"), "llm_cold_email");
+    assert.ok(out.includes("angle demandé ce jour"));
+    assert.ok(!out.includes(seo.commercial.pitchFocus));
+    assert.ok(buildPitchPrompt(prepPitchInput(d, null, APP), "llm_cold_email").includes(seo.commercial.pitchFocus));
   });
 
   it("démo de site : pas de bilan dans l'entrée", () => {
