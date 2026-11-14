@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getOpportunityOrDefault } from "../../../shared/opportunities";
 import { SCAN_MODULE_IDS } from "../../../shared/opportunities";
-import { buildBilanQueueFiles, prepPitchInput } from "../queueReports";
+import { buildBilanQueueFiles, prepBattlecardHeader, prepPitchInput } from "../queueReports";
 import { buildPitchPrompt } from "../workflow/pitchPrompt";
 import { pitchInputFromDossier, type Dossier } from "../workflow/runner";
 import type { MapsLead, SiteInspection } from "../types";
@@ -145,5 +145,17 @@ describe("queueReports — consigne de préparation", () => {
     const p = prepPitchInput(dossier(seo), bilan, APP);
     assert.deepEqual(p.report, { score: 62, actions: audit.weaknesses });
     assert.equal(p.siteDemoUrl, `${APP}/demos/l1/site`);
+  });
+});
+
+describe("queueReports — en-tête du prompt_battlecard.md", () => {
+  it("preuve bilan : rappelle que demo.html est déjà écrit et ne doit pas être réécrit", () => {
+    const h = prepBattlecardHeader("queue/pending/x", "visibility_report");
+    assert.ok(h.includes("queue/pending/x/battlecard.json"));
+    assert.ok(h.includes("`demo.html` (le bilan de visibilité locale) est déjà écrit : ne le réécris pas."), h);
+    assert.ok(prepBattlecardHeader("d", "acquisition_report").includes("le bilan d'acquisition"));
+  });
+  it("hors bilan : aucune règle sur demo.html", () => {
+    assert.doesNotMatch(prepBattlecardHeader("d", null), /demo\.html|réécris/);
   });
 });

@@ -20,7 +20,7 @@ import { companyFacts, runLeadWorkflow, type Dossier } from "./workflow/runner";
 import { loadRemoteOpportunities } from "./opportunities/remote";
 import { generateTrackerReportHtml } from "./generator/trackerReportGenerator";
 import { mapsSeoAuditFields } from "./workflow/auditFields";
-import { buildBilanQueueFiles, prepPitchInput } from "./queueReports";
+import { buildBilanQueueFiles, prepBattlecardHeader, prepPitchInput } from "./queueReports";
 import { buildPitchPrompt } from "./workflow/pitchPrompt";
 import { siteDemoFocus } from "./opportunities/siteDemo";
 import { getCompetitorBenchmark } from "./benchmarks/competitorBenchmarks";
@@ -439,9 +439,8 @@ ${(lead.recentReviews || []).map((r) => `   - "${r.text}" (${r.author}, ${r.rati
       let promptBattlecard = "";
       if (pitchGenerator === "llm_cold_email" || pitchGenerator === "llm_phone_battlecard") {
         // Consigne assemblée par nœud (workflow/pitchPrompt.ts), la même qu'en mode complet.
-        promptBattlecard = `# Consigne de génération du battlecard
-
-Enregistre le JSON valide dans : \`${leadDir}/battlecard.json\`
+        const bilanKind = def.proof.kind === "visibility_report" || def.proof.kind === "acquisition_report" ? def.proof.kind : null;
+        promptBattlecard = `${prepBattlecardHeader(leadDir, bilan ? bilanKind : null)}
 
 ${buildPitchPrompt(prepPitchInput(dossier, bilan, cfg.REMOTE_APP_URL, opts.pitch_focus), pitchGenerator)}
 `;

@@ -8,6 +8,7 @@ import { fetchCompetitorPixels, type CompetitorPixels } from "./collector/compet
 import { generateAcquisitionReportHtml } from "./generator/acquisitionReportGenerator";
 import { acquisitionScore, scoreActions, visibilityScore } from "./generator/reportScoring";
 import { generateVisibilityReportHtml } from "./generator/visibilityReportGenerator";
+import { bilanLabel, type BilanKind } from "./copywriter/bilanPitch";
 import { siteDemoUrl } from "./opportunities/siteDemo";
 import type { MapsLead, SiteInspection } from "./types";
 import type { PitchInput } from "./workflow/pitchFacts";
@@ -90,4 +91,17 @@ export function prepPitchInput(dossier: Dossier, bilan: BilanQueueFiles | null, 
     competitorPixels: bilan.competitorPixels,
     siteDemoUrl: bilan.siteDemoUrl,
   };
+}
+
+/**
+ * En-tête de `prompt_battlecard.md` en mode préparation, avant la consigne assemblée. Quand la preuve est un bilan,
+ * il rappelle que `demo.html` est déjà écrit par la file : l'agent ne le réécrit pas. (Propre à ce mode : la consigne
+ * assemblée, identique dans les deux modes, n'en parle pas.)
+ */
+export function prepBattlecardHeader(leadDir: string, bilan: BilanKind | null): string {
+  const lines = ["# Consigne de génération du battlecard", "", `Enregistre le JSON valide dans : \`${leadDir}/battlecard.json\``];
+  if (bilan) {
+    lines.push("", `\`demo.html\` (le ${bilanLabel(bilan)}) est déjà écrit : ne le réécris pas.`);
+  }
+  return lines.join("\n");
 }
