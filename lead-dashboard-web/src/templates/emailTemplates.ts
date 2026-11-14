@@ -153,7 +153,8 @@ export function buildTemplateVars(lead: TemplateLeadInput): Record<string, strin
     stackCompliment += `${stackCompliment ? " " : ""}Le travail sur votre stack (${stack.join(", ")}) est propre.`;
   }
 
-  const trackersList = (trackers.length ? trackers : weaknesses).map((t) => `- ${t}`).join("\n");
+  // Uniquement les traceurs mesurés : des faiblesses ne sont pas des scripts exécutés avant consentement.
+  const trackersList = trackers.map((t) => `- ${t}`).join("\n");
 
   return {
     company_name: lead.company_name,

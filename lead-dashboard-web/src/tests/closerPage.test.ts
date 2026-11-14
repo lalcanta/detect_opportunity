@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import { closerPage } from "../views/closer";
 import type { LeadRow, User } from "../types";
 
@@ -105,5 +106,14 @@ describe("closerPage — panneau sans argument", () => {
     assert.ok(!html.includes("Barre d'appel d'urgence mobile collante"));
     assert.ok(!html.includes("Design moderne ultra-rapide"));
     assert.match(html, /advSection\.classList\.toggle\('hidden', advItems\.length === 0\)/);
+  });
+});
+
+describe("closerPage — JavaScript client", () => {
+  it("chaque <script> inline se compile (aucune erreur de syntaxe)", () => {
+    const html = closerPage({ user, leads: [lead({})], scope: "all", view: "kanban", origin: "https://crm.test" });
+    const scripts = inlineScripts(html).filter((s) => s.trim());
+    assert.ok(scripts.length > 0);
+    for (const code of scripts) assert.doesNotThrow(() => new vm.Script(code));
   });
 });

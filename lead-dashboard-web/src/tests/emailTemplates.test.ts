@@ -89,6 +89,10 @@ describe("RÈGLES MÉTIER : Templating Email (contrôle humain, aucun envoi auto
       assert.doesNotMatch(out, /certains scripts|cascade réseau|\n- /);
       assert.ok(!/\{\{/.test(out));
     });
+    it("faiblesses sans traceur : ni « scripts » ni les faiblesses", () => {
+      const out = render({ trackers_found: [], weaknesses: ["Copyright 2018"] });
+      assert.doesNotMatch(out, /scripts|Copyright 2018|\n- /);
+    });
     it("avec des traceurs : introduction et liste sont présentes", () => {
       const out = render({ trackers_found: ["GA4", "Hotjar"] });
       assert.match(out, /certains scripts s'exécutent immédiatement :\n- GA4\n- Hotjar/);

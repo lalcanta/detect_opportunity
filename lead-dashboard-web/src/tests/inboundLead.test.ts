@@ -28,7 +28,9 @@ describe("lead entrant (formulaire public)", () => {
     );
     assert.equal(res.status, 200);
     assert.equal(binds.length, 1);
-    const audit = JSON.parse(binds[0]![7] as string);
+    const json = binds[0]!.find((v) => typeof v === "string" && v.startsWith("{") && "score" in JSON.parse(v));
+    assert.ok(json, "audit_data introuvable dans les paramètres de l'INSERT");
+    const audit = JSON.parse(json as string);
     assert.equal(audit.score, null);
   });
 });
