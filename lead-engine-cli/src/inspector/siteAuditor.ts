@@ -56,7 +56,8 @@ Analyse la capture jointe et ces mesures. Réponds en JSON strict : {"summary": 
     });
     const parsed = extractJson(text, fallbackAudit);
     const validated = auditSchema.safeParse(parsed);
-    if (validated.success) return validated.data;
+    // Le score rendu par le modèle est une estimation, jamais une mesure : le CRM l'affiche comme telle.
+    if (validated.success) return { ...validated.data, scoreSource: "ai_estimate" };
     log("audit", `Audit non conforme au schéma, utilisation du fallback enrichi`);
     return fallbackAudit;
   } catch (err) {

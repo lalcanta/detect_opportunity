@@ -197,6 +197,7 @@ describe("syncQueue — dossiers de bilan et démo de site complémentaire", () 
     });
     const ad = payloads[0]!.audit_data as Record<string, unknown>;
     assert.equal(ad.score, null);
+    assert.equal(ad.scoreSource, undefined);
   });
 
   it("dossier sans bilan : aucune recommandation par défaut inventée", async () => {
@@ -212,6 +213,7 @@ describe("syncQueue — dossiers de bilan et démo de site complémentaire", () 
       await mkLead("s2", { "demo.html": "<!DOCTYPE html><p>bilan</p>", "battlecard.json": BC, "audit_facts.json": JSON.stringify({ kind: "visibility_report", score: { score: 62 } }) });
     });
     assert.equal((payloads[0]!.audit_data as Record<string, unknown>).score, 62);
+    assert.equal((payloads[0]!.audit_data as Record<string, unknown>).scoreSource, "measured");
   });
 
   it("laisse en attente un bilan dont prompt_site_demo.md n'a pas son site_demo.html, avec la raison", async () => {

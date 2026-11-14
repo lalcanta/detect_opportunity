@@ -301,6 +301,7 @@ export async function syncQueue(opts: SyncQueueOptions = {}): Promise<SyncQueueR
         contacts: Array.isArray(meta.contacts) ? meta.contacts : undefined,
         audit_data: {
           score,
+          ...(score !== null ? { scoreSource: "measured" as const } : {}),
           summary,
           weaknesses,
           recommendations: [], // rien d'inventé : le panneau du closer lit les arguments de la battlecard

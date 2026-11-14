@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { assertKnownOptions } from "./utils/cliArgs";
 import { loadConfig, type Config } from "./config";
 import { ModelRouter } from "./llm/modelRouter";
@@ -94,12 +95,43 @@ export async function withHeartbeat<T>(beat: () => Promise<unknown>, run: () => 
   }
 }
 
+/** Processus qui empêche la veille ; `stop` le termine. */
+export interface SleepGuard {
+  stop(): void;
+}
+
+/**
+ * Empêche la mise en veille du Mac pendant un job (`caffeinate -i` : l'écran peut s'éteindre, la machine reste
+ * éveillée). Ailleurs que sur macOS, ou si `caffeinate` est introuvable, ne fait rien.
+ */
+export function preventSleep(platform: string = process.platform, start = (cmd: string, args: string[]) => spawn(cmd, args, { stdio: "ignore" })): SleepGuard {
+  if (platform !== "darwin") return { stop: () => undefined };
+  try {
+    const child = start("caffeinate", ["-i", "-w", String(process.pid)]);
+    child.on("error", () => undefined);
+    return { stop: () => void child.kill() };
+  } catch {
+    return { stop: () => undefined };
+  }
+}
+
+/** Exécute `run` sans que le Mac se mette en veille ; la protection est levée à la fin, succès ou erreur. */
+export async function withoutSleep<T>(run: () => Promise<T>, guard: () => SleepGuard = preventSleep): Promise<T> {
+  const g = guard();
+  try {
+    return await run();
+  } finally {
+    g.stop();
+  }
+}
+
 async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Promise<void> {
   const report = (b: Record<string, unknown>): Promise<{ cancel?: boolean }> =>
     api<{ cancel?: boolean }>(cfg, `/api/worker/jobs/${job.id}/progress`, b);
   // Le battement n'envoie aucun statut : il ne met à jour que heartbeat_at. Si le CRM répond `cancel` (job annulé ou déclaré mort),
   // le prochain rapport de progression le renverra aussi et le scan s'arrête.
-  await withHeartbeat(() => report({}), () => runJob(cfg, router, job, report));
+  // Pas de veille pendant le job : un Mac endormi ferait déclarer le job mort au bout de 10 minutes.
+  await withoutSleep(() => withHeartbeat(() => report({}), () => runJob(cfg, router, job, report)));
 }
 
 async function runJob(cfg: Config, router: ModelRouter, job: RemoteJob, report: (b: Record<string, unknown>) => Promise<{ cancel?: boolean }>): Promise<void> {

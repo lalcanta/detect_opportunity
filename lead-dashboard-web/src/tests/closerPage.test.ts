@@ -96,7 +96,15 @@ describe("closerPage — score d'audit absent", () => {
   });
 
   it("un score mesuré (bilan) reste affiché", () => {
-    assert.ok(render({ score: 62 }).includes("Score : 62/100"));
+    assert.ok(render({ score: 62, scoreSource: "measured" }).includes("Score : 62/100"));
+  });
+
+  it("un score estimé par l'IA, ou sans origine, est affiché comme une estimation", () => {
+    for (const extra of [{ scoreSource: "ai_estimate" }, {}]) {
+      const html = render({ score: 62, ...extra });
+      assert.ok(html.includes("Estimation IA : 62/100"));
+      assert.ok(!html.includes("Score : 62/100"));
+    }
   });
 });
 

@@ -90,9 +90,17 @@ describe("Reusable UI Components (lead-dashboard-web/src/views/components.ts)", 
     const oppHtml = renderOpportunityBadge("website_redesign");
     assert.ok(oppHtml.includes("Refonte de site"));
 
-    const auditHtml = renderAuditScoreBadge(32, "https://example.com");
+    const auditHtml = renderAuditScoreBadge(32, "https://example.com", "measured");
     assert.ok(auditHtml.includes("Score : 32/100"));
     assert.ok(auditHtml.includes("text-rose-700"));
+  });
+
+  it("renderAuditScoreBadge : un score non mesuré est affiché comme une estimation de l'IA", () => {
+    for (const source of ["ai_estimate", undefined, null]) {
+      const html = renderAuditScoreBadge(64, "https://example.com", source);
+      assert.ok(html.includes("Estimation IA : 64/100"), String(source));
+      assert.ok(!html.includes("Score :"), String(source));
+    }
   });
 
   it("renderAuditScoreBadge : un score absent ou nul n'affiche aucun chiffre", () => {

@@ -70,6 +70,7 @@ describe("renderReportPage / renderScoreBadge", () => {
     const a = buildReportAudit(r, "Résumé");
     assert.equal(a.summary, "Résumé");
     assert.equal(a.score, r.score);
+    assert.equal(a.scoreSource, "measured");
     assert.ok(a.weaknesses.length > 0 && a.weaknesses.length <= 3);
   });
 });

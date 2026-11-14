@@ -129,5 +129,5 @@ export function renderSiteDemoLink(url: string | null): string {
 }
 
 export function buildReportAudit(r: ScoreResult, summary: string): SiteAudit {
-  return { summary, weaknesses: scoreActions(r), score: r.score };
+  return { summary, weaknesses: scoreActions(r), score: r.score, scoreSource: "measured" };
 }

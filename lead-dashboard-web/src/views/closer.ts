@@ -32,6 +32,8 @@ interface AuditData {
   weaknesses?: string[];
   /** Absent ou nul tant qu'aucune mesure n'existe (bilan, audit réel). */
   score?: number | null;
+  /** « measured » (bilan) ; sinon estimation du modèle de langage ou ancien score sans origine. */
+  scoreSource?: "measured" | "ai_estimate";
   loadTimeMs?: number | null;
   isResponsive?: boolean | null;
   dominantColors?: string[];
@@ -139,7 +141,7 @@ function backlogCard(l: LeadRow, user: User, _origin: string): string {
   <!-- Signaux clés : Avis Google & Audit Technique -->
   <div class="flex items-center justify-between text-xs pt-0.5 ${isAdmin ? "pl-4" : ""}">
     ${renderGoogleRatingBadge(l.google_rating, l.google_reviews_count, true)}
-    ${renderAuditScoreBadge(audit?.score, l.website_url)}
+    ${renderAuditScoreBadge(audit?.score, l.website_url, audit?.scoreSource)}
   </div>
 
   ${
