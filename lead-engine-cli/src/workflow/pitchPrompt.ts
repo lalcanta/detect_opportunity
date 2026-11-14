@@ -41,15 +41,15 @@ function rulesSection(p: PitchInput, generator: LlmPitchGenerator): string {
     "Vouvoiement obligatoire, tutoiement interdit. Français, sans promesse mensongère ni jargon.",
     "Un seul constat précis par texte, pas une liste de reproches.",
     "Le lien principal (celui de la preuve, indiqué dans les constats) figure dans chaque message écrit.",
-    "Chaque message écrit se termine par une question simple qui appelle une réponse écrite.",
-    `Chaque message écrit (email, WhatsApp, formulaire) se termine par la ligne : « ${STOP_LINE} »`,
+    "coldEmail.body se conclut par une question simple qui appelle une réponse écrite, puis la ligne STOP vient en toute dernière ligne, après cette question.",
+    `Ligne STOP, à reproduire telle quelle en dernière ligne de coldEmail.body (email ou texte collé dans le formulaire) : « ${STOP_LINE} »`,
     "Longueurs : closerBrief 2 phrases au plus ; ourAdvantages 3 puces de 12 mots au plus.",
   ];
   if (phone) {
     rules.push(
       "callScript : une accroche de 60 mots au plus, lue à voix haute : présentation brève, un seul constat précis, annonce que la preuve gratuite est prête et propose de l'envoyer.",
       "objections : deux ou trois objections probables du prospect pour cette offre, chacune avec une réponse de 2 phrases au plus.",
-      "whatsappText : 300 caractères au plus, cordial, avec le lien principal.",
+      "whatsappText : 300 caractères au plus, cordial, avec le lien principal et une question simple qui appelle une réponse écrite.",
       "coldEmail.body : 120 mots au plus.",
     );
   } else {

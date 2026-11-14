@@ -47,6 +47,14 @@ describe("buildPitchPrompt", () => {
     assert.ok(!buildPitchPrompt(input({ primaryChannel: "email" }), "llm_cold_email").includes("900 caractères"));
     assert.ok(form.includes("Pour ne plus recevoir de message de notre part, répondez simplement STOP."));
   });
+  it("ligne STOP : après la question, dans coldEmail.body seulement", () => {
+    const mail = buildPitchPrompt(input({ primaryChannel: "email" }), "llm_cold_email");
+    assert.ok(mail.includes("Pour ne plus recevoir de message de notre part, répondez simplement STOP."));
+    assert.ok(mail.includes("puis la ligne STOP vient en toute dernière ligne, après cette question"));
+    const phone = buildPitchPrompt(input(), "llm_phone_battlecard");
+    const stop = phone.split("\n").filter((l) => l.includes("STOP"));
+    assert.ok(stop.length > 0 && stop.every((l) => l.includes("coldEmail.body") && !/whatsapp/i.test(l)), stop.join("\n"));
+  });
   it("note : jamais de valeur par défaut, vraie note quand elle est lue", () => {
     const none = buildPitchPrompt(input({ lead: { ...lead, rating: null, reviewsCount: null } }), "llm_phone_battlecard");
     assert.ok(!/5★|0 avis|n\/a/.test(none));
