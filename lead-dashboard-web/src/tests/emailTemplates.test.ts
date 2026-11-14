@@ -80,4 +80,19 @@ describe("RÈGLES MÉTIER : Templating Email (contrôle humain, aucun envoi auto
       assert.ok(out.includes("acme.fr"));
     });
   });
+  describe("Audit perf : liste de faiblesses vide", () => {
+    const tpl = EMAIL_TEMPLATES.find((t) => t.id === "perf_audit_first")!;
+    const render = (audit: Record<string, unknown>) =>
+      renderTemplate(tpl.body, buildTemplateVars({ company_name: "Acme", website_url: "https://acme.fr", demo_url: "u", audit }));
+    it("sans faiblesse mesurée : pas de « quelques points » suivi de rien", () => {
+      const out = render({ weaknesses: [] });
+      assert.doesNotMatch(out, /relevé quelques points|\n- /);
+      assert.ok(!/\{\{/.test(out));
+    });
+    it("avec des faiblesses : la liste est citée", () => {
+      const out = render({ weaknesses: ["Copyright 2018"] });
+      assert.match(out, /relevé quelques points/);
+      assert.match(out, /- Copyright 2018/);
+    });
+  });
 });

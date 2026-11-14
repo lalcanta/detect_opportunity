@@ -263,6 +263,7 @@ export async function runPrepScan(
         mapsUrl: lead.mapsUrl,
         loadTimeMs: inspection?.loadTimeMs ?? null,
         isResponsive: inspection?.isResponsive ?? null,
+        obsolescence_signals: inspection?.obsolescenceSignals ?? [],
         dominantColors: inspection?.dominantColors ?? [brandColor],
         logoUrl: inspection?.logoUrl ?? null,
         site_images: inspection?.siteImages ?? [],

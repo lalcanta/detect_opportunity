@@ -86,10 +86,7 @@ Bonne journée,
     subject: "[Audit Perf] Temps de chargement mobile sur {{domain}} (diagnostic rapide)",
     body: `{{greeting}}
 
-En testant {{domain}} sur mobile, j'ai relevé quelques points qui pénalisent le chargement :
-{{weaknesses_list}}
-
-Rien de dramatique, mais ce sont des corrections rapides avec un vrai impact sur le taux de conversion mobile.
+{{perf_audit_intro}}
 
 Si vous voulez le détail technique, dites-le-moi simplement par retour de mail.
 
@@ -166,6 +163,10 @@ export function buildTemplateVars(lead: TemplateLeadInput): Record<string, strin
     awards: awards.join(", "),
     stack_compliment: stackCompliment,
     trackers_list: (trackers.length ? trackers : weaknesses).map((t) => `- ${t}`).join("\n"),
+    // Sans faiblesse mesurée, pas de « quelques points » suivi de rien : le paragraphe devient une simple proposition.
+    perf_audit_intro: weaknesses.length
+      ? `En testant ${extractDomain(lead.website_url) || lead.company_name} sur mobile, j'ai relevé quelques points qui pénalisent le chargement :\n${weaknesses.map((w) => `- ${w}`).join("\n")}\n\nRien de dramatique, mais ce sont des corrections rapides avec un vrai impact sur le taux de conversion mobile.`
+      : `Je me suis intéressé à ${extractDomain(lead.website_url) || lead.company_name} et je peux vous envoyer un diagnostic rapide du chargement sur mobile.`,
     weaknesses_list: weaknesses.map((w) => `- ${w}`).join("\n"),
     report_url: reportUrl,
     demo_url: lead.demo_url,

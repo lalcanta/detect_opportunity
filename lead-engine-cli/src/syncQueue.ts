@@ -40,12 +40,21 @@ interface QueueMeta {
   /** Canal principal calculé par prep (phone | email | contact_form) */
   primary_channel?: string | null;
   contacts?: LeadContact[];
+  /** Mesures du site relevées à la préparation (absentes des anciens dossiers). */
+  isResponsive?: boolean | null;
+  obsolescence_signals?: string[];
 }
 
 /** Démo de site complémentaire d'un bilan : consigne écrite par prep, démo écrite par l'agent. */
 export const SITE_DEMO_PROMPT_FILE = "prompt_site_demo.md";
 export const SITE_DEMO_FILE = "site_demo.html";
 export const MANIFEST_PATH = "queue/pending_manifest.json";
+
+/** Faiblesses du site tirées des seules mesures présentes dans meta.json ; liste vide quand rien n'a été mesuré. */
+function measuredWeaknesses(meta: QueueMeta): string[] {
+  const signals = (meta.obsolescence_signals ?? []).filter((s) => typeof s === "string" && s.trim());
+  return [...(meta.isResponsive === false ? ["Affichage défaillant sur téléphone (débordements constatés)"] : []), ...signals];
+}
 
 /**
  * Assemble la battlecard et les constats d'audit d'un lead de la file à partir des fichiers écrits par l'agent.
@@ -97,15 +106,10 @@ export function buildQueueBattlecard(
         coldEmail,
       };
 
+  // Aucun secours inventé : sans audit, le résumé est neutre et les faiblesses viennent des seules mesures de meta.json.
   const summary =
-    rawBc.auditSummary || rawBc.executiveSummary || facts?.auditSummary || "Audit de performance web & opportunité d'optimisation.";
-  const weaknesses =
-    rawBc.weaknesses ||
-    rawBc.currentSiteCritique ||
-    facts?.weaknesses ||
-    (isColdEmail
-      ? []
-      : ["Site web existant lent à charger sur smartphone", "Absence de barre d'appel immédiate pour les urgences", "Avis clients Google non mis en valeur"]);
+    rawBc.auditSummary || rawBc.executiveSummary || facts?.auditSummary || `Dossier de ${meta.company_name} préparé sans audit détaillé.`;
+  const weaknesses = rawBc.weaknesses || rawBc.currentSiteCritique || facts?.weaknesses || measuredWeaknesses(meta);
 
   return { battlecard, summary, weaknesses };
 }
