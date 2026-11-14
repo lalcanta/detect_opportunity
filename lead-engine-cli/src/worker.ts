@@ -13,6 +13,8 @@ import { smtpSender, smtpSettingsFrom } from "./outreach/smtpSender";
  * et remonte la progression. Aucun port entrant à ouvrir sur le Mac.
  */
 const POLL_MS = 10_000;
+/** Battement envoyé au CRM pendant un job, même sans progression (sinon le CRM le déclare mort après 10 min). */
+export const HEARTBEAT_MS = 60_000;
 
 interface RemoteJob {
   id: number;
@@ -81,10 +83,24 @@ async function handleGenerateJob(cfg: Config, router: ModelRouter, job: RemoteJo
   });
 }
 
+/** Exécute `run` en envoyant un battement toutes les HEARTBEAT_MS ; la minuterie s'arrête à la fin, succès ou erreur. */
+export async function withHeartbeat<T>(beat: () => Promise<unknown>, run: () => Promise<T>, everyMs = HEARTBEAT_MS): Promise<T> {
+  const timer = setInterval(() => void beat().catch(() => undefined), everyMs);
+  try {
+    return await run();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 async function handleJob(cfg: Config, router: ModelRouter, job: RemoteJob): Promise<void> {
-  const effectiveMode = effectiveModeOf(job, router.isZeroCostMode());
   const report = (b: Record<string, unknown>): Promise<{ cancel?: boolean }> =>
     api<{ cancel?: boolean }>(cfg, `/api/worker/jobs/${job.id}/progress`, b);
+  await withHeartbeat(() => report({ status: "running" }), () => runJob(cfg, router, job, report));
+}
+
+async function runJob(cfg: Config, router: ModelRouter, job: RemoteJob, report: (b: Record<string, unknown>) => Promise<{ cancel?: boolean }>): Promise<void> {
+  const effectiveMode = effectiveModeOf(job, router.isZeroCostMode());
 
   if (effectiveMode === "api_generation") {
     await report({ status: "running", effective_mode: effectiveMode }).catch(() => undefined);

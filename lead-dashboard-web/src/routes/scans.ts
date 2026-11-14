@@ -5,6 +5,7 @@ import { bearerMatches, requireUser } from "../auth";
 import { jobModeBadge } from "../views/jobMode";
 import { isActiveScan, renderLiveScanCard, renderScanRows } from "../views/liveScanCard";
 import { readStoredOpportunities } from "../services/opportunityStore";
+import { appendLog, failStaleJobs } from "../services/scanJobs";
 
 export const scanRoutes = new Hono<AppEnv>();
 
@@ -27,6 +28,7 @@ export interface ScanJob {
   status: "queued" | "running" | "done" | "failed" | "cancelled";
   created_at: string;
   started_at: string | null;
+  heartbeat_at?: string | null;
   finished_at: string | null;
   processed: number;
   total: number;
@@ -158,6 +160,7 @@ scanRoutes.post("/api/admin/scans/:id/cancel", requireUser("admin"), async (c) =
 });
 
 export async function listScans(db: D1Database): Promise<ScanJob[]> {
+  await failStaleJobs(db);
   // Sans `logs` (volumineux, lu à la demande par /api/admin/scans/:id/logs) : la liste est relue toutes les 2,5 s.
   const r = await db
     .prepare(
@@ -330,12 +333,15 @@ scanRoutes.post("/api/worker/scheduled-scans/:id/trigger", async (c) => {
 /** Le worker réclame le plus ancien job en attente (atomique). */
 scanRoutes.post("/api/worker/claim", async (c) => {
   if (!bearerMatches(c.req.header("Authorization"), c.env.SYNC_SECRET_TOKEN)) return c.json({ error: "unauthorized" }, 401);
+  // Un job mort ne doit pas bloquer la file ni rester affiché comme en cours.
+  await failStaleJobs(c.env.DB);
+  const nowIso = new Date().toISOString();
   const job = await c.env.DB.prepare(
-    `UPDATE scan_jobs SET status = 'running', started_at = ?
+    `UPDATE scan_jobs SET status = 'running', started_at = ?1, heartbeat_at = ?1
      WHERE id = (SELECT id FROM scan_jobs WHERE status = 'queued' ORDER BY id LIMIT 1)
      RETURNING *`,
   )
-    .bind(new Date().toISOString())
+    .bind(nowIso)
     .first<ScanJob>();
   const models = await c.env.DB.prepare("SELECT action_type, provider, model, thinking_budget, fallback_models FROM model_settings").all();
   // Définitions des besoins en vigueur : le worker les applique au job, qui garde la version utilisée.
@@ -373,7 +379,7 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
   if (!bearerMatches(c.req.header("Authorization"), c.env.SYNC_SECRET_TOKEN)) return c.json({ error: "unauthorized" }, 401);
   const id = c.req.param("id");
   const b = await c.req.json<ProgressBody>().catch(() => ({}) as ProgressBody);
-  const cur = await c.env.DB.prepare("SELECT status FROM scan_jobs WHERE id = ?").bind(id).first<{ status: string }>();
+  const cur = await c.env.DB.prepare("SELECT status, logs FROM scan_jobs WHERE id = ?").bind(id).first<{ status: string; logs: string | null }>();
   if (!cur) return c.json({ error: "not_found" }, 404);
   if (cur.status === "cancelled") return c.json({ cancel: true });
 
@@ -388,11 +394,8 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
        processed = COALESCE(?2, processed),
        total = COALESCE(?3, total),
        message = COALESCE(?4, message),
-       logs = CASE
-         WHEN ?5 IS NULL THEN logs
-         WHEN logs IS NULL OR logs = '' THEN ?5
-         ELSE logs || '\n' || ?5
-       END,
+       logs = ?5,
+       heartbeat_at = ?7,
        finished_at = CASE WHEN ?6 = 1 THEN ?7 ELSE finished_at END,
        effective_mode = COALESCE(?9, effective_mode)
      WHERE id = ?8`,
@@ -402,7 +405,7 @@ scanRoutes.post("/api/worker/jobs/:id/progress", async (c) => {
       b.processed ?? null,
       b.total ?? null,
       b.message?.slice(0, 500) ?? null,
-      logLine,
+      appendLog(cur.logs, logLine),
       finished ? 1 : 0,
       now.toISOString(),
       id,
